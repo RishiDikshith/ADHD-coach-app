@@ -34,7 +34,8 @@ from ml_models.efficient_inference import (
     store_prediction
 )
 
-logging.basicConfig(level=logging.INFO)
+# Logging is now configured at the application entry point (frontend/app.py)
+# to ensure it's set up correctly for the cloud environment.
 app = FastAPI(title="ADHD Productivity API")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

@@ -6,8 +6,12 @@ import time
 import os
 import html
 import sys
+import logging
 
 st.set_page_config(page_title="ADHD AI Coach", layout="wide", initial_sidebar_state="expanded")
+
+# Configure logging to output to console (stdout) for cloud platforms like Render.
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
