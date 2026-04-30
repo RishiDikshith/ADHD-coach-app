@@ -660,41 +660,41 @@ if is_thinking:
         analysis = data.get("analysis", {})
         scores = data.get("scores", {})
         
-            # Extract current stress level from session
-            current_stress = st.session_state.user_data.get("stress_level", 5)
+        # Extract current stress level from session
+        current_stress = st.session_state.user_data.get("stress_level", 5)
+        
+        # Make an adjustment based on the current message's emotion
+        is_stressed_in_text = analysis.get("emotion") == "stress"
+        
+        # Fallback heuristic
+        stress_keywords = ["stress", "overwhelm", "anxious", "panic", "too much", "hard", "stuck", "tired", "sad", "depressed"]
+        if any(kw in user_input_text.lower() for kw in stress_keywords):
+            is_stressed_in_text = True
             
-            # Make an adjustment based on the current message's emotion
-            is_stressed_in_text = analysis.get("emotion") == "stress"
+        if is_stressed_in_text:
+            new_stress = min(10, current_stress + 2) # Nudge up stronger
+        else:
+            new_stress = max(1, current_stress - 1) # Nudge down when calm
+        
+        st.session_state.user_data["stress_level"] = new_stress
+        
+        # Dynamic Updates based on AI analysis
+        interventions = data.get("interventions", [])
+        if interventions:
+            st.session_state.goals = []
+            st.session_state.tasks = []
             
-            # Fallback heuristic
-            stress_keywords = ["stress", "overwhelm", "anxious", "panic", "too much", "hard", "stuck", "tired", "sad", "depressed"]
-            if any(kw in user_input_text.lower() for kw in stress_keywords):
-                is_stressed_in_text = True
+            timer_triggered = False
+            for inv in interventions:
+                st.session_state.goals.append(f"🎯 {inv['title']}")
+                st.session_state.tasks.append(inv['action'])
                 
-            if is_stressed_in_text:
-                new_stress = min(10, current_stress + 2) # Nudge up stronger
-            else:
-                new_stress = max(1, current_stress - 1) # Nudge down when calm
-            
-            st.session_state.user_data["stress_level"] = new_stress
-            
-            # Dynamic Updates based on AI analysis
-            interventions = data.get("interventions", [])
-            if interventions:
-                st.session_state.goals = []
-                st.session_state.tasks = []
-                
-                timer_triggered = False
-                for inv in interventions:
-                    st.session_state.goals.append(f"🎯 {inv['title']}")
-                    st.session_state.tasks.append(inv['action'])
-                    
-                    # Auto-start focus timer if suggested
-                    if inv['category'] == 'focus' and not st.session_state.timer_active and not timer_triggered:
-                        st.session_state.timer_active = True
-                        st.session_state.timer_start = time.time()
-                        timer_triggered = True
-                        st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
+                # Auto-start focus timer if suggested
+                if inv['category'] == 'focus' and not st.session_state.timer_active and not timer_triggered:
+                    st.session_state.timer_active = True
+                    st.session_state.timer_start = time.time()
+                    timer_triggered = True
+                    st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
     except Exception as e:
         reply = f"❌ Error: {str(e)}"
 
