@@ -13,8 +13,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-API_URL = os.getenv("ADHD_API_URL", "http://127.0.0.1:8000/chat")
 from src.database.db import create_user, verify_user, save_result, save_feedback
+# Import API directly to bypass network calls (Saves memory & prevents connection errors)
+from src.api.main_api import chat, ChatRequest
 
 
 def render_chat_text(text):
@@ -646,19 +647,19 @@ if is_thinking:
         user_input_text = st.session_state.messages[-1]["content"]
         history = st.session_state.messages[:-1]
         
-        response = requests.post(API_URL, json={
-            "text": user_input_text,
-            "history": history,
-            "user_data": st.session_state.user_data
-        }, timeout=35)
-        if response.status_code != 200:
-            reply = f"❌ Backend error ({response.status_code}): {response.text}"
-        else:
-            data = response.json()
-            reply = data.get("reply", "⚠️ No response")
-            analysis = data.get("analysis", {})
-            scores = data.get("scores", {})
-            
+        request_data = ChatRequest(
+            text=user_input_text,
+            history=history,
+            user_data=st.session_state.user_data
+        )
+        
+        # Call the API function directly instead of making an HTTP request
+        data = chat(request_data)
+        
+        reply = data.get("reply", "⚠️ No response")
+        analysis = data.get("analysis", {})
+        scores = data.get("scores", {})
+        
             # Extract current stress level from session
             current_stress = st.session_state.user_data.get("stress_level", 5)
             
@@ -694,8 +695,6 @@ if is_thinking:
                         st.session_state.timer_start = time.time()
                         timer_triggered = True
                         st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
-    except requests.exceptions.RequestException as e:
-        reply = f"❌ Connection error: {str(e)}"
     except Exception as e:
         reply = f"❌ Error: {str(e)}"
 
