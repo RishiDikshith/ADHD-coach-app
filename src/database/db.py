@@ -1,0 +1,166 @@
+import os
+import hashlib
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ==========================================
+# CLOUD DATABASE (POSTGRESQL)
+# ==========================================
+if DATABASE_URL:
+    import psycopg2
+    
+    def get_connection():
+        return psycopg2.connect(DATABASE_URL)
+
+    def init_db():
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS results (
+                    id SERIAL PRIMARY KEY,
+                    final_score REAL,
+                    level TEXT,
+                    username TEXT DEFAULT 'anonymous',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL
+                )
+                """)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT,
+                    rating TEXT,
+                    feedback_text TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+            conn.commit()
+
+    def create_user(username, password):
+        try:
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
+                        (username, hash_password(password))
+                    )
+                conn.commit()
+            return True
+        except psycopg2.IntegrityError:
+            return False
+
+    def verify_user(username, password):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                return bool(row and row[0] == hash_password(password))
+
+    def save_result(score, level, username="anonymous"):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO results (final_score, level, username) VALUES (%s, %s, %s)",
+                    (score, level, username)
+                )
+            conn.commit()
+
+    def save_feedback(username, rating, text):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO feedback (username, rating, feedback_text) VALUES (%s, %s, %s)",
+                    (username, rating, text)
+                )
+            conn.commit()
+
+# ==========================================
+# LOCAL DATABASE (SQLITE)
+# ==========================================
+else:
+    import sqlite3
+    
+    db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "database")
+    os.makedirs(db_dir, exist_ok=True)
+    db_path = os.path.join(db_dir, "data.db")
+
+    def get_connection():
+        return sqlite3.connect(db_path, check_same_thread=False)
+
+    def init_db():
+        conn = get_connection()
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            final_score REAL,
+            level TEXT
+        )
+        """)
+        try:
+            conn.execute("ALTER TABLE results ADD COLUMN username TEXT DEFAULT 'anonymous'")
+            conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        except sqlite3.OperationalError:
+            pass
+
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            rating TEXT,
+            feedback_text TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        conn.commit()
+
+    def create_user(username, password):
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                    (username, hash_password(password))
+                )
+                conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def verify_user(username, password):
+        with get_connection() as conn:
+            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+            return bool(row and row[0] == hash_password(password))
+
+    def save_result(score, level, username="anonymous"):
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT INTO results (final_score, level, username) VALUES (?, ?, ?)",
+                (score, level, username)
+            )
+            conn.commit()
+
+    def save_feedback(username, rating, text):
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT INTO feedback (username, rating, feedback_text) VALUES (?, ?, ?)",
+                (username, rating, text)
+            )
+            conn.commit()
+
+init_db()
