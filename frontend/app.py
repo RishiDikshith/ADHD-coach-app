@@ -42,7 +42,6 @@ body {
 
 [data-testid="stSidebar"] {
     background: linear-gradient(135deg, #111827 0%, #0f172a 100%) !important;
-    min-width: 400px !important;
 }
 
 /* Make main containers purely black */
@@ -290,6 +289,27 @@ div[data-testid="stTextArea"] textarea {
     min-height: 100px !important;
 }
 
+/* Responsive Adjustments for Mobile */
+@media (max-width: 768px) {
+    .chat-messages { height: 60vh; }
+    .user-message-bubble, .bot-message-bubble, .thinking-bubble {
+        font-size: 16px;
+        padding: 12px 16px;
+        max-width: 90%;
+    }
+    .header-title { font-size: 24px; }
+    .header-subtitle { font-size: 16px; }
+    form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input {
+        font-size: 16px !important;
+        padding: 10px 15px !important;
+    }
+    form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button {
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 20px !important;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -397,6 +417,10 @@ if not st.session_state.authenticated:
                 reg_pass = st.text_input("New Password", type="password")
                 if st.form_submit_button("Register", use_container_width=True):
                     if reg_user and reg_pass:
+                    import re
+                    if len(reg_pass) < 8 or not re.search(r"[A-Z]", reg_pass) or not re.search(r"[a-z]", reg_pass) or not re.search(r"[0-9]", reg_pass) or not re.search(r"[@$!%*?&#\-_]", reg_pass):
+                        st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
+                    else:
                         if create_user(reg_user, reg_pass):
                             st.success("Registration successful! You can now log in.")
                         else:

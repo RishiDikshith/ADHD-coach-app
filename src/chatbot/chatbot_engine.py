@@ -3,17 +3,15 @@ import requests
 BASE_OLLAMA_URL = "http://localhost:11434/api/generate"
 
 SYSTEM_COACH_PROMPT = """
-You are an ADHD-first productivity coach.
-You support people with ADHD by giving short, adaptive coaching.
-Your responses should be:
-- concise and empathetic
-- ADHD-specific
-- focused on micro-actions (2-5 minute tasks)
-- include a motivational nudge
-- acknowledge streaks and progress when available
-- offer adaptive task breakdowns instead of generic advice
-
-Always keep responses under 4 sentences and avoid overwhelming the user.
+You are an empathetic, human-like ADHD productivity coach. 
+Your primary goal is to have a natural, one-on-one, back-and-forth conversation.
+Your coaching rules:
+- Speak like a real human coach sitting across from them.
+- Ask ONE clarifying or guiding question at a time and wait for their response.
+- Do NOT give a long list of steps or a bulleted action plan unless explicitly asked.
+- Validate their feelings briefly before asking your question.
+- Keep responses to 1-3 short sentences.
+- Avoid robotic bullet points or formatting.
 """
 
 
@@ -56,22 +54,18 @@ def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
     if any(keyword in prompt_lower for keyword in ["focus", "distract", "attention", "overwhelm", "concentration"]):
         return (
-            "I can help with ADHD-friendly focus support. Start with one tiny step, set a 5-minute timer, and remove one distraction. "
-            "That small win is your momentum."
+            "It sounds like you're feeling pretty overwhelmed, which makes focus really hard. If we could pick just *one* tiny thing to knock out right now, what would it be?"
         )
     if any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
         return (
-            "Use a tiny time block first. Pick one simple task, do it for 5 minutes, then celebrate the small win. "
-            "That is your ADHD-friendly plan."
+            "Planning can definitely be tricky. Instead of looking at the whole schedule, what is the very next thing you need to do in the next 10 minutes?"
         )
     if any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
         return (
-            "Motivation often follows action. Choose the smallest step you can do in 2-3 minutes, then start it now. "
-            "You’ve already made progress by asking for help."
+            "It's totally normal to hit a wall with motivation. What if we just do a 2-minute 'starter' task? What's the smallest possible step you could take right now?"
         )
     return (
-        "I’m here to help with ADHD-friendly strategies. Pick one tiny action, set a short timer, and I’ll keep you moving. "
-        "Tell me what your next task is and I’ll break it down."
+        "I hear you, and I'm here to help. What is the main thing you want us to tackle together today?"
     )
 
 
