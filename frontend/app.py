@@ -593,30 +593,26 @@ st.markdown("""
 # Chat interface - make it expandable
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
+chat_placeholder = st.empty()
+
+# Inline Chat Input Form - stays above feedback
+with st.form("chat_input_form", clear_on_submit=True):
+    cols = st.columns([10, 1])
+    with cols[0]:
+        user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed")
+    with cols[1]:
+        submit_btn = st.form_submit_button("➤", use_container_width=True)
+
+if submit_btn and user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    # Do not call st.rerun() here so the UI updates immediately!
+
 is_thinking = st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
 if not st.session_state.messages:
-    st.markdown('<div style="height: 30vh;"></div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([2, 6, 2])
-    with col2:
-        with st.form("chat_input_form", clear_on_submit=True):
-            cols = st.columns([8, 1])
-            with cols[0]:
-                user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed")
-            with cols[1]:
-                submit_btn = st.form_submit_button("➤", use_container_width=True)
-
-    if submit_btn and user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        st.rerun()
-        
-    st.markdown('<div style="height: 10vh;"></div>', unsafe_allow_html=True)
+    chat_placeholder.markdown('<div style="height: 30vh;"></div><div style="text-align:center; color:#aaaaaa; font-size:20px;">Start a conversation below!</div><div style="height: 10vh;"></div>', unsafe_allow_html=True)
 else:
-    # Generate the whole chat HTML block first so divs are properly nested
     chat_html = '<div class="chat-messages">'
-    
-    # For column-reverse to display correctly (newest at bottom), add the newest items first
     if is_thinking:
         chat_html += '<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>'
 
@@ -625,82 +621,68 @@ else:
             chat_html += f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(msg["content"])}</div></div>'
         else:
             chat_html += f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(msg["content"])}</div></div>'
-
     chat_html += '</div>'
-
-    # Render the chat container
-    st.markdown(chat_html, unsafe_allow_html=True)
-
-    # Inline Chat Input Form - stays above feedback
-    with st.form("chat_input_form", clear_on_submit=True):
-        cols = st.columns([10, 1])
-        with cols[0]:
-            user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed")
-        with cols[1]:
-            submit_btn = st.form_submit_button("➤", use_container_width=True)
-
-    if submit_btn and user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        st.rerun()
+    chat_placeholder.markdown(chat_html, unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Process the backend call if we are thinking
 if is_thinking:
-    try:
-        user_input_text = st.session_state.messages[-1]["content"]
-        history = st.session_state.messages[:-1]
-        
-        request_data = ChatRequest(
-            text=user_input_text,
-            history=history,
-            user_data=st.session_state.user_data
-        )
-        
-        # Call the API function directly instead of making an HTTP request
-        data = chat(request_data)
-        
-        reply = data.get("reply", "⚠️ No response")
-        analysis = data.get("analysis", {})
-        scores = data.get("scores", {})
-        
-        # Extract current stress level from session
-        current_stress = st.session_state.user_data.get("stress_level", 5)
-        
-        # Make an adjustment based on the current message's emotion
-        is_stressed_in_text = analysis.get("emotion") == "stress"
-        
-        # Fallback heuristic
-        stress_keywords = ["stress", "overwhelm", "anxious", "panic", "too much", "hard", "stuck", "tired", "sad", "depressed"]
-        if any(kw in user_input_text.lower() for kw in stress_keywords):
-            is_stressed_in_text = True
+    with st.spinner("AI Coach is typing..."):
+        try:
+            user_input_text = st.session_state.messages[-1]["content"]
+            history = st.session_state.messages[:-1]
             
-        if is_stressed_in_text:
-            new_stress = min(10, current_stress + 2) # Nudge up stronger
-        else:
-            new_stress = max(1, current_stress - 1) # Nudge down when calm
-        
-        st.session_state.user_data["stress_level"] = new_stress
-        
-        # Dynamic Updates based on AI analysis
-        interventions = data.get("interventions", [])
-        if interventions:
-            st.session_state.goals = []
-            st.session_state.tasks = []
+            request_data = ChatRequest(
+                text=user_input_text,
+                history=history,
+                user_data=st.session_state.user_data
+            )
             
-            timer_triggered = False
-            for inv in interventions:
-                st.session_state.goals.append(f"🎯 {inv['title']}")
-                st.session_state.tasks.append(inv['action'])
+            # Call the API function directly instead of making an HTTP request
+            data = chat(request_data)
+            
+            reply = data.get("reply", "⚠️ No response")
+            analysis = data.get("analysis", {})
+            scores = data.get("scores", {})
+            
+            # Extract current stress level from session
+            current_stress = st.session_state.user_data.get("stress_level", 5)
+            
+            # Make an adjustment based on the current message's emotion
+            is_stressed_in_text = analysis.get("emotion") == "stress"
+            
+            # Fallback heuristic
+            stress_keywords = ["stress", "overwhelm", "anxious", "panic", "too much", "hard", "stuck", "tired", "sad", "depressed"]
+            if any(kw in user_input_text.lower() for kw in stress_keywords):
+                is_stressed_in_text = True
                 
-                # Auto-start focus timer if suggested
-                if inv['category'] == 'focus' and not st.session_state.timer_active and not timer_triggered:
-                    st.session_state.timer_active = True
-                    st.session_state.timer_start = time.time()
-                    timer_triggered = True
-                    st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
-    except Exception as e:
-        reply = f"❌ Error: {str(e)}"
+            if is_stressed_in_text:
+                new_stress = min(10, current_stress + 2) # Nudge up stronger
+            else:
+                new_stress = max(1, current_stress - 1) # Nudge down when calm
+            
+            st.session_state.user_data["stress_level"] = new_stress
+            
+            # Dynamic Updates based on AI analysis
+            interventions = data.get("interventions", [])
+            if interventions:
+                st.session_state.goals = []
+                st.session_state.tasks = []
+                
+                timer_triggered = False
+                for inv in interventions:
+                    st.session_state.goals.append(f"🎯 {inv['title']}")
+                    st.session_state.tasks.append(inv['action'])
+                    
+                    # Auto-start focus timer if suggested
+                    if inv['category'] == 'focus' and not st.session_state.timer_active and not timer_triggered:
+                        st.session_state.timer_active = True
+                        st.session_state.timer_start = time.time()
+                        timer_triggered = True
+                        st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
+        except Exception as e:
+            reply = f"❌ Error: {str(e)}"
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.session_state.session_count += 1

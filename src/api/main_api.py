@@ -389,25 +389,34 @@ def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
     if any(keyword in prompt_lower for keyword in ["focus", "distract", "attention", "overwhelm", "concentration"]):
         return (
-            "I can help with ADHD-friendly focus support. Try breaking your work into a tiny first step, "
-            "set a short timer for 5-10 minutes, and remove one distraction from your space. "
-            "Together we can build momentum from there."
+            "It sounds like you're feeling overwhelmed. Let's regain focus with these small steps:\n\n"
+            "• Pick one tiny step to start with.\n"
+            "• Set a timer for just 5-10 minutes.\n"
+            "• Remove one distraction from your space right now.\n\n"
+            "Which of these can you do first?"
         )
     if any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
         return (
-            "Time management is easier when you use small, visible blocks. "
-            "Start with a single 10-minute task, set an alarm for the next step, "
-            "and keep the next action simple."
+            "Time management can be tricky. Let's make it visible and simple:\n\n"
+            "• Start a 10-minute task right now.\n"
+            "• Set an alarm for when it's time to switch tasks.\n"
+            "• Keep your next action small and specific.\n\n"
+            "What is your very first 10-minute task?"
         )
     if any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
         return (
-            "Motivation often comes after starting. Choose the smallest possible action, "
-            "do it for just 2-5 minutes, and reward yourself for showing up."
+            "Motivation often follows action. Let's build momentum:\n\n"
+            "• Choose the smallest action possible.\n"
+            "• Do it for just 2 minutes.\n"
+            "• Reward yourself immediately after.\n\n"
+            "What's a 2-minute action you can take?"
         )
     return (
-        "I'm here to help with ADHD-friendly strategies. "
-        "Try a quick brain dump, then pick one tiny task and begin. "
-        "If you want, I can simplify your current work right now."
+        "I'm here to help you stay on track. Here's a quick strategy:\n\n"
+        "• Do a quick brain dump of your thoughts.\n"
+        "• Pick just one tiny task from that list.\n"
+        "• Begin working on it for 5 minutes.\n\n"
+        "Would you like me to help break down a specific task?"
     )
 
 
