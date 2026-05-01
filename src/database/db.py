@@ -1,8 +1,15 @@
 import os
 import hashlib
 from contextlib import contextmanager
+from dotenv import load_dotenv
+
+# 🔥 Load .env
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# ✅ DEBUG LINE (add here)
+print("DATABASE_URL:", DATABASE_URL)
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
