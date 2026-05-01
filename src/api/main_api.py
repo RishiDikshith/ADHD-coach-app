@@ -404,6 +404,20 @@ def generate_offline_reply(prompt):
 
 def get_ai_reply(prompt):
     try:
+        # 1. Try Groq Cloud API (For Live Render Deployment)
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if groq_api_key:
+            from groq import Groq
+            client = Groq(api_key=groq_api_key)
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama3-8b-8192",
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            return chat_completion.choices[0].message.content
+            
+        # 2. Fallback to Local Ollama
         ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
         res = requests.post(
             ollama_url,
@@ -420,10 +434,10 @@ def get_ai_reply(prompt):
         logging.error("Ollama request timed out")
         return generate_offline_reply(prompt)
     except requests.exceptions.RequestException as exc:
-        logging.error("Ollama request failed: %s", exc)
+        logging.error("AI API request failed: %s", exc)
         return generate_offline_reply(prompt)
     except Exception:
-        logging.exception("Unexpected error calling Ollama")
+        logging.exception("Unexpected error generating AI reply")
         return generate_offline_reply(prompt)
 
 
