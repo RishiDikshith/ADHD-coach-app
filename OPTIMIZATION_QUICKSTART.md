@@ -94,10 +94,9 @@ if result is None:
 The FastAPI is already integrated with optimizations. To use:
 
 ```bash
-# Start the API server
-python -m uvicorn src.api.main_api:app --reload --workers 4
-
-# API is now running at http://localhost:8000
+# The API is now imported directly into Streamlit to save memory on cloud platforms.
+# Start the Streamlit app:
+streamlit run frontend/app.py
 ```
 
 ### Example API Requests

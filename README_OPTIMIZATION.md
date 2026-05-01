@@ -290,8 +290,8 @@ predictions = batch_pred.predict_batch(large_df)
 
 ### 1. Deploy to Production
 ```bash
-# Start optimized API server
-python -m uvicorn src.api.main_api:app --workers 4 --host 0.0.0.0 --port 8000
+# Start the integrated Streamlit application (API is now imported directly to save memory)
+streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
 ```
 
 ### 2. Monitor Performance

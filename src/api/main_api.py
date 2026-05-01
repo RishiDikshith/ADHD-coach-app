@@ -403,14 +403,15 @@ def generate_offline_reply(prompt):
 
 def get_ai_reply(prompt):
     try:
+        ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
         res = requests.post(
-            "http://localhost:11434/api/generate",
+            ollama_url,
             json={
                 "model": "llama3:instruct",
                 "prompt": prompt,
                 "stream": False
             },
-            timeout=30
+            timeout=3  # Reduced from 30s to 3s to prevent cloud deployments from freezing
         )
         res.raise_for_status()
         return res.json().get("response", "")
