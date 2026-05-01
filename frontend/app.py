@@ -472,151 +472,159 @@ if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
-        with login_tab:
-            with st.form("login_form"):
-                log_user = st.text_input("Username")
-                log_pass = st.text_input("Password", type="password")
-                remember_me = st.checkbox("Remember me")
-                if st.form_submit_button("Login", use_container_width=True):
-                    if verify_user(log_user, log_pass):
-                        user = get_user_by_username(log_user)
-                        if user:
-                            has_valid_email = bool(user['contact_info'] and re.match(r"[^@]+@[^@]+\.[^@]+", user['contact_info']))
-                            if not user['is_verified']:
-                                if not has_valid_email:
-                                    # Legacy user without a valid email: Login but force them to link one
+        if st.session_state.auth_flow == 'register_otp':
+            st.subheader(f"Verify account for: {st.session_state.auth_user}")
+            with st.form("otp_verify_form"):
+                otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
+                submitted = st.form_submit_button("Verify Account")
+                if submitted:
+                    user = get_user_by_username(st.session_state.auth_user)
+                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
+                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
+                        activate_user(st.session_state.auth_user)
+                        st.success("Account verified successfully! You can now log in.")
+                        st.session_state.auth_flow = None
+                        st.session_state.auth_user = None
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("Invalid or expired OTP. Please try again.")
+            
+            # Add a button to escape the OTP screen
+            if st.button("← Cancel & Start Over", key="cancel_reg_otp"):
+                st.session_state.auth_flow = None
+                st.session_state.auth_user = None
+                st.rerun()
+        
+        elif st.session_state.auth_flow == 'forgot_password_otp':
+            st.subheader(f"Reset password for: {st.session_state.auth_user}")
+            with st.form("reset_otp_form"):
+                otp_code = st.text_input("Enter the 6-digit OTP from your email")
+                new_pass = st.text_input("Enter New Password", type="password")
+                if st.form_submit_button("Set New Password"):
+                    user = get_user_by_username(st.session_state.auth_user)
+                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
+                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
+                        if len(new_pass) < 6:
+                            st.error("Password must be at least 6 characters long.")
+                        else:
+                            # Use the original contact info for security
+                            if reset_password(user['username'], user['contact_info'], new_pass):
+                                st.success("Password has been reset successfully! You can now log in.")
+                                st.session_state.auth_flow = None
+                                st.session_state.auth_user = None
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("An unexpected error occurred during password reset.")
+                    else:
+                        st.error("Invalid or expired OTP.")
+            
+            # Add a button to escape the OTP screen
+            if st.button("← Cancel & Start Over", key="cancel_forgot_otp"):
+                st.session_state.auth_flow = None
+                st.session_state.auth_user = None
+                st.rerun()
+                
+        else:
+            login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
+            with login_tab:
+                with st.form("login_form"):
+                    log_user = st.text_input("Username")
+                    log_pass = st.text_input("Password", type="password")
+                    remember_me = st.checkbox("Remember me")
+                    if st.form_submit_button("Login", use_container_width=True):
+                        log_user = log_user.strip()
+                        if verify_user(log_user, log_pass):
+                            user = get_user_by_username(log_user)
+                            if user:
+                                has_valid_email = bool(user['contact_info'] and re.match(r"[^@]+@[^@]+\.[^@]+", user['contact_info']))
+                                if not user['is_verified']:
+                                    if not has_valid_email:
+                                        # Legacy user without a valid email: Login but force them to link one
+                                        st.session_state.authenticated = True
+                                        st.session_state.username = log_user
+                                        st.session_state.remember_me = remember_me
+                                        st.session_state.contact_linked = False 
+                                        st.rerun()
+                                    else:
+                                        # New user who abandoned registration: Send fresh OTP
+                                        otp = generate_otp()
+                                        expires_at = datetime.now() + timedelta(minutes=10)
+                                        set_user_otp(log_user, otp, expires_at)
+                                        if send_otp_email(user['contact_info'], otp):
+                                            st.session_state.auth_flow = 'register_otp'
+                                            st.session_state.auth_user = log_user
+                                            st.warning("Your account is not verified. A new OTP has been sent to your email.")
+                                            time.sleep(2)
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to send verification email. Please check your SMTP settings.")
+                                else:
+                                    # Standard verified user
                                     st.session_state.authenticated = True
                                     st.session_state.username = log_user
                                     st.session_state.remember_me = remember_me
-                                    st.session_state.contact_linked = False 
+                                    st.session_state.contact_linked = True
                                     st.rerun()
-                                else:
-                                    # New user who abandoned registration: Send fresh OTP
-                                    otp = generate_otp()
-                                    expires_at = datetime.now() + timedelta(minutes=10)
-                                    set_user_otp(log_user, otp, expires_at)
-                                    send_otp_email(user['contact_info'], otp)
-                                    st.session_state.auth_flow = 'register_otp'
-                                    st.session_state.auth_user = log_user
-                                    st.warning("Your account is not verified. A new OTP has been sent to your email.")
-                                    time.sleep(2)
-                                    st.rerun()
-                            else:
-                                # Standard verified user
-                                st.session_state.authenticated = True
-                                st.session_state.username = log_user
-                                st.session_state.remember_me = remember_me
-                                st.session_state.contact_linked = True
-                                st.rerun()
-                    else:
-                        st.error("Invalid username or password.")
-        with register_tab:
-            if st.session_state.auth_flow == 'register_otp':
-                st.subheader(f"Verify account for: {st.session_state.auth_user}")
-                with st.form("otp_verify_form"):
-                    otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
-                    submitted = st.form_submit_button("Verify Account")
-                    if submitted:
-                        user = get_user_by_username(st.session_state.auth_user)
-                        if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
-                            activate_user(st.session_state.auth_user)
-                            st.success("Account verified successfully! You can now log in.")
-                            st.session_state.auth_flow = None
-                            st.session_state.auth_user = None
-                            time.sleep(2)
-                            st.rerun()
                         else:
-                            st.error("Invalid or expired OTP. Please try again.")
-                
-                # Add a button to escape the OTP screen
-                if st.button("← Cancel & Start Over", key="cancel_reg_otp"):
-                    st.session_state.auth_flow = None
-                    st.session_state.auth_user = None
-                    st.rerun()
-            else:
-                with st.form("register_form"):
-                    reg_user = st.text_input("New Username")
-                    reg_pass = st.text_input("New Password", type="password")
-                    reg_contact = st.text_input("Email Address (Required for verification)")
-                    if st.form_submit_button("Register", use_container_width=True):
-                        if reg_user and reg_pass and reg_contact:
-                            is_email = re.match(r"[^@]+@[^@]+\.[^@]+", reg_contact)
-                            
-                            if not is_email:
-                                st.error("Please enter a valid email address.")
-                            elif len(reg_pass) < 8 or not re.search(r"[A-Z]", reg_pass) or not re.search(r"[a-z]", reg_pass) or not re.search(r"[0-9]", reg_pass) or not re.search(r"[@$!%*?&#\-_]", reg_pass):
-                                st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
+                            st.error("Invalid username or password.")
+            with register_tab:
+                    with st.form("register_form"):
+                        reg_user = st.text_input("New Username")
+                        reg_pass = st.text_input("New Password", type="password")
+                        reg_contact = st.text_input("Email Address (Required for verification)")
+                        if st.form_submit_button("Register", use_container_width=True):
+                            reg_user = reg_user.strip()
+                            if reg_user and reg_pass and reg_contact:
+                                is_email = re.match(r"[^@]+@[^@]+\.[^@]+", reg_contact)
+                                
+                                if not is_email:
+                                    st.error("Please enter a valid email address.")
+                                elif len(reg_pass) < 6:
+                                    st.error("Password must be at least 6 characters long.")
+                                else:
+                                    if create_user(reg_user, reg_pass, reg_contact):
+                                        # User created, now send OTP
+                                        otp = generate_otp()
+                                        expires_at = datetime.now() + timedelta(minutes=10)
+                                        set_user_otp(reg_user, otp, expires_at)
+                                        
+                                        if send_otp_email(reg_contact, otp):
+                                            st.session_state.auth_flow = 'register_otp'
+                                            st.session_state.auth_user = reg_user
+                                            st.success("Registration started! Please check your email for a verification code.")
+                                            time.sleep(2)
+                                            st.rerun()
+                                        else:
+                                            st.error("Could not send verification email. Please check the address and try again. You may need to configure SMTP environment variables.")
+                                    else:
+                                        st.error("Username already exists or database error occurred.")
                             else:
-                                if create_user(reg_user, reg_pass, reg_contact):
-                                    # User created, now send OTP
+                                st.error("Please provide username, password, and a valid email.")
+            with forgot_tab:
+                    with st.form("forgot_form"):
+                        for_user = st.text_input("Username")
+                        if st.form_submit_button("Send Password Reset Email", use_container_width=True):
+                            for_user = for_user.strip()
+                            if for_user:
+                                user = get_user_by_username(for_user)
+                                if user and user['contact_info']:
                                     otp = generate_otp()
                                     expires_at = datetime.now() + timedelta(minutes=10)
-                                    set_user_otp(reg_user, otp, expires_at)
-                                    
-                                    if send_otp_email(reg_contact, otp):
-                                        st.session_state.auth_flow = 'register_otp'
-                                        st.session_state.auth_user = reg_user
-                                        st.success("Registration started! Please check your email for a verification code.")
+                                    set_user_otp(for_user, otp, expires_at)
+                                    if send_otp_email(user['contact_info'], otp):
+                                        st.session_state.auth_flow = 'forgot_password_otp'
+                                        st.session_state.auth_user = for_user
+                                        st.success("Password reset email sent! Please check your inbox for an OTP.")
                                         time.sleep(2)
                                         st.rerun()
                                     else:
-                                        st.error("Could not send verification email. Please check the address and try again. You may need to configure SMTP environment variables.")
+                                        st.error("Could not send password reset email. Please contact support or check SMTP configuration.")
                                 else:
-                                    st.error("Username already exists.")
-                        else:
-                            st.error("Please provide username, password, and a valid email.")
-        with forgot_tab:
-            if st.session_state.auth_flow == 'forgot_password_otp':
-                st.subheader(f"Reset password for: {st.session_state.auth_user}")
-                with st.form("reset_otp_form"):
-                    otp_code = st.text_input("Enter the 6-digit OTP from your email")
-                    new_pass = st.text_input("Enter New Password", type="password")
-                    if st.form_submit_button("Set New Password"):
-                        user = get_user_by_username(st.session_state.auth_user)
-                        if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
-                            if len(new_pass) < 8 or not re.search(r"[A-Z]", new_pass) or not re.search(r"[a-z]", new_pass) or not re.search(r"[0-9]", new_pass) or not re.search(r"[@$!%*?&#\-_]", new_pass):
-                                st.error("New password is not strong enough.")
+                                    st.error("Username not found or no contact info linked to this account.")
                             else:
-                                # Use the original contact info for security
-                                if reset_password(user['username'], user['contact_info'], new_pass):
-                                    st.success("Password has been reset successfully! You can now log in.")
-                                    st.session_state.auth_flow = None
-                                    st.session_state.auth_user = None
-                                    time.sleep(2)
-                                    st.rerun()
-                                else:
-                                    st.error("An unexpected error occurred during password reset.")
-                        else:
-                            st.error("Invalid or expired OTP.")
-                
-                # Add a button to escape the OTP screen
-                if st.button("← Cancel & Start Over", key="cancel_forgot_otp"):
-                    st.session_state.auth_flow = None
-                    st.session_state.auth_user = None
-                    st.rerun()
-            else:
-                with st.form("forgot_form"):
-                    for_user = st.text_input("Username")
-                    if st.form_submit_button("Send Password Reset Email", use_container_width=True):
-                        if for_user:
-                            user = get_user_by_username(for_user)
-                            if user and user['contact_info']:
-                                otp = generate_otp()
-                                expires_at = datetime.now() + timedelta(minutes=10)
-                                set_user_otp(for_user, otp, expires_at)
-                                if send_otp_email(user['contact_info'], otp):
-                                    st.session_state.auth_flow = 'forgot_password_otp'
-                                    st.session_state.auth_user = for_user
-                                    st.success("Password reset email sent! Please check your inbox for an OTP.")
-                                    time.sleep(2)
-                                    st.rerun()
-                                else:
-                                    st.error("Could not send password reset email. Please contact support or check SMTP configuration.")
-                            else:
-                                st.error("Username not found or no contact info linked to this account.")
-                        else:
-                            st.error("Please enter your username.")
+                                st.error("Please enter your username.")
     st.stop()
 
 # -------- MANDATORY CONTACT LINKING FOR EXISTING USERS --------
@@ -630,7 +638,8 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
                 otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
                 if st.form_submit_button("Verify & Link", use_container_width=True):
                     user = get_user_by_username(st.session_state.username)
-                    if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
+                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
+                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
                         activate_user(st.session_state.username)
                         st.session_state.contact_linked = True
                         st.session_state.contact_info = user['contact_info']
@@ -884,7 +893,8 @@ with st.sidebar:
                 otp_code = st.text_input("Enter 6-digit OTP")
                 if st.form_submit_button("Verify & Update", use_container_width=True):
                     user = get_user_by_username(st.session_state.username)
-                    if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
+                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
+                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
                         update_user_contact(st.session_state.username, st.session_state.pending_new_email)
                         activate_user(st.session_state.username)
                         st.session_state.contact_info = st.session_state.pending_new_email
@@ -935,8 +945,8 @@ with st.sidebar:
                     st.error("New passwords do not match.")
                 elif not verify_user(st.session_state.username, current_password):
                     st.error("Incorrect current password.")
-                elif len(new_password) < 8 or not re.search(r"[A-Z]", new_password) or not re.search(r"[a-z]", new_password) or not re.search(r"[0-9]", new_password) or not re.search(r"[@$!%*?&#\-_]", new_password):
-                    st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
+                elif len(new_password) < 6:
+                    st.error("Password must be at least 6 characters long.")
                 else:
                     if reset_password(st.session_state.username, st.session_state.contact_info, new_password):
                         st.success("Password updated successfully!")

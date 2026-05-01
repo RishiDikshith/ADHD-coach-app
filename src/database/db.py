@@ -69,7 +69,8 @@ if DATABASE_URL:
                     )
                 conn.commit()
             return True
-        except psycopg2.IntegrityError:
+        except Exception as e:
+            print(f"Database error creating user: {e}")
             return False
 
     def verify_user(username, password):
@@ -210,7 +211,8 @@ else:
                 )
                 conn.commit()
             return True
-        except sqlite3.IntegrityError:
+        except Exception as e:
+            print(f"Database error creating user: {e}")
             return False
 
     def verify_user(username, password):
