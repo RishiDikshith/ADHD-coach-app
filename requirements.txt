@@ -25,3 +25,4 @@ pydub
 pytest
 gunicorn
 fpdf2
+python-dotenv==1.0.0
