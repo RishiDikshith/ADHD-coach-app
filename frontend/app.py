@@ -160,6 +160,18 @@ form[aria-label="chat_input_form"] {
     box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
 }
 
+/* Force chat input and button to stay on one line on mobile */
+form[aria-label="chat_input_form"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+form[aria-label="chat_input_form"] [data-testid="column"]:last-child {
+    flex-grow: 0 !important;
+    min-width: 50px !important;
+}
+
 /* Make inputs inside chat form transparent */
 form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input {
     background: transparent !important;
@@ -177,19 +189,21 @@ form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input:focus {
 
 /* Submit button */
 form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button {
-    background: transparent !important;
+    background: #333 !important;
     border: none !important;
-    color: #e0e0e0 !important;
-    font-size: 28px !important;
-    width: 52px !important;
-    height: 52px !important;
+    color: #fff !important;
+    font-size: 22px !important;
+    width: 44px !important;
+    height: 44px !important;
     border-radius: 50% !important;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:hover {
-    background: #333 !important;
+    background: #555 !important;
     color: #fff !important;
 }
 
@@ -304,8 +318,8 @@ div[data-testid="stTextArea"] textarea {
         padding: 10px 15px !important;
     }
     form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button {
-        width: 44px !important;
-        height: 44px !important;
+        width: 40px !important;
+        height: 40px !important;
         font-size: 20px !important;
     }
 }
@@ -395,6 +409,12 @@ if "authenticated" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state.username = None
 
+if "contact_linked" not in st.session_state:
+    st.session_state.contact_linked = False
+
+if "contact_info" not in st.session_state:
+    st.session_state.contact_info = None
+
 if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -404,10 +424,13 @@ if not st.session_state.authenticated:
             with st.form("login_form"):
                 log_user = st.text_input("Username")
                 log_pass = st.text_input("Password", type="password")
+                remember_me = st.checkbox("Remember me")
                 if st.form_submit_button("Login", use_container_width=True):
                     if verify_user(log_user, log_pass):
                         st.session_state.authenticated = True
                         st.session_state.username = log_user
+                        st.session_state.remember_me = remember_me
+                        st.session_state.contact_linked = False # Force check for existing users
                         st.rerun()
                     else:
                         st.error("Invalid username or password")
@@ -415,18 +438,48 @@ if not st.session_state.authenticated:
             with st.form("register_form"):
                 reg_user = st.text_input("New Username")
                 reg_pass = st.text_input("New Password", type="password")
+                reg_contact = st.text_input("Email or Phone Number (Required)")
                 if st.form_submit_button("Register", use_container_width=True):
-                    if reg_user and reg_pass:
+                    if reg_user and reg_pass and reg_contact:
                         import re
-                        if len(reg_pass) < 8 or not re.search(r"[A-Z]", reg_pass) or not re.search(r"[a-z]", reg_pass) or not re.search(r"[0-9]", reg_pass) or not re.search(r"[@$!%*?&#\-_]", reg_pass):
+                        is_email = re.match(r"[^@]+@[^@]+\.[^@]+", reg_contact)
+                        is_phone = re.match(r"^\+?[\d\s-]{10,}$", reg_contact)
+                        
+                        if not (is_email or is_phone):
+                            st.error("Please enter a valid email or phone number.")
+                        elif len(reg_pass) < 8 or not re.search(r"[A-Z]", reg_pass) or not re.search(r"[a-z]", reg_pass) or not re.search(r"[0-9]", reg_pass) or not re.search(r"[@$!%*?&#\-_]", reg_pass):
                             st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
                         else:
                             if create_user(reg_user, reg_pass):
+                                st.session_state.contact_info = reg_contact
                                 st.success("Registration successful! You can now log in.")
                             else:
                                 st.error("Username already exists.")
                     else:
-                        st.error("Please provide both username and password")
+                        st.error("Please provide username, password, and contact info")
+    st.stop()
+
+# -------- MANDATORY CONTACT LINKING FOR EXISTING USERS --------
+if st.session_state.authenticated and not st.session_state.get("contact_linked", False):
+    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>⚠️ Account Update Required</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #cbd5e1;'>To secure your account and enable real-time features, you must link an email or phone number to continue.</p>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.form("link_contact_form"):
+            contact_info = st.text_input("Email or Phone Number")
+            if st.form_submit_button("Link Account", use_container_width=True):
+                import re
+                is_email = re.match(r"[^@]+@[^@]+\.[^@]+", contact_info)
+                is_phone = re.match(r"^\+?[\d\s-]{10,}$", contact_info)
+                
+                if not (is_email or is_phone):
+                    st.error("Please enter a valid email or phone number.")
+                else:
+                    st.session_state.contact_info = contact_info
+                    st.session_state.contact_linked = True
+                    st.success("Account successfully linked!")
+                    time.sleep(1)
+                    st.rerun()
     st.stop()
 
 if "user_data" not in st.session_state:
@@ -625,7 +678,7 @@ with st.form("chat_input_form", clear_on_submit=True):
     with cols[0]:
         user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed")
     with cols[1]:
-        submit_btn = st.form_submit_button("➤", use_container_width=True)
+        submit_btn = st.form_submit_button("↑", use_container_width=True)
 
 if submit_btn and user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
