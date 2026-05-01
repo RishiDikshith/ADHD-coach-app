@@ -31,7 +31,8 @@ if DATABASE_URL:
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL
+                    password_hash TEXT NOT NULL,
+                    contact_info TEXT
                 )
                 """)
                 cur.execute("""
@@ -45,13 +46,20 @@ if DATABASE_URL:
                 """)
             conn.commit()
 
-    def create_user(username, password):
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("ALTER TABLE users ADD COLUMN contact_info TEXT")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+    def create_user(username, password, contact_info=None):
         try:
             with get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                        (username, hash_password(password))
+                        "INSERT INTO users (username, password_hash, contact_info) VALUES (%s, %s, %s)",
+                        (username, hash_password(password), contact_info)
                     )
                 conn.commit()
             return True
@@ -64,6 +72,15 @@ if DATABASE_URL:
                 cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
                 return bool(row and row[0] == hash_password(password))
+
+    def update_user_contact(username, contact_info):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET contact_info = %s WHERE username = %s",
+                    (contact_info, username)
+                )
+            conn.commit()
 
     def save_result(score, level, username="anonymous"):
         with get_connection() as conn:
@@ -115,9 +132,15 @@ else:
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            contact_info TEXT
         )
         """)
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN contact_info TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,12 +152,12 @@ else:
         """)
         conn.commit()
 
-    def create_user(username, password):
+    def create_user(username, password, contact_info=None):
         try:
             with get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                    (username, hash_password(password))
+                    "INSERT INTO users (username, password_hash, contact_info) VALUES (?, ?, ?)",
+                    (username, hash_password(password), contact_info)
                 )
                 conn.commit()
             return True
@@ -146,6 +169,14 @@ else:
             cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             return bool(row and row[0] == hash_password(password))
+
+    def update_user_contact(username, contact_info):
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET contact_info = ? WHERE username = ?",
+                (contact_info, username)
+            )
+            conn.commit()
 
     def save_result(score, level, username="anonymous"):
         with get_connection() as conn:

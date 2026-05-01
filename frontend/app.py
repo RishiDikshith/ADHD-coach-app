@@ -17,7 +17,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from src.database.db import create_user, verify_user, save_result, save_feedback
+from src.database.db import create_user, verify_user, save_result, save_feedback, update_user_contact
 # Import API directly to bypass network calls (Saves memory & prevents connection errors)
 from src.api.main_api import chat, ChatRequest
 
@@ -450,7 +450,7 @@ if not st.session_state.authenticated:
                         elif len(reg_pass) < 8 or not re.search(r"[A-Z]", reg_pass) or not re.search(r"[a-z]", reg_pass) or not re.search(r"[0-9]", reg_pass) or not re.search(r"[@$!%*?&#\-_]", reg_pass):
                             st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
                         else:
-                            if create_user(reg_user, reg_pass):
+                            if create_user(reg_user, reg_pass, reg_contact):
                                 st.session_state.contact_info = reg_contact
                                 st.success("Registration successful! You can now log in.")
                             else:
@@ -475,6 +475,7 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
                 if not (is_email or is_phone):
                     st.error("Please enter a valid email or phone number.")
                 else:
+                    update_user_contact(st.session_state.username, contact_info)
                     st.session_state.contact_info = contact_info
                     st.session_state.contact_linked = True
                     st.success("Account successfully linked!")
