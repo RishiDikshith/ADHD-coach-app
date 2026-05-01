@@ -76,7 +76,7 @@ def generate_chat_pdf(messages):
     except Exception:
         return pdf.output(dest='S').encode('latin-1')
 
-st.markdown("""
+st.html("""
 <style>
 * {
     margin: 0;
@@ -404,7 +404,7 @@ div[data-testid="stTextArea"] textarea {
 }
 
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
 # -------- STATE --------
@@ -1281,7 +1281,7 @@ with header_col2:
         initial = get_avatar_initials(st.session_state.username)
         bg_color = get_avatar_color(st.session_state.username)
         
-        st.markdown(f"""
+        st.html(f"""
         <div id="avatar-anchor" style="display:none;"></div>
         <style>
         /* Position the container instead of the button so the tooltip follows */
@@ -1329,7 +1329,7 @@ with header_col2:
             box-shadow: 0 6px 14px rgba(0,0,0,0.7) !important;
         }}
         </style>
-            """, unsafe_allow_html=True)
+            """)
             
         if st.button(initial, key="top_right_avatar_btn", help="Toggle Settings"):
             st.session_state.show_settings = not st.session_state.show_settings
