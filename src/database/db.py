@@ -76,7 +76,7 @@ if DATABASE_URL:
     def verify_user(username, password):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+                cur.execute("SELECT password_hash FROM users WHERE username = %s OR contact_info = %s", (username, username))
                 row = cur.fetchone()
                 return bool(row and row[0] == hash_password(password))
 
@@ -92,7 +92,7 @@ if DATABASE_URL:
     def get_user_by_username(username):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
+                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s OR contact_info = %s", (username, username))
                 row = cur.fetchone()
                 if row:
                     return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
@@ -217,7 +217,7 @@ else:
 
     def verify_user(username, password):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ? OR contact_info = ?", (username, username))
             row = cursor.fetchone()
             return bool(row and row[0] == hash_password(password))
 
@@ -231,7 +231,7 @@ else:
 
     def get_user_by_username(username):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ?", (username,))
+            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ? OR contact_info = ?", (username, username))
             row = cursor.fetchone()
             if row:
                 return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}

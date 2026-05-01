@@ -513,22 +513,24 @@ if "user_settings" not in st.session_state:
     st.session_state.user_settings = {}
 
 # -------- RESTORE SESSION FROM PERSISTENT STORAGE --------
-if "authenticated" in st.session_state and not st.session_state.authenticated:
-    # Only check for persisted session if not already authenticated
-    persisted_session = session_manager.load_session()
-    if persisted_session:
-        user = get_user_by_username(persisted_session["username"])
-        if user:
-            st.session_state.authenticated = True
-            st.session_state.username = persisted_session["username"]
-            st.session_state.remember_me = True
-            st.session_state.contact_linked = bool(user.get('is_verified', False))
-            st.session_state.contact_info = user.get('contact_info')
-            # Initialize settings manager for this user
-            settings_manager_instance = SettingsManager(persisted_session["username"])
-            st.session_state.user_settings = settings_manager_instance.load_settings()
-        else:
-            session_manager.clear_session()
+# WARNING: Using local file storage for sessions on cloud platforms (like Render) 
+# shares the session across all users! Disabled to ensure proper login functionality.
+# if "authenticated" in st.session_state and not st.session_state.authenticated:
+#     # Only check for persisted session if not already authenticated
+#     persisted_session = session_manager.load_session()
+#     if persisted_session:
+#         user = get_user_by_username(persisted_session["username"])
+#         if user:
+#             st.session_state.authenticated = True
+#             st.session_state.username = persisted_session["username"]
+#             st.session_state.remember_me = True
+#             st.session_state.contact_linked = bool(user.get('is_verified', False))
+#             st.session_state.contact_info = user.get('contact_info')
+#             # Initialize settings manager for this user
+#             settings_manager_instance = SettingsManager(persisted_session["username"])
+#             st.session_state.user_settings = settings_manager_instance.load_settings()
+#         else:
+#             session_manager.clear_session()
 
 if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
@@ -592,7 +594,7 @@ if not st.session_state.authenticated:
             login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
             with login_tab:
                 with st.form("login_form"):
-                    log_user = st.text_input("Username", autocomplete="username")
+                    log_user = st.text_input("Username or Email", autocomplete="username")
                     log_pass = st.text_input("Password", type="password", autocomplete="current-password")
                     remember_me = st.checkbox("Remember me")
                     if st.form_submit_button("Login", use_container_width=True):
@@ -600,6 +602,7 @@ if not st.session_state.authenticated:
                         if verify_user(log_user, log_pass):
                             user = get_user_by_username(log_user)
                             if user:
+                                log_user = user['username'] # Reassign to username if email was used
                                 has_valid_email = bool(user['contact_info'] and re.match(r"[^@]+@[^@]+\.[^@]+", user['contact_info']))
                                 if not user['is_verified']:
                                     if not has_valid_email:
@@ -609,7 +612,7 @@ if not st.session_state.authenticated:
                                         st.session_state.remember_me = remember_me
                                         st.session_state.contact_linked = False
                                         # Save session persistently
-                                        session_manager.save_session(log_user)
+                                        # session_manager.save_session(log_user)
                                         # Initialize settings manager for this user
                                         settings_manager_instance = SettingsManager(log_user)
                                         st.session_state.user_settings = settings_manager_instance.load_settings()
@@ -634,7 +637,7 @@ if not st.session_state.authenticated:
                                     st.session_state.remember_me = remember_me
                                     st.session_state.contact_linked = True
                                     # Save session persistently
-                                    session_manager.save_session(log_user)
+                                    # session_manager.save_session(log_user)
                                     # Initialize settings manager for this user
                                     settings_manager_instance = SettingsManager(log_user)
                                     st.session_state.user_settings = settings_manager_instance.load_settings()
@@ -771,7 +774,7 @@ with st.sidebar:
         st.session_state.authenticated = False
         st.session_state.username = None
         st.session_state.user_settings = {}
-        session_manager.clear_session()
+        # session_manager.clear_session()
         st.rerun()
 
     if not st.session_state.check_in_completed:
@@ -1119,7 +1122,7 @@ def render_settings_modal():
         if st.button("Logout from all devices", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.username = None
-            session_manager.clear_session()
+            # session_manager.clear_session()
             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Delete Account", type="primary", use_container_width=True):
