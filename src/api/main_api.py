@@ -411,7 +411,7 @@ def get_ai_reply(prompt):
             client = Groq(api_key=groq_api_key)
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 temperature=0.7,
                 max_tokens=1024,
             )

@@ -26,4 +26,4 @@ pytest
 gunicorn
 fpdf2
 python-dotenv==1.0.0
-groq==0.11.0
+groq==0.15.0
