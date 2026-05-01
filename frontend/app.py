@@ -37,6 +37,36 @@ def generate_otp(length=6):
 def render_chat_text(text):
     return html.escape(str(text)).replace("\n", "<br>")
 
+def generate_chat_pdf(messages):
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+        
+    pdf = FPDF()
+    pdf.add_page()
+    
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, "ADHD AI Coach - Chat History", ln=True, align='C')
+    pdf.ln(10)
+    
+    for msg in messages:
+        role = "You" if msg["role"] == "user" else "AI Coach"
+        # Latin-1 encoding gracefully replaces emojis with '?' to prevent FPDF text rendering crashes
+        safe_text = str(msg.get("content", "")).encode('latin-1', 'replace').decode('latin-1')
+        
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 8, f"{role}:", ln=True)
+        
+        pdf.set_font("Arial", '', 11)
+        pdf.multi_cell(0, 6, safe_text)
+        pdf.ln(5)
+        
+    try:
+        return bytes(pdf.output())
+    except Exception:
+        return pdf.output(dest='S').encode('latin-1')
+
 st.markdown("""
 <style>
 * {
@@ -427,6 +457,11 @@ if "contact_linked" not in st.session_state:
 if "contact_info" not in st.session_state:
     st.session_state.contact_info = None
 
+if "update_email_flow" not in st.session_state:
+    st.session_state.update_email_flow = None
+if "pending_new_email" not in st.session_state:
+    st.session_state.pending_new_email = None
+
 # State for multi-step auth flows (OTP verification)
 if "auth_flow" not in st.session_state:
     st.session_state.auth_flow = None # e.g., 'register_otp', 'forgot_password_otp'
@@ -445,20 +480,37 @@ if not st.session_state.authenticated:
                 remember_me = st.checkbox("Remember me")
                 if st.form_submit_button("Login", use_container_width=True):
                     if verify_user(log_user, log_pass):
-                        st.session_state.authenticated = True
-                        st.session_state.username = log_user
-                        st.session_state.remember_me = remember_me
-                        st.session_state.contact_linked = False # Force check for existing users
-                        st.rerun()
-                    else: # Check if user exists but is not verified
                         user = get_user_by_username(log_user)
-                        if user and not user['is_verified']:
-                            st.session_state.auth_flow = 'register_otp'
-                            st.session_state.auth_user = log_user
-                            st.warning("Your account is not verified. Please check your email for an OTP or request a new one.")
-                            st.rerun()
-                        else:
-                            st.error("Invalid username or password.")
+                        if user:
+                            has_valid_email = bool(user['contact_info'] and re.match(r"[^@]+@[^@]+\.[^@]+", user['contact_info']))
+                            if not user['is_verified']:
+                                if not has_valid_email:
+                                    # Legacy user without a valid email: Login but force them to link one
+                                    st.session_state.authenticated = True
+                                    st.session_state.username = log_user
+                                    st.session_state.remember_me = remember_me
+                                    st.session_state.contact_linked = False 
+                                    st.rerun()
+                                else:
+                                    # New user who abandoned registration: Send fresh OTP
+                                    otp = generate_otp()
+                                    expires_at = datetime.now() + timedelta(minutes=10)
+                                    set_user_otp(log_user, otp, expires_at)
+                                    send_otp_email(user['contact_info'], otp)
+                                    st.session_state.auth_flow = 'register_otp'
+                                    st.session_state.auth_user = log_user
+                                    st.warning("Your account is not verified. A new OTP has been sent to your email.")
+                                    time.sleep(2)
+                                    st.rerun()
+                            else:
+                                # Standard verified user
+                                st.session_state.authenticated = True
+                                st.session_state.username = log_user
+                                st.session_state.remember_me = remember_me
+                                st.session_state.contact_linked = True
+                                st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
         with register_tab:
             if st.session_state.auth_flow == 'register_otp':
                 st.subheader(f"Verify account for: {st.session_state.auth_user}")
@@ -476,6 +528,12 @@ if not st.session_state.authenticated:
                             st.rerun()
                         else:
                             st.error("Invalid or expired OTP. Please try again.")
+                
+                # Add a button to escape the OTP screen
+                if st.button("← Cancel & Start Over", key="cancel_reg_otp"):
+                    st.session_state.auth_flow = None
+                    st.session_state.auth_user = None
+                    st.rerun()
             else:
                 with st.form("register_form"):
                     reg_user = st.text_input("New Username")
@@ -531,6 +589,12 @@ if not st.session_state.authenticated:
                                     st.error("An unexpected error occurred during password reset.")
                         else:
                             st.error("Invalid or expired OTP.")
+                
+                # Add a button to escape the OTP screen
+                if st.button("← Cancel & Start Over", key="cancel_forgot_otp"):
+                    st.session_state.auth_flow = None
+                    st.session_state.auth_user = None
+                    st.rerun()
             else:
                 with st.form("forgot_form"):
                     for_user = st.text_input("Username")
@@ -558,24 +622,46 @@ if not st.session_state.authenticated:
 # -------- MANDATORY CONTACT LINKING FOR EXISTING USERS --------
 if st.session_state.authenticated and not st.session_state.get("contact_linked", False):
     st.markdown("<h2 style='text-align: center; margin-top: 50px;'>⚠️ Account Update Required</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #cbd5e1;'>To secure your account and enable real-time features, you must link an email or phone number to continue.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #cbd5e1;'>To secure your account and enable real-time features, you must link and verify an email address to continue.</p>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("link_contact_form"):
-            contact_info = st.text_input("Email or Phone Number")
-            if st.form_submit_button("Link Account", use_container_width=True):
-                is_email = re.match(r"[^@]+@[^@]+\.[^@]+", contact_info)
-                is_phone = re.match(r"^\+?[\d\s-]{10,}$", contact_info)
-                
-                if not (is_email or is_phone):
-                    st.error("Please enter a valid email or phone number.")
-                else:
-                    update_user_contact(st.session_state.username, contact_info)
-                    st.session_state.contact_info = contact_info
-                    st.session_state.contact_linked = True
-                    st.success("Account successfully linked!")
-                    time.sleep(1)
-                    st.rerun()
+        if st.session_state.auth_flow == 'legacy_link_otp':
+            with st.form("legacy_otp_form"):
+                otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
+                if st.form_submit_button("Verify & Link", use_container_width=True):
+                    user = get_user_by_username(st.session_state.username)
+                    if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
+                        activate_user(st.session_state.username)
+                        st.session_state.contact_linked = True
+                        st.session_state.contact_info = user['contact_info']
+                        st.session_state.auth_flow = None
+                        st.success("Account successfully linked and verified!")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("Invalid or expired OTP. Please try again.")
+            if st.button("← Cancel & Use Different Email"):
+                st.session_state.auth_flow = None
+                st.rerun()
+        else:
+            with st.form("link_contact_form"):
+                contact_info = st.text_input("Email Address")
+                if st.form_submit_button("Send Verification Code", use_container_width=True):
+                    is_email = re.match(r"[^@]+@[^@]+\.[^@]+", contact_info)
+                    if not is_email:
+                        st.error("Please enter a valid email address.")
+                    else:
+                        update_user_contact(st.session_state.username, contact_info)
+                        otp = generate_otp()
+                        expires_at = datetime.now() + timedelta(minutes=10)
+                        set_user_otp(st.session_state.username, otp, expires_at)
+                        if send_otp_email(contact_info, otp):
+                            st.session_state.auth_flow = 'legacy_link_otp'
+                            st.success("Verification code sent! Please check your email.")
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("Could not send email. Please check your SMTP settings.")
     st.stop()
 
 if "user_data" not in st.session_state:
@@ -754,6 +840,110 @@ with st.sidebar:
     if reflection_input != st.session_state.reflection:
         st.session_state.reflection = reflection_input
 
+    st.divider()
+    
+    # Export Data
+    with st.expander("📥 Export Data"):
+        st.markdown("Download a copy of your current chat history.")
+        if not st.session_state.messages:
+            st.info("No chat history to export yet.")
+        else:
+            pdf_bytes = generate_chat_pdf(st.session_state.messages)
+            if pdf_bytes:
+                st.download_button(
+                    label="📄 Download Chat as PDF",
+                    data=pdf_bytes,
+                    file_name=f"ADHD_Coach_Chat_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            
+            # Reliable text backup
+            txt_content = "ADHD AI Coach - Chat History\n" + "="*30 + "\n\n"
+            for msg in st.session_state.messages:
+                role = "You" if msg["role"] == "user" else "AI Coach"
+                txt_content += f"{role}:\n{msg.get('content', '')}\n\n"
+                
+            st.download_button(
+                label="📝 Download Chat as Text",
+                data=txt_content,
+                file_name=f"ADHD_Coach_Chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+    st.divider()
+    
+    # Account Settings
+    with st.expander("⚙️ Account Settings"):
+        st.markdown(f"**Current Email:** `{st.session_state.contact_info}`")
+        
+        if st.session_state.update_email_flow == 'otp':
+            with st.form("update_email_otp_form"):
+                st.markdown(f"Verify new email: **{st.session_state.pending_new_email}**")
+                otp_code = st.text_input("Enter 6-digit OTP")
+                if st.form_submit_button("Verify & Update", use_container_width=True):
+                    user = get_user_by_username(st.session_state.username)
+                    if user and user['otp_code'] == otp_code and user['otp_expires_at'] > datetime.now():
+                        update_user_contact(st.session_state.username, st.session_state.pending_new_email)
+                        activate_user(st.session_state.username)
+                        st.session_state.contact_info = st.session_state.pending_new_email
+                        st.session_state.update_email_flow = None
+                        st.session_state.pending_new_email = None
+                        st.success("Email updated successfully!")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("Invalid or expired OTP.")
+            if st.button("← Cancel", use_container_width=True):
+                st.session_state.update_email_flow = None
+                st.session_state.pending_new_email = None
+                st.rerun()
+        else:
+            with st.form("update_email_form"):
+                new_email = st.text_input("New Email Address")
+                if st.form_submit_button("Change Email", use_container_width=True):
+                    if re.match(r"[^@]+@[^@]+\.[^@]+", new_email):
+                        if new_email == st.session_state.contact_info:
+                            st.warning("This is already your current email.")
+                        else:
+                            otp = generate_otp()
+                            expires_at = datetime.now() + timedelta(minutes=10)
+                            set_user_otp(st.session_state.username, otp, expires_at)
+                            if send_otp_email(new_email, otp):
+                                st.session_state.update_email_flow = 'otp'
+                                st.session_state.pending_new_email = new_email
+                                st.success("OTP sent! Check your new email.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Failed to send email. Check SMTP settings.")
+                    else:
+                        st.error("Please enter a valid email address.")
+        
+        st.divider()
+        st.markdown("**Change Password**")
+        with st.form("change_password_form"):
+            current_password = st.text_input("Current Password", type="password")
+            new_password = st.text_input("New Password", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            
+            if st.form_submit_button("Update Password", use_container_width=True):
+                if not current_password or not new_password or not confirm_password:
+                    st.error("Please fill in all fields.")
+                elif new_password != confirm_password:
+                    st.error("New passwords do not match.")
+                elif not verify_user(st.session_state.username, current_password):
+                    st.error("Incorrect current password.")
+                elif len(new_password) < 8 or not re.search(r"[A-Z]", new_password) or not re.search(r"[a-z]", new_password) or not re.search(r"[0-9]", new_password) or not re.search(r"[@$!%*?&#\-_]", new_password):
+                    st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
+                else:
+                    if reset_password(st.session_state.username, st.session_state.contact_info, new_password):
+                        st.success("Password updated successfully!")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("An unexpected error occurred.")
 
 # -------- MAIN GPT-STYLE CHAT INTERFACE --------
 st.markdown("""

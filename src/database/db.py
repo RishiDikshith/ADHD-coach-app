@@ -75,10 +75,9 @@ if DATABASE_URL:
     def verify_user(username, password):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT password_hash, is_verified FROM users WHERE username = %s", (username,))
+                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
-                # User must be verified to log in
-                return bool(row and row[0] == hash_password(password) and row[1])
+                return bool(row and row[0] == hash_password(password))
 
     def update_user_contact(username, contact_info):
         with get_connection() as conn:
@@ -178,13 +177,18 @@ else:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            contact_info TEXT
+            contact_info TEXT,
+            is_verified BOOLEAN DEFAULT 0,
+            otp_code TEXT,
+            otp_expires_at TIMESTAMP
         )
         """)
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN contact_info TEXT")
-        except sqlite3.OperationalError:
-            pass
+        
+        for col in ["contact_info TEXT", "is_verified BOOLEAN DEFAULT 0", "otp_code TEXT", "otp_expires_at TIMESTAMP"]:
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass
 
         conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
@@ -211,10 +215,9 @@ else:
 
     def verify_user(username, password):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT password_hash, is_verified FROM users WHERE username = ?", (username,))
+            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
-            # User must be verified to log in
-            return bool(row and row[0] == hash_password(password) and row[1])
+            return bool(row and row[0] == hash_password(password))
 
     def update_user_contact(username, contact_info):
         with get_connection() as conn:
