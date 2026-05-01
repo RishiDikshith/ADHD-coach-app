@@ -51,10 +51,10 @@ if DATABASE_URL:
 
             try:
                 with conn.cursor() as cur:
-                    cur.execute("ALTER TABLE users ADD COLUMN contact_info TEXT")
-                    cur.execute("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE")
-                    cur.execute("ALTER TABLE users ADD COLUMN otp_code TEXT")
-                    cur.execute("ALTER TABLE users ADD COLUMN otp_expires_at TIMESTAMP")
+                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_info TEXT")
+                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE")
+                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code TEXT")
+                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP")
                 conn.commit()
             except Exception:
                 conn.rollback()
