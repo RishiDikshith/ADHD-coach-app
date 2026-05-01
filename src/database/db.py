@@ -32,7 +32,10 @@ if DATABASE_URL:
                     id SERIAL PRIMARY KEY,
                     username TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
-                    contact_info TEXT
+                    contact_info TEXT,
+                    is_verified BOOLEAN DEFAULT FALSE,
+                    otp_code TEXT,
+                    otp_expires_at TIMESTAMP
                 )
                 """)
                 cur.execute("""
@@ -49,6 +52,9 @@ if DATABASE_URL:
             try:
                 with conn.cursor() as cur:
                     cur.execute("ALTER TABLE users ADD COLUMN contact_info TEXT")
+                    cur.execute("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE")
+                    cur.execute("ALTER TABLE users ADD COLUMN otp_code TEXT")
+                    cur.execute("ALTER TABLE users ADD COLUMN otp_expires_at TIMESTAMP")
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -69,9 +75,10 @@ if DATABASE_URL:
     def verify_user(username, password):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+                cur.execute("SELECT password_hash, is_verified FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
-                return bool(row and row[0] == hash_password(password))
+                # User must be verified to log in
+                return bool(row and row[0] == hash_password(password) and row[1])
 
     def update_user_contact(username, contact_info):
         with get_connection() as conn:
@@ -82,12 +89,40 @@ if DATABASE_URL:
                 )
             conn.commit()
 
+    def get_user_by_username(username):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                if row:
+                    return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
+        return None
+
+    def set_user_otp(username, otp, expires_at):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET otp_code = %s, otp_expires_at = %s WHERE username = %s",
+                    (otp, expires_at, username)
+                )
+            conn.commit()
+
+    def activate_user(username):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = %s",
+                    (username,)
+                )
+            conn.commit()
+
     def reset_password(username, contact_info, new_password):
         with get_connection() as conn:
             with conn.cursor() as cur:
+                # This function now just updates the password. OTP verification happens before.
                 cur.execute("SELECT id FROM users WHERE username = %s AND contact_info = %s", (username, contact_info))
                 if cur.fetchone():
-                    cur.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hash_password(new_password), username))
+                    cur.execute("UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s", (hash_password(new_password), username))
                     conn.commit()
                     return True
         return False
@@ -176,9 +211,10 @@ else:
 
     def verify_user(username, password):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+            cursor = conn.execute("SELECT password_hash, is_verified FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
-            return bool(row and row[0] == hash_password(password))
+            # User must be verified to log in
+            return bool(row and row[0] == hash_password(password) and row[1])
 
     def update_user_contact(username, contact_info):
         with get_connection() as conn:
@@ -188,11 +224,36 @@ else:
             )
             conn.commit()
 
+    def get_user_by_username(username):
+        with get_connection() as conn:
+            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+            if row:
+                return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
+        return None
+
+    def set_user_otp(username, otp, expires_at):
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE username = ?",
+                (otp, expires_at, username)
+            )
+            conn.commit()
+
+    def activate_user(username):
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = ?",
+                (username,)
+            )
+            conn.commit()
+
     def reset_password(username, contact_info, new_password):
         with get_connection() as conn:
+            # This function now just updates the password. OTP verification happens before.
             cursor = conn.execute("SELECT id FROM users WHERE username = ? AND contact_info = ?", (username, contact_info))
             if cursor.fetchone():
-                conn.execute("UPDATE users SET password_hash = ? WHERE username = ?", (hash_password(new_password), username))
+                conn.execute("UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE username = ?", (hash_password(new_password), username))
                 conn.commit()
                 return True
         return False
