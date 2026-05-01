@@ -172,7 +172,13 @@ TOTAL                    [32/32] ✅
 
 ## How to Run the System
 
-### 1. Run All Tests
+### 0. Install Requirements
+```bash
+cd d:\ADHD_Productivity_MVP
+pip install -r requirements.txt
+```
+
+### 1. Run All Tests (Requires `pytest`)
 ```bash
 cd d:\ADHD_Productivity_MVP
 pytest tests/test_pipeline.py -v --tb=short

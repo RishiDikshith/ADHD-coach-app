@@ -18,3 +18,9 @@ matplotlib==3.8.2
 imbalanced-learn==0.12.4
 nltk==3.9.1
 psycopg2-binary==2.9.9
+SpeechRecognition
+deep-translator
+gTTS
+pydub
+pytest
+gunicorn

@@ -82,6 +82,16 @@ if DATABASE_URL:
                 )
             conn.commit()
 
+    def reset_password(username, contact_info, new_password):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM users WHERE username = %s AND contact_info = %s", (username, contact_info))
+                if cur.fetchone():
+                    cur.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hash_password(new_password), username))
+                    conn.commit()
+                    return True
+        return False
+
     def save_result(score, level, username="anonymous"):
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -177,6 +187,15 @@ else:
                 (contact_info, username)
             )
             conn.commit()
+
+    def reset_password(username, contact_info, new_password):
+        with get_connection() as conn:
+            cursor = conn.execute("SELECT id FROM users WHERE username = ? AND contact_info = ?", (username, contact_info))
+            if cursor.fetchone():
+                conn.execute("UPDATE users SET password_hash = ? WHERE username = ?", (hash_password(new_password), username))
+                conn.commit()
+                return True
+        return False
 
     def save_result(score, level, username="anonymous"):
         with get_connection() as conn:

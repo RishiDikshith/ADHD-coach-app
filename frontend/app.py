@@ -17,9 +17,13 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from src.database.db import create_user, verify_user, save_result, save_feedback, update_user_contact
+from src.database.db import create_user, verify_user, save_result, save_feedback, update_user_contact, reset_password
 # Import API directly to bypass network calls (Saves memory & prevents connection errors)
 from src.api.main_api import chat, ChatRequest
+import speech_recognition as sr
+from deep_translator import GoogleTranslator
+from gtts import gTTS
+import io
 
 
 def render_chat_text(text):
@@ -419,7 +423,7 @@ if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        login_tab, register_tab = st.tabs(["Login", "Register"])
+        login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
         with login_tab:
             with st.form("login_form"):
                 log_user = st.text_input("Username")
@@ -457,6 +461,25 @@ if not st.session_state.authenticated:
                                 st.error("Username already exists.")
                     else:
                         st.error("Please provide username, password, and contact info")
+        with forgot_tab:
+            with st.form("forgot_form"):
+                for_user = st.text_input("Username")
+                for_contact = st.text_input("Email or Phone Number used during registration")
+                for_pass = st.text_input("New Password", type="password")
+                if st.form_submit_button("Reset Password", use_container_width=True):
+                    if for_user and for_contact and for_pass:
+                        import re
+                        if len(for_pass) < 8 or not re.search(r"[A-Z]", for_pass) or not re.search(r"[a-z]", for_pass) or not re.search(r"[0-9]", for_pass) or not re.search(r"[@$!%*?&#\-_]", for_pass):
+                            st.error("Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.")
+                        else:
+                            if reset_password(for_user, for_contact, for_pass):
+                                st.success("Password reset successfully! You can now log in.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Invalid username or contact info. Please verify your details.")
+                    else:
+                        st.error("Please provide your username, contact info, and a new password.")
     st.stop()
 
 # -------- MANDATORY CONTACT LINKING FOR EXISTING USERS --------
@@ -673,6 +696,12 @@ st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
 chat_placeholder = st.empty()
 
+LANGUAGES = {
+    "English": "en", "Spanish": "es", "French": "fr", "German": "de", 
+    "Hindi": "hi", "Chinese (Simplified)": "zh-CN", "Arabic": "ar", 
+    "Portuguese": "pt", "Russian": "ru", "Japanese": "ja"
+}
+
 # Inline Chat Input Form - stays above feedback
 with st.form("chat_input_form", clear_on_submit=True):
     cols = st.columns([10, 1])
@@ -681,9 +710,39 @@ with st.form("chat_input_form", clear_on_submit=True):
     with cols[1]:
         submit_btn = st.form_submit_button("↑", use_container_width=True)
 
+with st.expander("🎙️ Voice Assistant (Multilingual)"):
+    voice_lang_name = st.selectbox("Select your spoken language", options=list(LANGUAGES.keys()), index=0)
+    audio_bytes = st.audio_input("Record your message")
+
 if submit_btn and user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.messages.append({"role": "user", "content": user_input, "is_voice": False})
     # Do not call st.rerun() here so the UI updates immediately!
+
+if audio_bytes and st.session_state.get("last_audio") != audio_bytes:
+    st.session_state.last_audio = audio_bytes
+    with st.spinner("Transcribing and translating audio..."):
+        try:
+            r = sr.Recognizer()
+            with sr.AudioFile(audio_bytes) as source:
+                audio_data = r.record(source)
+            
+            voice_lang_code = LANGUAGES[voice_lang_name]
+            native_text = r.recognize_google(audio_data, language=voice_lang_code)
+            
+            if voice_lang_code != "en":
+                english_text = GoogleTranslator(source=voice_lang_code, target='en').translate(native_text)
+                display_text = f"🗣️ {native_text}\n\n*(Translated to English): {english_text}*"
+            else:
+                english_text = native_text
+                display_text = f"🗣️ {native_text}"
+                
+            st.session_state.messages.append({
+                "role": "user", "content": english_text, "display": display_text, "is_voice": True, "lang": voice_lang_code
+            })
+        except sr.UnknownValueError:
+            st.error("Could not understand the audio. Please try speaking clearly again.")
+        except Exception as e:
+            st.error(f"Audio Error: {e}")
 
 is_thinking = st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
@@ -695,14 +754,19 @@ else:
         chat_html += '<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>'
 
     for msg in reversed(st.session_state.messages):
+        content_to_render = msg.get("display", msg["content"])
         if msg["role"] == "user":
-            chat_html += f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(msg["content"])}</div></div>'
+            chat_html += f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>'
         else:
-            chat_html += f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(msg["content"])}</div></div>'
+            chat_html += f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(content_to_render)}</div></div>'
     chat_html += '</div>'
     chat_placeholder.markdown(chat_html, unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
+
+# Play audio if the latest message was from the assistant and contains voice data
+if not is_thinking and st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant" and st.session_state.messages[-1].get("audio"):
+    st.audio(st.session_state.messages[-1]["audio"], format="audio/mp3", autoplay=True)
 
 # Process the backend call if we are thinking
 if is_thinking:
@@ -759,10 +823,36 @@ if is_thinking:
                         st.session_state.timer_start = time.time()
                         timer_triggered = True
                         st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
+                        
+            # Check if voice translation & TTS is needed
+            last_msg = st.session_state.messages[-1]
+            audio_data = None
+            display_reply = reply
+            
+            if last_msg.get("is_voice"):
+                target_lang = last_msg.get("lang", "en")
+                if target_lang != "en":
+                    translated_reply = GoogleTranslator(source='en', target=target_lang).translate(reply)
+                    display_reply = f"{translated_reply}\n\n*(English): {reply}*"
+                    tts_text = translated_reply
+                else:
+                    tts_text = reply
+                    
+                # Generate Audio
+                try:
+                    tts = gTTS(text=tts_text, lang=target_lang)
+                    fp = io.BytesIO()
+                    tts.write_to_fp(fp)
+                    fp.seek(0)
+                    audio_data = fp.read()
+                except Exception as e:
+                    logging.error(f"TTS Error: {e}")
         except Exception as e:
             reply = f"❌ Error: {str(e)}"
+            display_reply = reply
+            audio_data = None
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+    st.session_state.messages.append({"role": "assistant", "content": reply, "display": display_reply, "audio": audio_data})
     st.session_state.session_count += 1
     
     # Update gamification
