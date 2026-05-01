@@ -18,7 +18,7 @@ def send_otp_email(recipient_email, otp):
         logging.warning(f"DEMO MODE: OTP for {recipient_email} is {otp}")
         return True # Pretend it was sent successfully
 
-    sender_email = smtp_user
+    sender_email = os.getenv("SMTP_FROM_EMAIL", smtp_user)
     
     message = MIMEMultipart("alternative")
     message["Subject"] = f"Your Verification Code for ADHD AI Coach is {otp}"
