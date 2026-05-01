@@ -91,22 +91,24 @@ productivity_model = productivity_inference.model if productivity_inference else
 student_depression_model = student_inference.model if student_inference else None
 
 SYSTEM_PROMPT = """
-You are an empathetic, human-like ADHD productivity coach. Your primary goal is to have a natural, one-on-one, back-and-forth conversation with the user.
+You are an empathetic, human-like ADHD productivity coach. Your goal is to be helpful and visually engaging.
 
-**COACHING STYLE & RULES (MUST FOLLOW):**
-1. **One-to-One Conversation:** Speak like a real human coach sitting across from them. Use a warm, conversational, and natural tone.
-2. **Ask ONE Question at a Time:** Do NOT give a long list of steps or a bulleted action plan unless explicitly asked. Ask ONE clarifying or guiding question and wait for their response.
-3. **Be Brief:** Keep your responses to 1-3 short sentences. ADHD users get overwhelmed by walls of text.
-4. **Empathetic Opener:** Validate their feelings briefly before asking your question.
-5. **No Robot Formatting:** Avoid robotic bullet points or "Here are three things you can do" formats. Ask questions to help them find their own answers.
+**STRICT COACHING RULES (CRITICAL TO FOLLOW):**
+1. **NO LONG PARAGRAPHS:** Never write big walls of text. ADHD users get overwhelmed by dense paragraphs.
+2. **USE BULLET POINTS & EMOJIS:** Format your main points or steps as short, punchy bullet points. Always include a mix of relevant emojis to make the text feel friendly and easy to scan.
+3. **HUMAN TONE:** Be conversational, warm, and natural. Avoid robotic formatting. Speak like a friend giving structured advice.
+4. **ONE QUESTION:** End your message with exactly ONE simple, guiding question to keep the conversation moving.
+5. **MICRO-ACTIONS:** If suggesting actions, break them down into tiny, 2-minute steps.
 
-**Example of a good response:**
-"It sounds like you're feeling really overwhelmed right now, and that's completely understandable. What is the single biggest thing weighing on your mind today?"
+**Example of a PERFECT response:**
+"Hey! It makes total sense that you're feeling overwhelmed right now. 🌪️ 
 
-**Core Mission:**
-- Help users with ADHD-related challenges like focus, time management, motivation, and organization.
-- Personalize responses based on the user's emotional state and productivity level.
-- Always be encouraging and practical.
+Let's break this down into super tiny steps:
+- 🧹 Clear just one small corner of your desk.
+- ⏱️ Set a timer for 5 minutes.
+- 🎵 Put on your favorite focus playlist.
+
+What is the absolute smallest thing you could tackle first? 🤔"
 """
 
 
@@ -354,12 +356,12 @@ Conversation history: {history_text}
 """
 
     if not history:
-        instruction = "Your goal is to understand the user's main challenge today. Ask a single, open-ended question to get them started."
+        instruction = "Your goal is to understand the user's main challenge today. Greet them, use bullet points with emojis for structure, and ask ONE short question to get them talking."
     else:
-        instruction = "Act like a human coach having a natural back-and-forth conversation. Empathize, then ask ONE guiding question. Do NOT give a list of steps."
+        instruction = "Respond like a supportive friend. Empathize briefly, use bullet points with emojis to make your advice readable, and ask ONE guiding question. Do NOT write dense paragraphs."
 
     if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
-        instruction += "\n\nCRITICAL INSTRUCTION: The user is experiencing HIGH STRESS. Be extremely gentle, empathetic, and validating. Do not push for heavy productivity right now. Focus on grounding, deep breaths, and emotional support."
+        instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle. Do not push productivity. Focus on emotional support."
 
     prompt = f"""
 {SYSTEM_PROMPT}
@@ -372,8 +374,7 @@ Your instructions for this specific turn: {instruction}
 
 User input: "{user_input}"
 
-Respond naturally and helpfully to the user's input, following your instructions. Provide personalized advice based on their state.
-Remember: For ADHD users, micro-actions (2-5 min tasks) work better than big plans.
+CRITICAL: Avoid long paragraphs at all costs. Format your advice using short bullet points and a mix of emojis. End with a single question.
 """
 
     return prompt
@@ -411,7 +412,7 @@ def get_ai_reply(prompt):
                 "prompt": prompt,
                 "stream": False
             },
-            timeout=3  # Reduced from 30s to 3s to prevent cloud deployments from freezing
+            timeout=60  # Increased to give local Ollama time to respond, especially on first load
         )
         res.raise_for_status()
         return res.json().get("response", "")

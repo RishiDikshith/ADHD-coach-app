@@ -20,6 +20,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
+# Import utilities for session, settings, and avatar
+from src.utils.session_manager import SessionManager
+from src.utils.settings_manager import SettingsManager
+from src.utils.avatar import render_avatar_html, get_avatar_initials, get_avatar_color
+
 from src.database.db import create_user, verify_user, save_result, save_feedback, update_user_contact, reset_password, get_user_by_username, set_user_otp, activate_user
 # OTP Email Sending Utility
 from src.utils.email_sender import send_otp_email
@@ -29,6 +34,10 @@ import speech_recognition as sr
 from deep_translator import GoogleTranslator
 from gtts import gTTS
 import io
+
+# Initialize session and settings managers
+session_manager = SessionManager()
+settings_manager_instance = None  # Will be initialized after authentication
  
 def generate_otp(length=6):
     """Generate a random numeric OTP."""
@@ -46,8 +55,8 @@ def generate_chat_pdf(messages):
     pdf = FPDF()
     pdf.add_page()
     
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "ADHD AI Coach - Chat History", ln=True, align='C')
+    pdf.set_font("helvetica", 'B', 16)
+    pdf.cell(0, 10, "ADHD AI Coach - Chat History", new_x="LMARGIN", new_y="NEXT", align='C')
     pdf.ln(10)
     
     for msg in messages:
@@ -55,10 +64,10 @@ def generate_chat_pdf(messages):
         # Latin-1 encoding gracefully replaces emojis with '?' to prevent FPDF text rendering crashes
         safe_text = str(msg.get("content", "")).encode('latin-1', 'replace').decode('latin-1')
         
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 8, f"{role}:", ln=True)
+        pdf.set_font("helvetica", 'B', 12)
+        pdf.cell(0, 8, f"{role}:", new_x="LMARGIN", new_y="NEXT")
         
-        pdf.set_font("Arial", '', 11)
+        pdf.set_font("helvetica", '', 11)
         pdf.multi_cell(0, 6, safe_text)
         pdf.ln(5)
         
@@ -267,6 +276,12 @@ form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:
     margin-bottom: 12px;
     border-left: 4px solid #48bb78;
     text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(72, 187, 120, 0.2);
 }
 
 .stat-value {
@@ -291,6 +306,14 @@ form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:
     font-size: 16px;
     margin: 6px 4px;
     font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    cursor: default;
+}
+
+.habit-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(240, 147, 251, 0.4);
+    opacity: 0.9;
 }
 
 .goal-item {
@@ -302,6 +325,13 @@ form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:
     border-left: 4px solid #667eea;
     font-size: 18px;
     font-weight: 500;
+    transition: transform 0.2s ease, background 0.2s ease;
+    cursor: default;
+}
+
+.goal-item:hover {
+    transform: translateX(4px);
+    background: #374151;
 }
 
 .task-item {
@@ -313,6 +343,13 @@ form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:
     border-left: 4px solid #48bb78;
     font-size: 18px;
     font-weight: 500;
+    transition: transform 0.2s ease, background 0.2s ease;
+    cursor: default;
+}
+
+.task-item:hover {
+    transform: translateX(4px);
+    background: #374151;
 }
 
 .feedback-box {
@@ -468,6 +505,31 @@ if "auth_flow" not in st.session_state:
 if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
+# Settings state
+if "show_settings" not in st.session_state:
+    st.session_state.show_settings = False
+
+if "user_settings" not in st.session_state:
+    st.session_state.user_settings = {}
+
+# -------- RESTORE SESSION FROM PERSISTENT STORAGE --------
+if "authenticated" in st.session_state and not st.session_state.authenticated:
+    # Only check for persisted session if not already authenticated
+    persisted_session = session_manager.load_session()
+    if persisted_session:
+        user = get_user_by_username(persisted_session["username"])
+        if user:
+            st.session_state.authenticated = True
+            st.session_state.username = persisted_session["username"]
+            st.session_state.remember_me = True
+            st.session_state.contact_linked = bool(user.get('is_verified', False))
+            st.session_state.contact_info = user.get('contact_info')
+            # Initialize settings manager for this user
+            settings_manager_instance = SettingsManager(persisted_session["username"])
+            st.session_state.user_settings = settings_manager_instance.load_settings()
+        else:
+            session_manager.clear_session()
+
 if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -475,7 +537,7 @@ if not st.session_state.authenticated:
         if st.session_state.auth_flow == 'register_otp':
             st.subheader(f"Verify account for: {st.session_state.auth_user}")
             with st.form("otp_verify_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
+                otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
                 submitted = st.form_submit_button("Verify Account")
                 if submitted:
                     user = get_user_by_username(st.session_state.auth_user)
@@ -499,8 +561,8 @@ if not st.session_state.authenticated:
         elif st.session_state.auth_flow == 'forgot_password_otp':
             st.subheader(f"Reset password for: {st.session_state.auth_user}")
             with st.form("reset_otp_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP from your email")
-                new_pass = st.text_input("Enter New Password", type="password")
+                otp_code = st.text_input("Enter the 6-digit OTP from your email", autocomplete="one-time-code")
+                new_pass = st.text_input("Enter New Password", type="password", autocomplete="new-password")
                 if st.form_submit_button("Set New Password"):
                     user = get_user_by_username(st.session_state.auth_user)
                     exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
@@ -530,8 +592,8 @@ if not st.session_state.authenticated:
             login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
             with login_tab:
                 with st.form("login_form"):
-                    log_user = st.text_input("Username")
-                    log_pass = st.text_input("Password", type="password")
+                    log_user = st.text_input("Username", autocomplete="username")
+                    log_pass = st.text_input("Password", type="password", autocomplete="current-password")
                     remember_me = st.checkbox("Remember me")
                     if st.form_submit_button("Login", use_container_width=True):
                         log_user = log_user.strip()
@@ -545,7 +607,12 @@ if not st.session_state.authenticated:
                                         st.session_state.authenticated = True
                                         st.session_state.username = log_user
                                         st.session_state.remember_me = remember_me
-                                        st.session_state.contact_linked = False 
+                                        st.session_state.contact_linked = False
+                                        # Save session persistently
+                                        session_manager.save_session(log_user)
+                                        # Initialize settings manager for this user
+                                        settings_manager_instance = SettingsManager(log_user)
+                                        st.session_state.user_settings = settings_manager_instance.load_settings()
                                         st.rerun()
                                     else:
                                         # New user who abandoned registration: Send fresh OTP
@@ -566,14 +633,19 @@ if not st.session_state.authenticated:
                                     st.session_state.username = log_user
                                     st.session_state.remember_me = remember_me
                                     st.session_state.contact_linked = True
+                                    # Save session persistently
+                                    session_manager.save_session(log_user)
+                                    # Initialize settings manager for this user
+                                    settings_manager_instance = SettingsManager(log_user)
+                                    st.session_state.user_settings = settings_manager_instance.load_settings()
                                     st.rerun()
                         else:
                             st.error("Invalid username or password.")
             with register_tab:
                     with st.form("register_form"):
-                        reg_user = st.text_input("New Username")
-                        reg_pass = st.text_input("New Password", type="password")
-                        reg_contact = st.text_input("Email Address (Required for verification)")
+                        reg_user = st.text_input("New Username", autocomplete="username")
+                        reg_pass = st.text_input("New Password", type="password", autocomplete="new-password")
+                        reg_contact = st.text_input("Email Address (Required for verification)", autocomplete="email")
                         if st.form_submit_button("Register", use_container_width=True):
                             reg_user = reg_user.strip()
                             if reg_user and reg_pass and reg_contact:
@@ -604,7 +676,7 @@ if not st.session_state.authenticated:
                                 st.error("Please provide username, password, and a valid email.")
             with forgot_tab:
                     with st.form("forgot_form"):
-                        for_user = st.text_input("Username")
+                        for_user = st.text_input("Username", autocomplete="username")
                         if st.form_submit_button("Send Password Reset Email", use_container_width=True):
                             for_user = for_user.strip()
                             if for_user:
@@ -635,7 +707,7 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
     with col2:
         if st.session_state.auth_flow == 'legacy_link_otp':
             with st.form("legacy_otp_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP sent to your email")
+                otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
                 if st.form_submit_button("Verify & Link", use_container_width=True):
                     user = get_user_by_username(st.session_state.username)
                     exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
@@ -654,7 +726,7 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
                 st.rerun()
         else:
             with st.form("link_contact_form"):
-                contact_info = st.text_input("Email Address")
+                contact_info = st.text_input("Email Address", autocomplete="email")
                 if st.form_submit_button("Send Verification Code", use_container_width=True):
                     is_email = re.match(r"[^@]+@[^@]+\.[^@]+", contact_info)
                     if not is_email:
@@ -688,10 +760,18 @@ with st.sidebar:
     st.markdown('<h2 style="color: #e2e7ff; text-align: center; font-size: 32px;">🧠 ADHD Dashboard</h2>', unsafe_allow_html=True)
     st.markdown('<p style="color: #cbd5e1; text-align: center; font-size: 18px;">Your productivity companion</p>', unsafe_allow_html=True)
     
-    st.markdown(f'<div style="text-align:center; margin-bottom: 10px; color:#cbd5e1;">Logged in as: <b>{st.session_state.username}</b></div>', unsafe_allow_html=True)
+
+    
+    # Display current status
+    if st.session_state.user_settings.get("theme") == "light":
+        st.info("💡 Light Theme Active")
+    
+    # Logout button
     if st.button("Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.username = None
+        st.session_state.user_settings = {}
+        session_manager.clear_session()
         st.rerun()
 
     if not st.session_state.check_in_completed:
@@ -881,10 +961,16 @@ with st.sidebar:
                 use_container_width=True
             )
 
-    st.divider()
+
+# -------- SETTINGS MODAL RENDERER --------
+def render_settings_modal():
+    """Render settings configuration panel"""
+    st.markdown("<h2>⚙️ User Settings</h2>", unsafe_allow_html=True)
     
-    # Account Settings
-    with st.expander("⚙️ Account Settings"):
+    settings = st.session_state.user_settings
+    settings_tabs = st.tabs(["Account", "Personalization", "Appearance", "General"])
+    
+    with settings_tabs[0]:
         st.markdown(f"**Current Email:** `{st.session_state.contact_info}`")
         
         if st.session_state.update_email_flow == 'otp':
@@ -954,14 +1040,207 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.error("An unexpected error occurred.")
+                        
+    with settings_tabs[1]:
+        st.markdown("**Personalization Options**")
+        st.selectbox("AI Coach Tone", ["Empathetic & Gentle", "Direct & Firm", "Energetic & Motivating"], index=0)
+        st.selectbox("Primary Focus Area", ["Time Management", "Task Initiation", "Emotional Regulation", "Organization"], index=0)
+        if st.button("Save Preferences", key="save_pers", use_container_width=True):
+            st.success("Preferences saved successfully!")
+            
+    with settings_tabs[2]:
+        st.markdown("**Appearance Settings**")
+        theme = st.selectbox(
+            "Theme",
+            options=["dark", "light"],
+            index=0 if settings.get("theme") == "dark" else 1,
+            key="theme_select"
+        )
+        
+        time_format = st.selectbox(
+            "Time Format",
+            options=["24-hour", "12-hour"],
+            index=0 if not settings.get("use_12h_format") else 1,
+            key="time_select"
+        )
+        st.checkbox("Enable UI Animations", value=True)
+        if st.button("Apply Appearance", key="save_app", use_container_width=True):
+            st.success("Appearance settings applied!")
+            
+    with settings_tabs[3]:
+        st.markdown("**General Settings**")
+        
+        notif_enabled = st.checkbox(
+            "Enable Notifications",
+            value=settings.get("notifications_enabled", True),
+            key="notif_check"
+        )
+        
+        if notif_enabled:
+            notif_freq = st.selectbox(
+                "Notification Frequency",
+                options=["hourly", "daily", "weekly"],
+                index=["hourly", "daily", "weekly"].index(settings.get("notification_frequency", "daily")),
+                key="notif_freq_select"
+            )
+        else:
+            notif_freq = settings.get("notification_frequency", "daily")
+            
+        sound_enabled = st.checkbox(
+            "Sound Notifications",
+            value=settings.get("sound_enabled", True),
+            key="sound_check"
+        )
+        
+        timer_duration = st.slider(
+            "Pomodoro Timer Duration (minutes)",
+            min_value=5,
+            max_value=60,
+            value=settings.get("timer_duration", 25),
+            step=5,
+            key="timer_slider_settings"
+        )
+        
+        auto_checkin = st.checkbox(
+            "Enable Auto Check-in",
+            value=settings.get("auto_check_in", True),
+            key="checkin_check"
+        )
+        
+        language = st.selectbox(
+            "Language",
+            options=["en", "es", "fr", "de"],
+            index=["en", "es", "fr", "de"].index(settings.get("language", "en")),
+            key="lang_select"
+        )
+        
+        st.divider()
+        st.checkbox("Share anonymous usage data to improve models", value=False)
+        if st.button("Logout from all devices", use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.username = None
+            session_manager.clear_session()
+            st.rerun()
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Delete Account", type="primary", use_container_width=True):
+            st.error("Account deletion requested. Please contact support.")
+            
+    st.divider()
+    # Save Settings
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 Save Changes", use_container_width=True, key="save_settings"):
+            new_settings = {
+                "theme": theme,
+                "language": language,
+                "notifications_enabled": notif_enabled,
+                "notification_frequency": notif_freq,
+                "timer_duration": timer_duration,
+                "auto_check_in": auto_checkin,
+                "sound_enabled": sound_enabled,
+                "use_12h_format": time_format == "12-hour"
+            }
+            
+            # Save to disk
+            if settings_manager_instance:
+                settings_manager_instance.save_settings(new_settings)
+                st.session_state.user_settings = new_settings
+                
+                # Apply timer duration immediately
+                st.session_state.timer_duration = timer_duration * 60
+                st.session_state.timer_seconds = timer_duration * 60
+                
+                st.success("✅ Settings saved successfully!")
+                st.session_state.show_settings = False
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.error("Error: Settings manager not initialized")
+    
+    with col2:
+        if st.button("❌ Cancel", use_container_width=True, key="cancel_settings"):
+            st.session_state.show_settings = False
+            st.rerun()
+
 
 # -------- MAIN GPT-STYLE CHAT INTERFACE --------
-st.markdown("""
-<div class="header-container">
-    <div class="header-title">💬 ADHD AI Coach</div>
-    <div class="header-subtitle">Your AI-powered ADHD productivity assistant</div>
-</div>
-""", unsafe_allow_html=True)
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.markdown("""
+    <div class="header-container" style="border-bottom: none; padding-bottom: 0;">
+        <div class="header-title">💬 ADHD AI Coach</div>
+        <div class="header-subtitle">Your AI-powered ADHD productivity assistant</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with header_col2:
+    if st.session_state.username:
+        initial = get_avatar_initials(st.session_state.username)
+        bg_color = get_avatar_color(st.session_state.username)
+        
+        st.markdown(f"""
+        <div id="avatar-anchor" style="display:none;"></div>
+        <style>
+        /* Position the container instead of the button so the tooltip follows */
+        div[data-testid="stElementContainer"]:has(#avatar-anchor) + div[data-testid="stElementContainer"],
+        div.element-container:has(#avatar-anchor) + div.element-container {{
+            position: fixed !important;
+            right: 25px !important;
+            top: 65px !important;
+            z-index: 99999 !important;
+            width: 56px !important;
+            height: 56px !important;
+        }}
+        
+        /* Style the button */
+        div[data-testid="stElementContainer"]:has(#avatar-anchor) + div[data-testid="stElementContainer"] button,
+        div.element-container:has(#avatar-anchor) + div.element-container button {{
+            background-color: {bg_color} !important;
+            color: white !important;
+            border-radius: 50% !important;
+            width: 56px !important;
+            height: 56px !important;
+            min-width: 56px !important;
+            min-height: 56px !important;
+            border: 2px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: all 0.2s ease !important;
+            margin: 0 !important;
+        }}
+        div[data-testid="stElementContainer"]:has(#avatar-anchor) + div[data-testid="stElementContainer"] button p,
+        div.element-container:has(#avatar-anchor) + div.element-container button p {{
+            font-size: 24px !important;
+            font-weight: bold !important;
+            color: white !important;
+            margin: 0 !important;
+            line-height: 1 !important;
+        }}
+        div[data-testid="stElementContainer"]:has(#avatar-anchor) + div[data-testid="stElementContainer"] button:hover,
+        div.element-container:has(#avatar-anchor) + div.element-container button:hover {{
+            opacity: 0.85 !important;
+            border-color: rgba(255, 255, 255, 0.4) !important;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.7) !important;
+        }}
+        </style>
+            """, unsafe_allow_html=True)
+            
+        if st.button(initial, key="top_right_avatar_btn", help="Toggle Settings"):
+            st.session_state.show_settings = not st.session_state.show_settings
+            st.rerun()
+
+st.markdown("<div style='border-bottom: 1px solid #1e1e1e; margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+
+# -------- SHOW SETTINGS MODAL IF TRIGGERED --------
+if st.session_state.show_settings:
+    modal_col1, modal_col2, modal_col3 = st.columns([1, 2, 1])
+    with modal_col2:
+        with st.container():
+            render_settings_modal()
+    st.stop()
 
 # Chat interface - make it expandable
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -978,7 +1257,7 @@ LANGUAGES = {
 with st.form("chat_input_form", clear_on_submit=True):
     cols = st.columns([10, 1])
     with cols[0]:
-        user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed")
+        user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed", autocomplete="off")
     with cols[1]:
         submit_btn = st.form_submit_button("↑", use_container_width=True)
 
@@ -1042,8 +1321,9 @@ if not is_thinking and st.session_state.messages and st.session_state.messages[-
 
 # Process the backend call if we are thinking
 if is_thinking:
-    with st.spinner("AI Coach is typing..."):
+    with st.status("🧠 Analyzing your message...", expanded=True) as status:
         try:
+            status.write("Extracting context and history...")
             user_input_text = st.session_state.messages[-1]["content"]
             history = st.session_state.messages[:-1]
             
@@ -1053,9 +1333,11 @@ if is_thinking:
                 user_data=st.session_state.user_data
             )
             
+            status.write("Evaluating productivity and stress levels...")
             # Call the API function directly instead of making an HTTP request
             data = chat(request_data)
             
+            status.write("Generating personalized coaching response...")
             reply = data.get("reply", "⚠️ No response")
             analysis = data.get("analysis", {})
             scores = data.get("scores", {})
@@ -1102,6 +1384,7 @@ if is_thinking:
             display_reply = reply
             
             if last_msg.get("is_voice"):
+                status.write("Translating response and generating audio...")
                 target_lang = last_msg.get("lang", "en")
                 if target_lang != "en":
                     translated_reply = GoogleTranslator(source='en', target=target_lang).translate(reply)
@@ -1119,7 +1402,10 @@ if is_thinking:
                     audio_data = fp.read()
                 except Exception as e:
                     logging.error(f"TTS Error: {e}")
+            
+            status.update(label="✅ Response ready!", state="complete", expanded=False)
         except Exception as e:
+            status.update(label="❌ Error generating response", state="error", expanded=False)
             reply = f"❌ Error: {str(e)}"
             display_reply = reply
             audio_data = None

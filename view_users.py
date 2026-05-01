@@ -1,46 +1,38 @@
-import sqlite3
 import os
+import sys
 
 # Get the project root directory
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-db_path = os.path.join(PROJECT_ROOT, "database", "data.db")
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
+from src.database.db import get_connection, DATABASE_URL
 
 def view_users():
-    """Connects to the database and prints all registered users."""
-    if not os.path.exists(db_path):
-        print(f"Error: Database file not found at {db_path}")
-        return
-
+    """Connects to the active database (Cloud or Local) and prints all users."""
+    print("--- Registered Users ---")
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with get_connection() as conn:
+            if DATABASE_URL:
+                print("🌍 Connected to CLOUD PostgreSQL (NeonTech)")
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT id, username, contact_info, is_verified FROM users ORDER BY id;")
+                    users = cursor.fetchall()
+            else:
+                print("💻 Connected to LOCAL SQLite")
+                cursor = conn.execute("SELECT id, username, contact_info, is_verified FROM users ORDER BY id;")
+                users = cursor.fetchall()
 
-        print("--- Registered Users ---")
-        
-        # Check if users table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users';")
-        if cursor.fetchone() is None:
-            print("The 'users' table does not exist in the database.")
-            conn.close()
-            return
-
-        cursor.execute("SELECT id, username FROM users ORDER BY id;")
-        users = cursor.fetchall()
-
-        if not users:
-            print("No users found in the database.")
-        else:
-            print(f"{'ID':<5} {'Username':<20}")
-            print("-" * 27)
-            for user in users:
-                print(f"{user[0]:<5} {user[1]:<20}")
-        
-        conn.close()
-
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
+            if not users:
+                print("No users found in the database.")
+            else:
+                print(f"{'ID':<5} | {'Username':<20} | {'Email/Contact':<30} | {'Verified'}")
+                print("-" * 80)
+                for user in users:
+                    print(f"{user[0]:<5} | {str(user[1]):<20} | {str(user[2]):<30} | {bool(user[3])}")
+                    
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"❌ Database error: {e}")
 
 if __name__ == "__main__":
     view_users()
