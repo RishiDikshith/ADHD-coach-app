@@ -505,6 +505,9 @@ if "auth_flow" not in st.session_state:
 if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
+if "otp_sent_time" not in st.session_state:
+    st.session_state.otp_sent_time = 0.0
+
 # Settings state
 if "show_settings" not in st.session_state:
     st.session_state.show_settings = False
@@ -538,6 +541,10 @@ if not st.session_state.authenticated:
     with col2:
         if st.session_state.auth_flow == 'register_otp':
             st.subheader(f"Verify account for: {st.session_state.auth_user}")
+            if not os.getenv("SMTP_SERVER"):
+                user_db = get_user_by_username(st.session_state.auth_user)
+                if user_db and user_db.get('otp_code'):
+                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
             with st.form("otp_verify_form"):
                 otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
                 submitted = st.form_submit_button("Verify Account")
@@ -546,7 +553,13 @@ if not st.session_state.authenticated:
                     exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
                     if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
                         activate_user(st.session_state.auth_user)
-                        st.success("Account verified successfully! You can now log in.")
+                        
+                        st.session_state.username = st.session_state.auth_user
+                        st.session_state.contact_linked = True
+                        st.session_state.contact_info = user.get('contact_info')
+                        st.session_state.user_settings = SettingsManager(st.session_state.auth_user).load_settings()
+                        
+                        st.success("Account verified successfully! Logging you in...")
                         st.session_state.auth_flow = None
                         st.session_state.auth_user = None
                         time.sleep(2)
@@ -555,13 +568,35 @@ if not st.session_state.authenticated:
                         st.error("Invalid or expired OTP. Please try again.")
             
             # Add a button to escape the OTP screen
-            if st.button("← Cancel & Start Over", key="cancel_reg_otp"):
-                st.session_state.auth_flow = None
-                st.session_state.auth_user = None
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Resend OTP", key="resend_reg_otp", use_container_width=True):
+                    if time.time() - st.session_state.otp_sent_time < 30:
+                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
+                    else:
+                        user = get_user_by_username(st.session_state.auth_user)
+                        if user:
+                            new_otp = generate_otp()
+                            set_user_otp(st.session_state.auth_user, new_otp, datetime.now() + timedelta(minutes=10))
+                            if send_otp_email(user['contact_info'], new_otp):
+                                st.session_state.otp_sent_time = time.time()
+                                st.success("OTP resent!")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Failed to resend.")
+            with col_b:
+                if st.button("← Cancel & Start Over", key="cancel_reg_otp", use_container_width=True):
+                    st.session_state.auth_flow = None
+                    st.session_state.auth_user = None
+                    st.rerun()
         
         elif st.session_state.auth_flow == 'forgot_password_otp':
             st.subheader(f"Reset password for: {st.session_state.auth_user}")
+            if not os.getenv("SMTP_SERVER"):
+                user_db = get_user_by_username(st.session_state.auth_user)
+                if user_db and user_db.get('otp_code'):
+                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
             with st.form("reset_otp_form"):
                 otp_code = st.text_input("Enter the 6-digit OTP from your email", autocomplete="one-time-code")
                 new_pass = st.text_input("Enter New Password", type="password", autocomplete="new-password")
@@ -574,7 +609,13 @@ if not st.session_state.authenticated:
                         else:
                             # Use the original contact info for security
                             if reset_password(user['username'], user['contact_info'], new_pass):
-                                st.success("Password has been reset successfully! You can now log in.")
+                                
+                                st.session_state.authenticated = True
+                                st.session_state.contact_linked = True
+                                st.session_state.contact_info = user.get('contact_info')
+                                st.session_state.user_settings = SettingsManager(st.session_state.auth_user).load_settings()
+                                
+                                st.success("Password reset successfully! Logging you in...")
                                 st.session_state.auth_flow = None
                                 st.session_state.auth_user = None
                                 time.sleep(2)
@@ -585,10 +626,28 @@ if not st.session_state.authenticated:
                         st.error("Invalid or expired OTP.")
             
             # Add a button to escape the OTP screen
-            if st.button("← Cancel & Start Over", key="cancel_forgot_otp"):
-                st.session_state.auth_flow = None
-                st.session_state.auth_user = None
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Resend OTP", key="resend_forgot_otp", use_container_width=True):
+                    if time.time() - st.session_state.otp_sent_time < 30:
+                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
+                    else:
+                        user = get_user_by_username(st.session_state.auth_user)
+                        if user:
+                            new_otp = generate_otp()
+                            set_user_otp(st.session_state.auth_user, new_otp, datetime.now() + timedelta(minutes=10))
+                            if send_otp_email(user['contact_info'], new_otp):
+                                st.session_state.otp_sent_time = time.time()
+                                st.success("OTP resent!")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Failed to resend.")
+            with col_b:
+                if st.button("← Cancel & Start Over", key="cancel_forgot_otp", use_container_width=True):
+                    st.session_state.auth_flow = None
+                    st.session_state.auth_user = None
+                    st.rerun()
                 
         else:
             login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
@@ -623,9 +682,10 @@ if not st.session_state.authenticated:
                                         expires_at = datetime.now() + timedelta(minutes=10)
                                         set_user_otp(log_user, otp, expires_at)
                                         if send_otp_email(user['contact_info'], otp):
+                                            st.session_state.otp_sent_time = time.time()
                                             st.session_state.auth_flow = 'register_otp'
                                             st.session_state.auth_user = log_user
-                                            st.warning("Your account is not verified. A new OTP has been sent to your email.")
+                                            st.warning("Account verification required. An OTP has been sent to your email.")
                                             time.sleep(2)
                                             st.rerun()
                                         else:
@@ -658,23 +718,18 @@ if not st.session_state.authenticated:
                                     st.error("Please enter a valid email address.")
                                 elif len(reg_pass) < 6:
                                     st.error("Password must be at least 6 characters long.")
+                                elif get_user_by_username(reg_user):
+                                    st.error("This username is already taken. Please choose another one.")
+                                elif get_user_by_username(reg_contact):
+                                    st.error("This email is already registered. Please log in or use 'Forgot Password'.")
                                 else:
-                                    if create_user(reg_user, reg_pass, reg_contact):
-                                        # User created, now send OTP
-                                        otp = generate_otp()
-                                        expires_at = datetime.now() + timedelta(minutes=10)
-                                        set_user_otp(reg_user, otp, expires_at)
-                                        
-                                        if send_otp_email(reg_contact, otp):
-                                            st.session_state.auth_flow = 'register_otp'
-                                            st.session_state.auth_user = reg_user
-                                            st.success("Registration started! Please check your email for a verification code.")
-                                            time.sleep(2)
-                                            st.rerun()
-                                        else:
-                                            st.error("Could not send verification email. Please check the address and try again. You may need to configure SMTP environment variables.")
+                                    success, error_msg = create_user(reg_user, reg_pass, reg_contact)
+                                    if success:
+                                        st.success("Registration successful! You can now log in.")
+                                        time.sleep(2)
+                                        st.rerun()
                                     else:
-                                        st.error("Username already exists or database error occurred.")
+                                        st.error(f"Database error occurred: {error_msg}")
                             else:
                                 st.error("Please provide username, password, and a valid email.")
             with forgot_tab:
@@ -689,6 +744,7 @@ if not st.session_state.authenticated:
                                     expires_at = datetime.now() + timedelta(minutes=10)
                                     set_user_otp(for_user, otp, expires_at)
                                     if send_otp_email(user['contact_info'], otp):
+                                        st.session_state.otp_sent_time = time.time()
                                         st.session_state.auth_flow = 'forgot_password_otp'
                                         st.session_state.auth_user = for_user
                                         st.success("Password reset email sent! Please check your inbox for an OTP.")
@@ -709,6 +765,10 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.session_state.auth_flow == 'legacy_link_otp':
+            if not os.getenv("SMTP_SERVER"):
+                user_db = get_user_by_username(st.session_state.username)
+                if user_db and user_db.get('otp_code'):
+                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
             with st.form("legacy_otp_form"):
                 otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
                 if st.form_submit_button("Verify & Link", use_container_width=True):
@@ -724,9 +784,27 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
                         st.rerun()
                     else:
                         st.error("Invalid or expired OTP. Please try again.")
-            if st.button("← Cancel & Use Different Email"):
-                st.session_state.auth_flow = None
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Resend OTP", key="resend_legacy_otp", use_container_width=True):
+                    if time.time() - st.session_state.otp_sent_time < 30:
+                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
+                    else:
+                        user = get_user_by_username(st.session_state.username)
+                        if user:
+                            new_otp = generate_otp()
+                            set_user_otp(st.session_state.username, new_otp, datetime.now() + timedelta(minutes=10))
+                            if send_otp_email(user['contact_info'], new_otp):
+                                st.session_state.otp_sent_time = time.time()
+                                st.success("OTP resent!")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Failed to resend.")
+            with col_b:
+                if st.button("← Cancel & Use Different Email", use_container_width=True):
+                    st.session_state.auth_flow = None
+                    st.rerun()
         else:
             with st.form("link_contact_form"):
                 contact_info = st.text_input("Email Address", autocomplete="email")
@@ -740,6 +818,7 @@ if st.session_state.authenticated and not st.session_state.get("contact_linked",
                         expires_at = datetime.now() + timedelta(minutes=10)
                         set_user_otp(st.session_state.username, otp, expires_at)
                         if send_otp_email(contact_info, otp):
+                            st.session_state.otp_sent_time = time.time()
                             st.session_state.auth_flow = 'legacy_link_otp'
                             st.success("Verification code sent! Please check your email.")
                             time.sleep(1.5)
@@ -978,6 +1057,10 @@ def render_settings_modal():
         
         if st.session_state.update_email_flow == 'otp':
             with st.form("update_email_otp_form"):
+                if not os.getenv("SMTP_SERVER"):
+                    user_db = get_user_by_username(st.session_state.username)
+                    if user_db and user_db.get('otp_code'):
+                        st.info(f"🛠️ **Demo Mode:** Your OTP is `{user_db['otp_code']}`")
                 st.markdown(f"Verify new email: **{st.session_state.pending_new_email}**")
                 otp_code = st.text_input("Enter 6-digit OTP")
                 if st.form_submit_button("Verify & Update", use_container_width=True):
@@ -994,10 +1077,26 @@ def render_settings_modal():
                         st.rerun()
                     else:
                         st.error("Invalid or expired OTP.")
-            if st.button("← Cancel", use_container_width=True):
-                st.session_state.update_email_flow = None
-                st.session_state.pending_new_email = None
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Resend OTP", key="resend_update_email_otp", use_container_width=True):
+                    if time.time() - st.session_state.otp_sent_time < 30:
+                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
+                    else:
+                        new_otp = generate_otp()
+                        set_user_otp(st.session_state.username, new_otp, datetime.now() + timedelta(minutes=10))
+                        if send_otp_email(st.session_state.pending_new_email, new_otp):
+                            st.session_state.otp_sent_time = time.time()
+                            st.success("OTP resent!")
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("Failed to resend.")
+            with col_b:
+                if st.button("← Cancel", use_container_width=True):
+                    st.session_state.update_email_flow = None
+                    st.session_state.pending_new_email = None
+                    st.rerun()
         else:
             with st.form("update_email_form"):
                 new_email = st.text_input("New Email Address")
@@ -1010,6 +1109,7 @@ def render_settings_modal():
                             expires_at = datetime.now() + timedelta(minutes=10)
                             set_user_otp(st.session_state.username, otp, expires_at)
                             if send_otp_email(new_email, otp):
+                                st.session_state.otp_sent_time = time.time()
                                 st.session_state.update_email_flow = 'otp'
                                 st.session_state.pending_new_email = new_email
                                 st.success("OTP sent! Check your new email.")

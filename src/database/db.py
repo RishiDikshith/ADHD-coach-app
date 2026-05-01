@@ -1,5 +1,6 @@
 import os
 import hashlib
+from contextlib import contextmanager
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -12,8 +13,13 @@ def hash_password(password):
 if DATABASE_URL:
     import psycopg2
     
+    @contextmanager
     def get_connection():
-        return psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def init_db():
         with get_connection() as conn:
@@ -68,10 +74,10 @@ if DATABASE_URL:
                         (username, hash_password(password), contact_info)
                     )
                 conn.commit()
-            return True
+            return True, ""
         except Exception as e:
             print(f"Database error creating user: {e}")
-            return False
+            return False, str(e)
 
     def verify_user(username, password):
         with get_connection() as conn:
@@ -155,52 +161,57 @@ else:
     os.makedirs(db_dir, exist_ok=True)
     db_path = os.path.join(db_dir, "data.db")
 
+    @contextmanager
     def get_connection():
-        return sqlite3.connect(db_path, check_same_thread=False)
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def init_db():
-        conn = get_connection()
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            final_score REAL,
-            level TEXT
-        )
-        """)
-        try:
-            conn.execute("ALTER TABLE results ADD COLUMN username TEXT DEFAULT 'anonymous'")
-            conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-        except sqlite3.OperationalError:
-            pass
-
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            contact_info TEXT,
-            is_verified BOOLEAN DEFAULT 0,
-            otp_code TEXT,
-            otp_expires_at TIMESTAMP
-        )
-        """)
-        
-        for col in ["contact_info TEXT", "is_verified BOOLEAN DEFAULT 0", "otp_code TEXT", "otp_expires_at TIMESTAMP"]:
+        with get_connection() as conn:
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                final_score REAL,
+                level TEXT
+            )
+            """)
             try:
-                conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+                conn.execute("ALTER TABLE results ADD COLUMN username TEXT DEFAULT 'anonymous'")
+                conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             except sqlite3.OperationalError:
                 pass
 
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            rating TEXT,
-            feedback_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        conn.commit()
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                contact_info TEXT,
+                is_verified BOOLEAN DEFAULT 0,
+                otp_code TEXT,
+                otp_expires_at TIMESTAMP
+            )
+            """)
+            
+            for col in ["contact_info TEXT", "is_verified BOOLEAN DEFAULT 0", "otp_code TEXT", "otp_expires_at TIMESTAMP"]:
+                try:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+                except sqlite3.OperationalError:
+                    pass
+
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                rating TEXT,
+                feedback_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            conn.commit()
 
     def create_user(username, password, contact_info=None):
         try:
@@ -210,10 +221,10 @@ else:
                     (username, hash_password(password), contact_info)
                 )
                 conn.commit()
-            return True
+            return True, ""
         except Exception as e:
             print(f"Database error creating user: {e}")
-            return False
+            return False, str(e)
 
     def verify_user(username, password):
         with get_connection() as conn:
