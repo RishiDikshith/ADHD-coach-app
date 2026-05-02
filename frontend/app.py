@@ -493,49 +493,49 @@ def apply_theme():
 
     /* Additional Streamlit overrides */
     .stSelectbox div[data-baseweb="select"] > div,
-    .stMultiSelect div[data-baseweb="select"] > div {
+    .stMultiSelect div[data-baseweb="select"] > div {{
         background-color: var(--input-bg) !important;
         border-color: var(--border-color) !important;
         color: var(--text-color) !important;
-    }
-    .stSelectbox div[data-baseweb="select"] * {
+    }}
+    .stSelectbox div[data-baseweb="select"] * {{
         color: var(--text-color) !important;
-    }
+    }}
     
-    button[kind="secondary"] {
+    button[kind="secondary"] {{
         background-color: var(--btn-bg) !important;
         color: var(--text-color) !important;
         border-color: var(--border-color) !important;
-    }
-    button[kind="secondary"]:hover {
+    }}
+    button[kind="secondary"]:hover {{
         background-color: var(--btn-hover) !important;
-    }
+    }}
 
     /* Fix Slider Thumb and Track */
-    div[data-testid="stSlider"] div[role="slider"] {
+    div[data-testid="stSlider"] div[role="slider"] {{
         background-color: #6ee7b7 !important;
         border: 2px solid #ffffff !important;
         box-shadow: 0 0 5px rgba(255,255,255,0.5) !important;
-    }
+    }}
     
     /* Fix Audio Input Buttons */
-    div[data-testid="stAudioInput"] {
+    div[data-testid="stAudioInput"] {{
         background-color: var(--input-bg) !important;
         border: 1px solid var(--border-color) !important;
         border-radius: 12px;
         padding: 8px;
-    }
-    div[data-testid="stAudioInput"] button {
+    }}
+    div[data-testid="stAudioInput"] button {{
         background-color: var(--btn-bg) !important;
         color: var(--text-color) !important;
         border: 1px solid var(--border-color) !important;
-    }
-    div[data-testid="stAudioInput"] button:hover {
+    }}
+    div[data-testid="stAudioInput"] button:hover {{
         background-color: var(--btn-hover) !important;
-    }
-    div[data-testid="stAudioInput"] svg {
+    }}
+    div[data-testid="stAudioInput"] svg {{
         fill: var(--text-color) !important;
-    }
+    }}
 
     /* Responsive Adjustments for Mobile */
     @media (max-width: 768px) {{
