@@ -1501,15 +1501,19 @@ def render_feedback_section():
                     st.session_state.feedback_list.append(feedback_entry)
                     
                     # Save feedback to Database
+                    success = True
                     try:
                         save_feedback(st.session_state.username, feedback_rating, feedback_text)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        success = False
+                        st.error(f"Error saving feedback: {e}")
+                        print(f"Error saving feedback: {e}")
                     
-                    st.success("✅ Thank you! Your feedback has been recorded.")
-                    st.balloons()
-                    time.sleep(0.8)
-                    st.rerun()
+                    if success:
+                        st.success("✅ Thank you! Your feedback has been recorded.")
+                        st.balloons()
+                        time.sleep(0.8)
+                        st.rerun()
                 else:
                     st.warning("Please enter some feedback before submitting.")
 render_feedback_section()

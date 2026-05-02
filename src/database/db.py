@@ -2,6 +2,8 @@ import os
 import hashlib
 from contextlib import contextmanager
 from dotenv import load_dotenv
+import csv
+from datetime import datetime
 
 # 🔥 Load .env
 load_dotenv()
@@ -10,6 +12,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ✅ DEBUG LINE (add here)
 print("DATABASE_URL:", DATABASE_URL)
+
+def _append_feedback_to_csv(username, rating, text):
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "feedback.csv")
+    file_exists = os.path.isfile(csv_path)
+    with open(csv_path, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["username", "rating", "feedback_text", "created_at"])
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        writer.writerow([username, rating, text, created_at])
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -160,6 +172,7 @@ if DATABASE_URL:
             conn.commit()
 
     def save_feedback(username, rating, text):
+        _append_feedback_to_csv(username, rating, text)
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -299,6 +312,7 @@ else:
             conn.commit()
 
     def save_feedback(username, rating, text):
+        _append_feedback_to_csv(username, rating, text)
         with get_connection() as conn:
             conn.execute(
                 "INSERT INTO feedback (username, rating, feedback_text) VALUES (?, ?, ?)",
