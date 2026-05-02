@@ -11,6 +11,10 @@ import random
 import string
 import re
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 # Fallback for st.fragment in older Streamlit versions
 if hasattr(st, "fragment"):
     st_fragment = st.fragment
@@ -633,7 +637,7 @@ if "pending_new_email" not in st.session_state:
 
 # State for multi-step auth flows (OTP verification)
 if "auth_flow" not in st.session_state:
-    st.session_state.auth_flow = None # e.g., 'register_otp', 'forgot_password_otp'
+    st.session_state.auth_flow = None
 if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
@@ -647,8 +651,23 @@ if "show_settings" not in st.session_state:
 if "user_settings" not in st.session_state:
     st.session_state.user_settings = {}
 
+if "logout_requested" not in st.session_state:
+    st.session_state.logout_requested = False
+
 # -------- RESTORE SESSION FROM PERSISTENT STORAGE --------
-if not st.session_state.authenticated:
+if st.session_state.logout_requested:
+    st.session_state.authenticated = False
+    st.session_state.username = None
+    st.session_state.user_settings = {}
+    st.session_state.contact_linked = False
+    st.session_state.contact_info = None
+    try:
+        cookie_manager.delete("remembered_username")
+    except KeyError:
+        pass
+    st.session_state.logout_requested = False
+    remembered_user = None
+elif not st.session_state.authenticated:
     remembered_user = cookie_manager.get(cookie="remembered_username")
     if remembered_user:
         user = get_user_by_username(remembered_user)
@@ -656,14 +675,17 @@ if not st.session_state.authenticated:
             st.session_state.authenticated = True
             st.session_state.username = remembered_user
             st.session_state.remember_me = True
-            st.session_state.contact_linked = bool(user.get('is_verified', False))
+            st.session_state.contact_linked = True
             st.session_state.contact_info = user.get('contact_info')
             # Initialize settings manager for this user
             settings_manager_instance = SettingsManager(remembered_user)
             st.session_state.user_settings = settings_manager_instance.load_settings()
             st.rerun()
         else:
-            cookie_manager.delete("remembered_username")
+            try:
+                cookie_manager.delete("remembered_username")
+            except KeyError:
+                pass
 
 # Ensure settings manager is initialized for the active session
 if st.session_state.get("username") and settings_manager_instance is None:
@@ -675,297 +697,54 @@ if st.session_state.get("username") and settings_manager_instance is None:
 apply_theme()
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🧠 ADHD AI Coach Login</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; margin-top: 50px;'>ADHD AI Coach Login</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.session_state.auth_flow == 'register_otp':
-            st.subheader(f"Verify account for: {st.session_state.auth_user}")
-            if not os.getenv("SMTP_SERVER"):
-                user_db = get_user_by_username(st.session_state.auth_user)
-                if user_db and user_db.get('otp_code'):
-                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
-            with st.form("otp_verify_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
-                submitted = st.form_submit_button("Verify Account")
-                if submitted:
-                    user = get_user_by_username(st.session_state.auth_user)
-                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
-                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
-                        activate_user(st.session_state.auth_user)
-                        
-                        st.session_state.username = st.session_state.auth_user
-                        st.session_state.contact_linked = True
-                        st.session_state.contact_info = user.get('contact_info')
-                        st.session_state.user_settings = SettingsManager(st.session_state.auth_user).load_settings()
-                        
-                        st.success("Account verified successfully! Logging you in...")
-                        st.session_state.auth_flow = None
-                        st.session_state.auth_user = None
-                        time.sleep(0.6)
-                        st.rerun()
-                    else:
-                        st.error("Invalid or expired OTP. Please try again.")
-            
-            # Add a button to escape the OTP screen
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("Resend OTP", key="resend_reg_otp", use_container_width=True):
-                    if time.time() - st.session_state.otp_sent_time < 30:
-                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
-                    else:
-                        user = get_user_by_username(st.session_state.auth_user)
-                        if user:
-                            new_otp = generate_otp()
-                            set_user_otp(st.session_state.auth_user, new_otp, datetime.now() + timedelta(minutes=10))
-                            if send_otp_email(user['contact_info'], new_otp):
-                                st.session_state.otp_sent_time = time.time()
-                                st.success("OTP resent!")
-                                time.sleep(0.4)
-                                st.rerun()
-                            else:
-                                st.error("Failed to resend.")
-            with col_b:
-                if st.button("← Cancel & Start Over", key="cancel_reg_otp", use_container_width=True):
-                    st.session_state.auth_flow = None
-                    st.session_state.auth_user = None
-                    st.rerun()
-        
-        elif st.session_state.auth_flow == 'forgot_password_otp':
-            st.subheader(f"Reset password for: {st.session_state.auth_user}")
-            if not os.getenv("SMTP_SERVER"):
-                user_db = get_user_by_username(st.session_state.auth_user)
-                if user_db and user_db.get('otp_code'):
-                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
-            with st.form("reset_otp_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP from your email", autocomplete="one-time-code")
-                new_pass = st.text_input("Enter New Password", type="password", autocomplete="new-password")
-                if st.form_submit_button("Set New Password"):
-                    user = get_user_by_username(st.session_state.auth_user)
-                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
-                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
-                        if len(new_pass) < 6:
-                            st.error("Password must be at least 6 characters long.")
-                        else:
-                            # Use the original contact info for security
-                            if reset_password(user['username'], user['contact_info'], new_pass):
-                                
-                                st.session_state.authenticated = True
-                                st.session_state.contact_linked = True
-                                st.session_state.contact_info = user.get('contact_info')
-                                st.session_state.user_settings = SettingsManager(st.session_state.auth_user).load_settings()
-                                
-                                st.success("Password reset successfully! Logging you in...")
-                                st.session_state.auth_flow = None
-                                st.session_state.auth_user = None
-                                time.sleep(0.6)
-                                st.rerun()
-                            else:
-                                st.error("An unexpected error occurred during password reset.")
-                    else:
-                        st.error("Invalid or expired OTP.")
-            
-            # Add a button to escape the OTP screen
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("Resend OTP", key="resend_forgot_otp", use_container_width=True):
-                    if time.time() - st.session_state.otp_sent_time < 30:
-                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
-                    else:
-                        user = get_user_by_username(st.session_state.auth_user)
-                        if user:
-                            new_otp = generate_otp()
-                            set_user_otp(st.session_state.auth_user, new_otp, datetime.now() + timedelta(minutes=10))
-                            if send_otp_email(user['contact_info'], new_otp):
-                                st.session_state.otp_sent_time = time.time()
-                                st.success("OTP resent!")
-                                time.sleep(0.4)
-                                st.rerun()
-                            else:
-                                st.error("Failed to resend.")
-            with col_b:
-                if st.button("← Cancel & Start Over", key="cancel_forgot_otp", use_container_width=True):
-                    st.session_state.auth_flow = None
-                    st.session_state.auth_user = None
-                    st.rerun()
-                
-        else:
-            login_tab, register_tab, forgot_tab = st.tabs(["Login", "Register", "Forgot Password"])
-            with login_tab:
-                with st.form("login_form"):
-                    log_user = st.text_input("Username or Email", autocomplete="username")
-                    log_pass = st.text_input("Password", type="password", autocomplete="current-password")
-                    remember_me = st.checkbox("Remember me")
-                    if st.form_submit_button("Login", use_container_width=True):
-                        log_user = log_user.strip()
-                        if verify_user(log_user, log_pass):
-                            user = get_user_by_username(log_user)
-                            if user:
-                                log_user = user['username'] # Reassign to username if email was used
-                                has_valid_email = bool(user['contact_info'] and re.match(r"[^@]+@[^@]+\.[^@]+", user['contact_info']))
-                                if not user['is_verified']:
-                                    if not has_valid_email:
-                                        # Legacy user without a valid email: Login but force them to link one
-                                        st.session_state.authenticated = True
-                                        st.session_state.username = log_user
-                                        st.session_state.remember_me = remember_me
-                                        st.session_state.contact_linked = False
-                                        
-                                        if remember_me:
-                                            cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
-                                        # Initialize settings manager for this user
-                                        settings_manager_instance = SettingsManager(log_user)
-                                        st.session_state.user_settings = settings_manager_instance.load_settings()
-                                        st.rerun()
-                                    else:
-                                        # New user who abandoned registration: Send fresh OTP
-                                        otp = generate_otp()
-                                        expires_at = datetime.now() + timedelta(minutes=10)
-                                        set_user_otp(log_user, otp, expires_at)
-                                        if send_otp_email(user['contact_info'], otp):
-                                            st.session_state.otp_sent_time = time.time()
-                                            st.session_state.auth_flow = 'register_otp'
-                                            st.session_state.auth_user = log_user
-                                            st.warning("Account verification required. An OTP has been sent to your email.")
-                                            time.sleep(0.6)
-                                            st.rerun()
-                                        else:
-                                            st.error("Failed to send verification email. Please check your SMTP settings.")
-                                else:
-                                    # Standard verified user
-                                    st.session_state.authenticated = True
-                                    st.session_state.username = log_user
-                                    st.session_state.remember_me = remember_me
-                                    st.session_state.contact_linked = True
-                                    
-                                    if remember_me:
-                                        cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
-                                    # Initialize settings manager for this user
-                                    settings_manager_instance = SettingsManager(log_user)
-                                    st.session_state.user_settings = settings_manager_instance.load_settings()
-                                    st.rerun()
-                        else:
-                            st.error("Invalid username or password.")
-            with register_tab:
-                    with st.form("register_form"):
-                        reg_user = st.text_input("New Username", autocomplete="username")
-                        reg_pass = st.text_input("New Password", type="password", autocomplete="new-password")
-                        reg_contact = st.text_input("Email Address (Required for verification)", autocomplete="email")
-                        if st.form_submit_button("Register", use_container_width=True):
-                            reg_user = reg_user.strip()
-                            if reg_user and reg_pass and reg_contact:
-                                is_email = re.match(r"[^@]+@[^@]+\.[^@]+", reg_contact)
-                                
-                                if not is_email:
-                                    st.error("Please enter a valid email address.")
-                                elif len(reg_pass) < 6:
-                                    st.error("Password must be at least 6 characters long.")
-                                elif get_user_by_username(reg_user):
-                                    st.error("This username is already taken. Please choose another one.")
-                                elif get_user_by_username(reg_contact):
-                                    st.error("This email is already registered. Please log in or use 'Forgot Password'.")
-                                else:
-                                    success, error_msg = create_user(reg_user, reg_pass, reg_contact)
-                                    if success:
-                                        st.success("Registration successful! You can now log in.")
-                                        time.sleep(0.6)
-                                        st.rerun()
-                                    else:
-                                        st.error(f"Database error occurred: {error_msg}")
-                            else:
-                                st.error("Please provide username, password, and a valid email.")
-            with forgot_tab:
-                    with st.form("forgot_form"):
-                        for_user = st.text_input("Username", autocomplete="username")
-                        if st.form_submit_button("Send Password Reset Email", use_container_width=True):
-                            for_user = for_user.strip()
-                            if for_user:
-                                user = get_user_by_username(for_user)
-                                if user and user['contact_info']:
-                                    otp = generate_otp()
-                                    expires_at = datetime.now() + timedelta(minutes=10)
-                                    set_user_otp(for_user, otp, expires_at)
-                                    if send_otp_email(user['contact_info'], otp):
-                                        st.session_state.otp_sent_time = time.time()
-                                        st.session_state.auth_flow = 'forgot_password_otp'
-                                        st.session_state.auth_user = for_user
-                                        st.success("Password reset email sent! Please check your inbox for an OTP.")
-                                        time.sleep(0.6)
-                                        st.rerun()
-                                    else:
-                                        st.error("Could not send password reset email. Please contact support or check SMTP configuration.")
-                                else:
-                                    st.error("Username not found or no contact info linked to this account.")
-                            else:
-                                st.error("Please enter your username.")
-    st.stop()
+        login_tab, register_tab = st.tabs(["Login", "Register"])
 
-# -------- MANDATORY CONTACT LINKING FOR EXISTING USERS --------
-if st.session_state.authenticated and not st.session_state.get("contact_linked", False):
-    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>⚠️ Account Update Required</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: var(--muted-text);'>To secure your account and enable real-time features, you must link and verify an email address to continue.</p>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.session_state.auth_flow == 'legacy_link_otp':
-            if not os.getenv("SMTP_SERVER"):
-                user_db = get_user_by_username(st.session_state.username)
-                if user_db and user_db.get('otp_code'):
-                    st.info(f"🛠️ **Demo Mode (No SMTP Setup):** Your OTP is `{user_db['otp_code']}`")
-            with st.form("legacy_otp_form"):
-                otp_code = st.text_input("Enter the 6-digit OTP sent to your email", autocomplete="one-time-code")
-                if st.form_submit_button("Verify & Link", use_container_width=True):
-                    user = get_user_by_username(st.session_state.username)
-                    exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
-                    if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
-                        activate_user(st.session_state.username)
+        with login_tab:
+            with st.form("login_form"):
+                log_user = st.text_input("Username", autocomplete="username")
+                log_pass = st.text_input("Password", type="password", autocomplete="current-password")
+                remember_me = st.checkbox("Remember me")
+                if st.form_submit_button("Login", use_container_width=True):
+                    log_user = log_user.strip()
+                    if verify_user(log_user, log_pass):
+                        st.session_state.authenticated = True
+                        st.session_state.username = log_user
+                        st.session_state.remember_me = remember_me
                         st.session_state.contact_linked = True
-                        st.session_state.contact_info = user['contact_info']
-                        st.session_state.auth_flow = None
-                        st.success("Account successfully linked and verified!")
-                        time.sleep(0.4)
+                        st.session_state.contact_info = None
+
+                        if remember_me:
+                            cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
+
+                        settings_manager_instance = SettingsManager(log_user)
+                        st.session_state.user_settings = settings_manager_instance.load_settings()
                         st.rerun()
                     else:
-                        st.error("Invalid or expired OTP. Please try again.")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("Resend OTP", key="resend_legacy_otp", use_container_width=True):
-                    if time.time() - st.session_state.otp_sent_time < 30:
-                        st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
+                        st.error("Invalid username or password.")
+
+        with register_tab:
+            with st.form("register_form"):
+                reg_user = st.text_input("New Username", autocomplete="username")
+                reg_pass = st.text_input("New Password", type="password", autocomplete="new-password")
+                if st.form_submit_button("Register", use_container_width=True):
+                    reg_user = reg_user.strip()
+                    if not reg_user or not reg_pass:
+                        st.error("Please provide username and password.")
+                    elif len(reg_pass) < 6:
+                        st.error("Password must be at least 6 characters long.")
+                    elif get_user_by_username(reg_user):
+                        st.error("This username is already taken. Please choose another one.")
                     else:
-                        user = get_user_by_username(st.session_state.username)
-                        if user:
-                            new_otp = generate_otp()
-                            set_user_otp(st.session_state.username, new_otp, datetime.now() + timedelta(minutes=10))
-                            if send_otp_email(user['contact_info'], new_otp):
-                                st.session_state.otp_sent_time = time.time()
-                                st.success("OTP resent!")
-                                time.sleep(0.4)
-                                st.rerun()
-                            else:
-                                st.error("Failed to resend.")
-            with col_b:
-                if st.button("← Cancel & Use Different Email", use_container_width=True):
-                    st.session_state.auth_flow = None
-                    st.rerun()
-        else:
-            with st.form("link_contact_form"):
-                contact_info = st.text_input("Email Address", autocomplete="email")
-                if st.form_submit_button("Send Verification Code", use_container_width=True):
-                    is_email = re.match(r"[^@]+@[^@]+\.[^@]+", contact_info)
-                    if not is_email:
-                        st.error("Please enter a valid email address.")
-                    else:
-                        update_user_contact(st.session_state.username, contact_info)
-                        otp = generate_otp()
-                        expires_at = datetime.now() + timedelta(minutes=10)
-                        set_user_otp(st.session_state.username, otp, expires_at)
-                        if send_otp_email(contact_info, otp):
-                            st.session_state.otp_sent_time = time.time()
-                            st.session_state.auth_flow = 'legacy_link_otp'
-                            st.success("Verification code sent! Please check your email.")
-                            time.sleep(0.4)
+                        success, error_msg = create_user(reg_user, reg_pass)
+                        if success:
+                            st.success("Registration successful! You can now log in.")
+                            time.sleep(0.6)
                             st.rerun()
                         else:
-                            st.error("Could not send email. Please check your SMTP settings.")
+                            st.error(f"Database error occurred: {error_msg}")
     st.stop()
 
 if "user_data" not in st.session_state:
@@ -985,16 +764,9 @@ with st.sidebar:
     
     # Logout button
     if st.button("Logout", use_container_width=True):
-        st.session_state.authenticated = False
-        st.session_state.username = None
-        st.session_state.user_settings = {}
-        cookie_manager.delete("remembered_username")
+        st.session_state.logout_requested = True
         st.rerun()
 
-    if not st.session_state.check_in_completed:
-        st.warning("⚠️ Please complete your daily check-in below for personalized coaching!")
-
-    # Daily Check-in
     @st_fragment
     def render_daily_checkin():
         with st.expander("📝 Daily Check-in", expanded=not st.session_state.check_in_completed):
@@ -1342,9 +1114,7 @@ def render_settings_modal():
         
         st.divider()
         if st.button("Logout from all devices", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.username = None
-            cookie_manager.delete("remembered_username")
+            st.session_state.logout_requested = True
             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Delete Account", type="primary", use_container_width=True):
@@ -1356,7 +1126,7 @@ def render_settings_modal():
     with col1:
         if st.button("💾 Save Changes", use_container_width=True, key="save_settings"):
             new_settings = {
-                "theme": "dark",
+                "theme": settings.get("theme", "dark"),
                 "language": language,
                 "notifications_enabled": settings.get("notifications_enabled", True),
                 "notification_frequency": notif_freq,

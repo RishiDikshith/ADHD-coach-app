@@ -22,7 +22,18 @@ if DATABASE_URL:
     
     @contextmanager
     def get_connection():
-        conn = psycopg2.connect(DATABASE_URL)
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+                break
+            except psycopg2.OperationalError as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ DB connection attempt {attempt + 1} failed. Retrying...")
+                    time.sleep(2)
+                else:
+                    raise e
         try:
             yield conn
         finally:
@@ -77,7 +88,7 @@ if DATABASE_URL:
             with get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO users (username, password_hash, contact_info) VALUES (%s, %s, %s)",
+                        "INSERT INTO users (username, password_hash, contact_info, is_verified) VALUES (%s, %s, %s, TRUE)",
                         (username, hash_password(password), contact_info)
                     )
                 conn.commit()
@@ -89,7 +100,7 @@ if DATABASE_URL:
     def verify_user(username, password):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT password_hash FROM users WHERE username = %s OR contact_info = %s", (username, username))
+                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
                 return bool(row and row[0] == hash_password(password))
 
@@ -105,7 +116,7 @@ if DATABASE_URL:
     def get_user_by_username(username):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s OR contact_info = %s", (username, username))
+                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
                 if row:
                     return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
@@ -132,8 +143,7 @@ if DATABASE_URL:
     def reset_password(username, contact_info, new_password):
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # This function now just updates the password. OTP verification happens before.
-                cur.execute("SELECT id FROM users WHERE username = %s AND contact_info = %s", (username, contact_info))
+                cur.execute("SELECT id FROM users WHERE username = %s", (username,))
                 if cur.fetchone():
                     cur.execute("UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s", (hash_password(new_password), username))
                     conn.commit()
@@ -224,7 +234,7 @@ else:
         try:
             with get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO users (username, password_hash, contact_info) VALUES (?, ?, ?)",
+                    "INSERT INTO users (username, password_hash, contact_info, is_verified) VALUES (?, ?, ?, TRUE)",
                     (username, hash_password(password), contact_info)
                 )
                 conn.commit()
@@ -235,7 +245,7 @@ else:
 
     def verify_user(username, password):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ? OR contact_info = ?", (username, username))
+            cursor = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             return bool(row and row[0] == hash_password(password))
 
@@ -249,7 +259,7 @@ else:
 
     def get_user_by_username(username):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ? OR contact_info = ?", (username, username))
+            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             if row:
                 return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
@@ -273,8 +283,7 @@ else:
 
     def reset_password(username, contact_info, new_password):
         with get_connection() as conn:
-            # This function now just updates the password. OTP verification happens before.
-            cursor = conn.execute("SELECT id FROM users WHERE username = ? AND contact_info = ?", (username, contact_info))
+            cursor = conn.execute("SELECT id FROM users WHERE username = ?", (username,))
             if cursor.fetchone():
                 conn.execute("UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE username = ?", (hash_password(new_password), username))
                 conn.commit()
@@ -297,4 +306,7 @@ else:
             )
             conn.commit()
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"⚠️ Warning: Could not initialize database on import: {e}")
