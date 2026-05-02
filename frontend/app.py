@@ -10,9 +10,7 @@ import logging
 import random
 import string
 import re
-import extra_streamlit_components as stx
 
-# Streamlit Component Re-rendering Optimization
 # Fallback for st.fragment in older Streamlit versions
 if hasattr(st, "fragment"):
     st_fragment = st.fragment
@@ -48,7 +46,15 @@ import io
 session_manager = SessionManager()
 settings_manager_instance = None  # Will be initialized after authentication
 
-cookie_manager = stx.CookieManager(key="cookie_manager")
+
+    cookie_manager = stx.CookieManager(key="cookie_manager")
+except ImportError:
+    logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
+    class MockCookieManager:
+        def get(self, cookie, *args, **kwargs): return None
+        def set(self, cookie, val, *args, **kwargs): pass
+        def delete(self, cookie, *args, **kwargs): pass
+    cookie_manager = MockCookieManager()
  
 def generate_otp(length=6):
     """Generate a random numeric OTP."""
