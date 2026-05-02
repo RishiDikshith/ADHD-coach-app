@@ -208,7 +208,7 @@ def apply_theme():
         margin-bottom: 24px;
         padding-right: 12px;
         display: flex;
-        flex-direction: column; /* Auto-scrolls to bottom */
+        flex-direction: column-reverse; /* Auto-scrolls to bottom natively */
         gap: 12px;
     }}
 
@@ -854,7 +854,7 @@ with st.sidebar:
                 st.session_state.timer_seconds = st.session_state.timer_duration
                 st.rerun()
                 
-    @st_fragment(run_every=1)
+    @st_fragment
     def render_focus_timer_display():
         status_text = "🟢 Active" if st.session_state.timer_active else "⚪ Inactive"
         remaining = st.session_state.timer_seconds
@@ -1314,7 +1314,7 @@ else:
     if is_thinking:
         chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
 
-    for msg in st.session_state.messages:
+    for msg in reversed(st.session_state.messages):
         content_to_render = msg.get("display", msg["content"])
         if msg["role"] == "user":
             chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
