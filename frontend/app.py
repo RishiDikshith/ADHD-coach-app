@@ -46,18 +46,25 @@ import io
 session_manager = SessionManager()
 settings_manager_instance = None  # Will be initialized after authentication
 
-try:
-    import extra_streamlit_components as stx
-    cookie_manager = stx.CookieManager(key="cookie_manager")
-except ImportError:
-    if "missing_stx_logged" not in st.session_state:
+# Initialize cookie manager with lazy loading to prevent SessionInfo errors
+cookie_manager = None
+
+def initialize_cookie_manager():
+    """Lazily initialize cookie manager after session state is ready"""
+    global cookie_manager
+    if cookie_manager is not None:
+        return
+    
+    try:
+        import extra_streamlit_components as stx
+        cookie_manager = stx.CookieManager(key="cookie_manager")
+    except ImportError:
         logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
-        st.session_state.missing_stx_logged = True
-    class MockCookieManager:
-        def get(self, cookie, *args, **kwargs): return None
-        def set(self, cookie, val, *args, **kwargs): pass
-        def delete(self, cookie, *args, **kwargs): pass
-    cookie_manager = MockCookieManager()
+        class MockCookieManager:
+            def get(self, cookie, *args, **kwargs): return None
+            def set(self, cookie, val, *args, **kwargs): pass
+            def delete(self, cookie, *args, **kwargs): pass
+        cookie_manager = MockCookieManager()
  
 def generate_otp(length=6):
     """Generate a random numeric OTP."""
@@ -652,6 +659,9 @@ if "user_settings" not in st.session_state:
 if "logout_requested" not in st.session_state:
     st.session_state.logout_requested = False
 
+# -------- INITIALIZE COOKIE MANAGER --------
+initialize_cookie_manager()
+
 # -------- RESTORE SESSION FROM PERSISTENT STORAGE --------
 if st.session_state.logout_requested:
     st.session_state.authenticated = False
@@ -660,13 +670,19 @@ if st.session_state.logout_requested:
     st.session_state.contact_linked = False
     st.session_state.contact_info = None
     try:
-        cookie_manager.delete("remembered_username")
-    except KeyError:
-        pass
+        if cookie_manager:
+            cookie_manager.delete("remembered_username")
+    except (KeyError, Exception) as e:
+        logging.debug(f"Cookie deletion error: {e}")
     st.session_state.logout_requested = False
     remembered_user = None
 elif not st.session_state.authenticated:
-    remembered_user = cookie_manager.get(cookie="remembered_username")
+    try:
+        remembered_user = cookie_manager.get(cookie="remembered_username") if cookie_manager else None
+    except Exception as e:
+        logging.debug(f"Cookie retrieval error: {e}")
+        remembered_user = None
+    
     if remembered_user:
         user = get_user_by_username(remembered_user)
         if user:
@@ -681,9 +697,10 @@ elif not st.session_state.authenticated:
             st.rerun()
         else:
             try:
-                cookie_manager.delete("remembered_username")
-            except KeyError:
-                pass
+                if cookie_manager:
+                    cookie_manager.delete("remembered_username")
+            except (KeyError, Exception) as e:
+                logging.debug(f"Cookie deletion error: {e}")
 
 # Ensure settings manager is initialized for the active session
 if st.session_state.get("username") and settings_manager_instance is None:
@@ -715,7 +732,11 @@ if not st.session_state.authenticated:
                         st.session_state.contact_info = None
 
                         if remember_me:
-                            cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
+                            try:
+                                if cookie_manager:
+                                    cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
+                            except Exception as e:
+                                logging.debug(f"Cookie set error: {e}")
 
                         settings_manager_instance = SettingsManager(log_user)
                         st.session_state.user_settings = settings_manager_instance.load_settings()
@@ -1309,17 +1330,42 @@ if is_thinking:
         try:
             status.write("Extracting context and history...")
             user_input_text = st.session_state.messages[-1]["content"]
-            history = st.session_state.messages[:-1]
             
-            request_data = ChatRequest(
-                text=user_input_text,
-                history=history,
-                user_data=st.session_state.user_data
-            )
+            # Clean history to only include essential fields to prevent serialization issues
+            history = []
+            for msg in st.session_state.messages[:-1]:
+                try:
+                    clean_msg = {
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    }
+                    history.append(clean_msg)
+                except Exception as e:
+                    logging.debug(f"Error cleaning history message: {e}")
+            
+            # Ensure user_data has default values
+            user_data = st.session_state.user_data or {}
+            
+            try:
+                request_data = ChatRequest(
+                    text=user_input_text,
+                    history=history,
+                    user_data=user_data
+                )
+            except Exception as validation_error:
+                logging.error(f"ChatRequest validation error: {validation_error}")
+                st.error(f"Message format error: {str(validation_error)[:100]}")
+                st.rerun()
             
             status.write("Evaluating productivity and stress levels...")
-            # Call the API function directly instead of making an HTTP request
-            data = chat(request_data)
+            try:
+                # Call the API function directly instead of making an HTTP request
+                data = chat(request_data)
+            except Exception as chat_error:
+                logging.error(f"Chat API error: {chat_error}")
+                st.error(f"AI processing error: {str(chat_error)[:100]}")
+                st.session_state.messages[-1]["role"] = "user"  # Restore user message role
+                st.rerun()
             
             status.write("Generating personalized coaching response...")
             reply = data.get("reply", "⚠️ No response")

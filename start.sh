@@ -4,4 +4,10 @@
 # We no longer spin up background Gunicorn workers.
 
 # Start the Streamlit frontend (this will be the main process)
-streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.enableCORS=false
+streamlit run frontend/app.py \
+  --server.port $PORT \
+  --server.address 0.0.0.0 \
+  --server.enableCORS=false \
+  --client.showErrorDetails=false \
+  --logger.level=error \
+  --client.toolbarMode=minimal
