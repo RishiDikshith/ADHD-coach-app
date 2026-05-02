@@ -219,7 +219,7 @@ def apply_theme():
         margin-bottom: 24px;
         padding-right: 12px;
         display: flex;
-        flex-direction: column-reverse; /* Auto-scrolls to bottom */
+        flex-direction: column; /* Auto-scrolls to bottom */
         gap: 12px;
     }}
 
@@ -1255,18 +1255,13 @@ LANGUAGES = {
 }
 
 # Inline Chat Input Form - stays above feedback
-with st.form("chat_input_form", clear_on_submit=True):
-    cols = st.columns([10, 1])
-    with cols[0]:
-        user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed", autocomplete="off")
-    with cols[1]:
-        submit_btn = st.form_submit_button("↑", use_container_width=True)
+user_input = st.chat_input("Ask your ADHD Coach...")
 
 with st.expander("🎙️ Voice Assistant (Multilingual)"):
     voice_lang_name = st.selectbox("Select your spoken language", options=list(LANGUAGES.keys()), index=0)
     audio_bytes = st.audio_input("Record your message")
 
-if submit_btn and user_input:
+if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input, "is_voice": False})
     # Do not call st.rerun() here so the UI updates immediately!
 
