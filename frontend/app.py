@@ -11,10 +11,6 @@ import random
 import string
 import re
 
-for stream in (sys.stdout, sys.stderr):
-    if hasattr(stream, "reconfigure"):
-        stream.reconfigure(encoding="utf-8", errors="replace")
-
 # Fallback for st.fragment in older Streamlit versions
 if hasattr(st, "fragment"):
     st_fragment = st.fragment
@@ -27,8 +23,8 @@ else:
 
 st.set_page_config(page_title="ADHD AI Coach", layout="wide", initial_sidebar_state="expanded")
 
-# Configure logging to output to console (stdout) for cloud platforms like Render.
-logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging for cloud platforms like Render.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
