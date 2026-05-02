@@ -11,6 +11,8 @@ import random
 import string
 import re
 
+
+
 # Fallback for st.fragment in older Streamlit versions
 if hasattr(st, "fragment"):
     st_fragment = st.fragment
@@ -275,13 +277,9 @@ def apply_theme():
     }}
 
     /* Sticky Form Container */
-    div[data-testid="stForm"]:has(form[aria-label="chat_input_form"]) {{
-        position: sticky;
-        bottom: 50px; /* Space for the feedback expander */
+    div[data-testid="stForm"] {{
         background: var(--bg-color);
-        z-index: 999;
         padding: 10px 0;
-        border: none;
     }}
 
     /* Pill Design for Chat Form */
@@ -722,7 +720,7 @@ if not st.session_state.authenticated:
                 log_user = st.text_input("Username", autocomplete="username")
                 log_pass = st.text_input("Password", type="password", autocomplete="current-password")
                 remember_me = st.checkbox("Remember me")
-                if st.form_submit_button("Login", use_container_width=True):
+                if st.form_submit_button("Login", width="stretch"):
                     log_user = log_user.strip()
                     if verify_user(log_user, log_pass):
                         st.session_state.authenticated = True
@@ -748,7 +746,7 @@ if not st.session_state.authenticated:
             with st.form("register_form"):
                 reg_user = st.text_input("New Username", autocomplete="username")
                 reg_pass = st.text_input("New Password", type="password", autocomplete="new-password")
-                if st.form_submit_button("Register", use_container_width=True):
+                if st.form_submit_button("Register", width="stretch"):
                     reg_user = reg_user.strip()
                     if not reg_user or not reg_pass:
                         st.error("Please provide username and password.")
@@ -782,7 +780,7 @@ with st.sidebar:
     st.markdown('<div class="sidebar-p">Your productivity companion</div>', unsafe_allow_html=True)
     
     # Logout button
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout", width="stretch"):
         st.session_state.logout_requested = True
         st.rerun()
 
@@ -799,7 +797,7 @@ with st.sidebar:
             )
             
             if not st.session_state.check_in_completed:
-                if st.button("Save Check-in", use_container_width=True):
+                if st.button("Save Check-in", width="stretch"):
                     # Calculate initial stress immediately from check-in data
                     calc_stress = 5
                     sleep = st.session_state.user_data["sleep_hours"]
@@ -864,13 +862,13 @@ with st.sidebar:
         # Focus Controls
         col1, col2 = st.columns(2)
         with col1:
-            if st.button('▶ Start', key='start_focus_sidebar', use_container_width=True):
+            if st.button('▶ Start', key='start_focus_sidebar', width="stretch"):
                 if not st.session_state.timer_active:
                     st.session_state.timer_active = True
                     st.session_state.timer_start = time.time()
                     st.rerun()
         with col2:
-            if st.button('⏹ Stop', key='stop_focus_sidebar', use_container_width=True):
+            if st.button('⏹ Stop', key='stop_focus_sidebar', width="stretch"):
                 if st.session_state.timer_active:
                     st.session_state.timer_active = False
                     st.session_state.timer_seconds = st.session_state.timer_duration
@@ -943,7 +941,7 @@ with st.sidebar:
     if st.session_state.progress and len(st.session_state.progress) > 1:
         st.markdown('### 📈 Progress (Points)')
         df = pd.DataFrame(st.session_state.progress).set_index("Time")
-        st.line_chart(df, use_container_width=True)
+        st.line_chart(df, width="stretch")
         st.divider()
     
     # Reflection
@@ -967,7 +965,7 @@ with st.sidebar:
                     data=pdf_bytes,
                     file_name=f"ADHD_Coach_Chat_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             # Reliable text backup
@@ -981,7 +979,7 @@ with st.sidebar:
                 data=txt_content,
                 file_name=f"ADHD_Coach_Chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                 mime="text/plain",
-                use_container_width=True
+                width="stretch"
             )
 
 
@@ -1005,7 +1003,7 @@ def render_settings_modal():
                         st.info(f"🛠️ **Demo Mode:** Your OTP is `{user_db['otp_code']}`")
                 st.markdown(f"Verify new email: **{st.session_state.pending_new_email}**")
                 otp_code = st.text_input("Enter 6-digit OTP")
-                if st.form_submit_button("Verify & Update", use_container_width=True):
+                if st.form_submit_button("Verify & Update", width="stretch"):
                     user = get_user_by_username(st.session_state.username)
                     exp_time = pd.to_datetime(user['otp_expires_at']).tz_localize(None) if user and user.get('otp_expires_at') else datetime.min
                     if user and str(user['otp_code']) == str(otp_code) and exp_time > datetime.now():
@@ -1021,7 +1019,7 @@ def render_settings_modal():
                         st.error("Invalid or expired OTP.")
             col_a, col_b = st.columns(2)
             with col_a:
-                if st.button("Resend OTP", key="resend_update_email_otp", use_container_width=True):
+                if st.button("Resend OTP", key="resend_update_email_otp", width="stretch"):
                     if time.time() - st.session_state.otp_sent_time < 30:
                         st.warning(f"Please wait {int(30 - (time.time() - st.session_state.otp_sent_time))}s.")
                     else:
@@ -1035,14 +1033,14 @@ def render_settings_modal():
                         else:
                             st.error("Failed to resend.")
             with col_b:
-                if st.button("← Cancel", use_container_width=True):
+                if st.button("← Cancel", width="stretch"):
                     st.session_state.update_email_flow = None
                     st.session_state.pending_new_email = None
                     st.rerun()
         else:
             with st.form("update_email_form"):
                 new_email = st.text_input("New Email Address")
-                if st.form_submit_button("Change Email", use_container_width=True):
+                if st.form_submit_button("Change Email", width="stretch"):
                     if re.match(r"[^@]+@[^@]+\.[^@]+", new_email):
                         if new_email == st.session_state.contact_info:
                             st.warning("This is already your current email.")
@@ -1069,7 +1067,7 @@ def render_settings_modal():
             new_password = st.text_input("New Password", type="password")
             confirm_password = st.text_input("Confirm New Password", type="password")
             
-            if st.form_submit_button("Update Password", use_container_width=True):
+            if st.form_submit_button("Update Password", width="stretch"):
                 if not current_password or not new_password or not confirm_password:
                     st.error("Please fill in all fields.")
                 elif new_password != confirm_password:
@@ -1090,7 +1088,7 @@ def render_settings_modal():
         st.markdown("**Personalization Options**")
         st.selectbox("AI Coach Tone", ["Empathetic & Gentle", "Direct & Firm", "Energetic & Motivating"], index=0)
         st.selectbox("Primary Focus Area", ["Time Management", "Task Initiation", "Emotional Regulation", "Organization"], index=0)
-        if st.button("Save Preferences", key="save_pers", use_container_width=True):
+        if st.button("Save Preferences", key="save_pers", width="stretch"):
             st.success("Preferences saved successfully!")
             
     with settings_tabs[2]:
@@ -1102,7 +1100,7 @@ def render_settings_modal():
             index=0 if not settings.get("use_12h_format") else 1,
             key="time_select"
         )
-        if st.button("Apply Appearance", key="save_app", use_container_width=True):
+        if st.button("Apply Appearance", key="save_app", width="stretch"):
             st.success("Appearance settings applied!")
             
     with settings_tabs[3]:
@@ -1132,18 +1130,18 @@ def render_settings_modal():
         )
         
         st.divider()
-        if st.button("Logout from all devices", use_container_width=True):
+        if st.button("Logout from all devices", width="stretch"):
             st.session_state.logout_requested = True
             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Delete Account", type="primary", use_container_width=True):
+        if st.button("Delete Account", type="primary", width="stretch"):
             st.error("Account deletion requested. Please contact support.")
             
     st.divider()
     # Save Settings
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Save Changes", use_container_width=True, key="save_settings"):
+        if st.button("💾 Save Changes", width="stretch", key="save_settings"):
             new_settings = {
                 "theme": settings.get("theme", "dark"),
                 "language": language,
@@ -1172,7 +1170,7 @@ def render_settings_modal():
                 st.error("Error: Settings manager not initialized")
     
     with col2:
-        if st.button("❌ Cancel", use_container_width=True, key="cancel_settings"):
+        if st.button("❌ Cancel", width="stretch", key="cancel_settings"):
             st.session_state.show_settings = False
             st.rerun()
 
@@ -1191,7 +1189,7 @@ with header_col2:
     if st.session_state.username:
         initial, bg_color = get_cached_avatar_info(st.session_state.username)
         
-        st.html(f"""
+        st.markdown(f"""
         <div id="avatar-anchor" style="display:none;"></div>
         <style>
         /* Position the container instead of the button so the tooltip follows */
@@ -1200,7 +1198,7 @@ with header_col2:
             position: fixed !important;
             right: 25px !important;
             top: 65px !important;
-            z-index: 99999 !important;
+            z-index: 1 !important;
             width: 56px !important;
             height: 56px !important;
         }}
@@ -1239,7 +1237,7 @@ with header_col2:
             box-shadow: 0 6px 14px rgba(0,0,0,0.7) !important;
         }}
         </style>
-            """)
+            """,unsafe_allow_html=True)
 
 st.markdown("<div style='border-bottom: 1px solid var(--border-color); margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
@@ -1262,7 +1260,7 @@ with st.form("chat_input_form", clear_on_submit=True):
     with cols[0]:
         user_input = st.text_input("Message", placeholder="Ask your ADHD Coach...", label_visibility="collapsed", autocomplete="off")
     with cols[1]:
-        submit_btn = st.form_submit_button("↑", use_container_width=True)
+        submit_btn = st.form_submit_button("↑", width="stretch")
 
 with st.expander("🎙️ Voice Assistant (Multilingual)"):
     voice_lang_name = st.selectbox("Select your spoken language", options=list(LANGUAGES.keys()), index=0)
@@ -1484,7 +1482,7 @@ def render_feedback_section():
             with feedback_col2:
                 feedback_rating = st.selectbox("Rating", ["⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"], index=4, label_visibility="collapsed")
 
-            submit_feedback = st.form_submit_button("💬 Submit Feedback", use_container_width=True)
+            submit_feedback = st.form_submit_button("💬 Submit Feedback", width="stretch")
             
             if submit_feedback:
                 if feedback_text:
