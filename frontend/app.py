@@ -142,7 +142,7 @@ def apply_theme():
     }
     """
     
-    st.html(f"""
+    st.markdown(f"""
     <style>
     {css_vars}
     
@@ -545,7 +545,7 @@ def apply_theme():
         }}
     }}
     </style>
-    """)
+    """,unsafe_allow_html=True)
 
 
 # -------- STATE --------
