@@ -8,6 +8,8 @@ import joblib
 import numpy as np
 import pandas as pd
 import requests
+from functools import lru_cache
+import threading
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
@@ -401,8 +403,19 @@ def generate_offline_reply(prompt):
         "I hear you, and I'm here to help. What is the main thing you want us to tackle together today?"
     )
 
+# Queueing mechanism to prevent slowing down under load
+# Limits how many concurrent LLM generations can happen at once
+MAX_CONCURRENT_AI_REQUESTS = int(os.getenv("MAX_CONCURRENT_AI_REQUESTS", "4"))
+ai_queue_semaphore = threading.Semaphore(MAX_CONCURRENT_AI_REQUESTS)
 
+@lru_cache(maxsize=1000)
 def get_ai_reply(prompt):
+    # Wait up to 15 seconds in the queue before gracefully degrading
+    acquired = ai_queue_semaphore.acquire(timeout=15.0)
+    if not acquired:
+        logging.warning("AI Request queue is full and timed out. Using offline fallback.")
+        return generate_offline_reply(prompt)
+
     try:
         # 1. Try Groq Cloud API (For Live Render Deployment)
         groq_api_key = os.getenv("GROQ_API_KEY")
@@ -439,6 +452,8 @@ def get_ai_reply(prompt):
     except Exception:
         logging.exception("Unexpected error generating AI reply")
         return generate_offline_reply(prompt)
+    finally:
+        ai_queue_semaphore.release()
 
 
 def format_reply(reply):
