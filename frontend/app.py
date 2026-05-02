@@ -493,23 +493,49 @@ def apply_theme():
 
     /* Additional Streamlit overrides */
     .stSelectbox div[data-baseweb="select"] > div,
-    .stMultiSelect div[data-baseweb="select"] > div {{
+    .stMultiSelect div[data-baseweb="select"] > div {
         background-color: var(--input-bg) !important;
         border-color: var(--border-color) !important;
         color: var(--text-color) !important;
-    }}
-    .stSelectbox div[data-baseweb="select"] * {{
+    }
+    .stSelectbox div[data-baseweb="select"] * {
         color: var(--text-color) !important;
-    }}
+    }
     
-    button[kind="secondary"] {{
+    button[kind="secondary"] {
         background-color: var(--btn-bg) !important;
         color: var(--text-color) !important;
         border-color: var(--border-color) !important;
-    }}
-    button[kind="secondary"]:hover {{
+    }
+    button[kind="secondary"]:hover {
         background-color: var(--btn-hover) !important;
-    }}
+    }
+
+    /* Fix Slider Thumb and Track */
+    div[data-testid="stSlider"] div[role="slider"] {
+        background-color: #6ee7b7 !important;
+        border: 2px solid #ffffff !important;
+        box-shadow: 0 0 5px rgba(255,255,255,0.5) !important;
+    }
+    
+    /* Fix Audio Input Buttons */
+    div[data-testid="stAudioInput"] {
+        background-color: var(--input-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 12px;
+        padding: 8px;
+    }
+    div[data-testid="stAudioInput"] button {
+        background-color: var(--btn-bg) !important;
+        color: var(--text-color) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    div[data-testid="stAudioInput"] button:hover {
+        background-color: var(--btn-hover) !important;
+    }
+    div[data-testid="stAudioInput"] svg {
+        fill: var(--text-color) !important;
+    }
 
     /* Responsive Adjustments for Mobile */
     @media (max-width: 768px) {{
@@ -804,17 +830,32 @@ with st.sidebar:
                     st.rerun()
     render_daily_checkin()
     
-    @st_fragment(run_every=1)
-    def render_focus_timer():
-        # Focus Session Status
-        st.markdown('### ⏱️ Focus Session')
-        
-        if not st.session_state.timer_active:
-            selected_mins = st.slider("Set Timer (minutes)", 5, 120, st.session_state.timer_duration // 60, 5, key="timer_slider")
-            if selected_mins * 60 != st.session_state.timer_duration:
-                st.session_state.timer_duration = selected_mins * 60
+    # Focus Session Status
+    st.markdown('### ⏱️ Focus Session')
+    
+    if not st.session_state.timer_active:
+        selected_mins = st.slider("Set Timer (minutes)", 5, 120, st.session_state.timer_duration // 60, 5, key="timer_slider")
+        if selected_mins * 60 != st.session_state.timer_duration:
+            st.session_state.timer_duration = selected_mins * 60
+            st.session_state.timer_seconds = st.session_state.timer_duration
+
+    # Focus Controls
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button('▶ Start', key='start_focus_sidebar', use_container_width=True):
+            if not st.session_state.timer_active:
+                st.session_state.timer_active = True
+                st.session_state.timer_start = time.time()
+                st.rerun()
+    with col2:
+        if st.button('⏹ Stop', key='stop_focus_sidebar', use_container_width=True):
+            if st.session_state.timer_active:
+                st.session_state.timer_active = False
                 st.session_state.timer_seconds = st.session_state.timer_duration
+                st.rerun()
                 
+    @st_fragment(run_every=1)
+    def render_focus_timer_display():
         status_text = "🟢 Active" if st.session_state.timer_active else "⚪ Inactive"
         remaining = st.session_state.timer_seconds
         if st.session_state.timer_active and st.session_state.timer_start:
@@ -838,22 +879,8 @@ with st.sidebar:
         mins = remaining // 60
         secs = remaining % 60
         st.markdown(f'<div class="focus-status-box"><b>{status_text}</b><br>Remaining: <b>{mins:02d}:{secs:02d}</b></div>', unsafe_allow_html=True)
-        
-        # Focus Controls
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button('▶ Start', key='start_focus_sidebar', use_container_width=True):
-                if not st.session_state.timer_active:
-                    st.session_state.timer_active = True
-                    st.session_state.timer_start = time.time()
-                    st.rerun()
-        with col2:
-            if st.button('⏹ Stop', key='stop_focus_sidebar', use_container_width=True):
-                if st.session_state.timer_active:
-                    st.session_state.timer_active = False
-                    st.session_state.timer_seconds = st.session_state.timer_duration
-                    st.rerun()
-    render_focus_timer()
+
+    render_focus_timer_display()
     
     st.divider()
     
@@ -1245,33 +1272,38 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input, "is_voice": False})
     # Do not call st.rerun() here so the UI updates immediately!
 
-if audio_bytes and st.session_state.get("last_audio") != audio_bytes:
-    st.session_state.last_audio = audio_bytes
-    with st.spinner("Transcribing and translating audio..."):
-        try:
-            import speech_recognition as sr
-            from deep_translator import GoogleTranslator
-            r = sr.Recognizer()
-            with sr.AudioFile(audio_bytes) as source:
-                audio_data = r.record(source)
-            
-            voice_lang_code = LANGUAGES[voice_lang_name]
-            native_text = r.recognize_google(audio_data, language=voice_lang_code)
-            
-            if voice_lang_code != "en":
-                english_text = GoogleTranslator(source=voice_lang_code, target='en').translate(native_text)
-                display_text = f"🗣️ {native_text}\n\n*(Translated to English): {english_text}*"
-            else:
-                english_text = native_text
-                display_text = f"🗣️ {native_text}"
+if audio_bytes:
+    current_audio_data = audio_bytes.getvalue()
+    if st.session_state.get("last_audio_data") != current_audio_data:
+        st.session_state.last_audio_data = current_audio_data
+        with st.spinner("Transcribing and translating audio..."):
+            try:
+                import speech_recognition as sr
+                from deep_translator import GoogleTranslator
+                r = sr.Recognizer()
+                audio_bytes.seek(0)
+                with sr.AudioFile(audio_bytes) as source:
+                    audio_data = r.record(source)
                 
-            st.session_state.messages.append({
-                "role": "user", "content": english_text, "display": display_text, "is_voice": True, "lang": voice_lang_code
-            })
-        except sr.UnknownValueError:
-            st.error("Could not understand the audio. Please try speaking clearly again.")
-        except Exception as e:
-            st.error(f"Audio Error: {e}")
+                voice_lang_code = LANGUAGES[voice_lang_name]
+                native_text = r.recognize_google(audio_data, language=voice_lang_code)
+                
+                if voice_lang_code != "en":
+                    english_text = GoogleTranslator(source=voice_lang_code, target='en').translate(native_text)
+                    display_text = f"🗣️ {native_text}\n\n*(Translated to English): {english_text}*"
+                else:
+                    english_text = native_text
+                    display_text = f"🗣️ {native_text}"
+                    
+                st.session_state.messages.append({
+                    "role": "user", "content": english_text, "display": display_text, "is_voice": True, "lang": voice_lang_code
+                })
+                # Immediately rerun so the UI shows the new message before the AI processes it
+                st.rerun()
+            except sr.UnknownValueError:
+                st.error("Could not understand the audio. Please try speaking clearly again.")
+            except Exception as e:
+                st.error(f"Audio Error: {e}")
 
 is_thinking = st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
@@ -1282,7 +1314,7 @@ else:
     if is_thinking:
         chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
 
-    for msg in reversed(st.session_state.messages):
+    for msg in st.session_state.messages:
         content_to_render = msg.get("display", msg["content"])
         if msg["role"] == "user":
             chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
