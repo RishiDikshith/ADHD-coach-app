@@ -46,7 +46,8 @@ import io
 session_manager = SessionManager()
 settings_manager_instance = None  # Will be initialized after authentication
 
-
+try:
+    import extra_streamlit_components as stx
     cookie_manager = stx.CookieManager(key="cookie_manager")
 except ImportError:
     logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
