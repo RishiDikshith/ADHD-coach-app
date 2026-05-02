@@ -2,3 +2,6 @@ username,rating,feedback_text,created_at
 test,5,hello,2023-10-10
 test_stream_user,⭐⭐⭐,Testing stream save_feedback,2026-05-02 20:12:48
 ,⭐⭐⭐,Testing none,2026-05-02 20:16:27
+test_user,5,Test feedback from CLI,2026-05-02 21:12:40
+test_user_2,5,Test feedback from CLI 2,2026-05-02 21:17:07
+rishi_65,⭐⭐,more,2026-05-02 21:28:45

@@ -42,7 +42,7 @@ if DATABASE_URL:
                 break
             except psycopg2.OperationalError as e:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ DB connection attempt {attempt + 1} failed. Retrying...")
+                    print(f"WARNING: DB connection attempt {attempt + 1} failed. Retrying...")
                     time.sleep(2)
                 else:
                     raise e
@@ -173,13 +173,16 @@ if DATABASE_URL:
 
     def save_feedback(username, rating, text):
         _append_feedback_to_csv(username, rating, text)
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO feedback (username, rating, feedback_text) VALUES (%s, %s, %s)",
-                    (username, rating, text)
-                )
-            conn.commit()
+        try:
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO feedback (username, rating, feedback_text) VALUES (%s, %s, %s)",
+                        (username, rating, text)
+                    )
+                conn.commit()
+        except Exception as e:
+            print(f"Warning: Failed to save feedback to cloud DB: {e}")
 
 # ==========================================
 # LOCAL DATABASE (SQLITE)
@@ -313,14 +316,17 @@ else:
 
     def save_feedback(username, rating, text):
         _append_feedback_to_csv(username, rating, text)
-        with get_connection() as conn:
-            conn.execute(
-                "INSERT INTO feedback (username, rating, feedback_text) VALUES (?, ?, ?)",
-                (username, rating, text)
-            )
-            conn.commit()
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO feedback (username, rating, feedback_text) VALUES (?, ?, ?)",
+                    (username, rating, text)
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"Warning: Failed to save feedback to local DB: {e}")
 
 try:
     init_db()
 except Exception as e:
-    print(f"⚠️ Warning: Could not initialize database on import: {e}")
+    print(f"Warning: Could not initialize database on import: {e}")
