@@ -49,25 +49,14 @@ session_manager = SessionManager()
 settings_manager_instance = None  # Will be initialized after authentication
 
 # Initialize cookie manager with lazy loading to prevent SessionInfo errors
-cookie_manager = None
+class MockCookieManager:
+    def get(self, cookie, *args, **kwargs): return None
+    def set(self, cookie, val, *args, **kwargs): pass
+    def delete(self, cookie, *args, **kwargs): pass
+cookie_manager = MockCookieManager()
 
 def initialize_cookie_manager():
-    """Lazily initialize cookie manager after session state is ready"""
-    global cookie_manager
-    if cookie_manager is not None:
-        return
-    
-    try:
-        import extra_streamlit_components as stx
-        cookie_manager = stx.CookieManager(key="cookie_manager")
-    except ImportError:
-        logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
-        class MockCookieManager:
-            def get(self, cookie, *args, **kwargs): return None
-            def set(self, cookie, val, *args, **kwargs): pass
-            def delete(self, cookie, *args, **kwargs): pass
-        cookie_manager = MockCookieManager()
- 
+    pass 
 def generate_otp(length=6):
     """Generate a random numeric OTP."""
     return "".join(random.choices(string.digits, k=length))
@@ -719,22 +708,13 @@ if not st.session_state.authenticated:
             with st.form("login_form"):
                 log_user = st.text_input("Username", autocomplete="username")
                 log_pass = st.text_input("Password", type="password", autocomplete="current-password")
-                remember_me = st.checkbox("Remember me")
                 if st.form_submit_button("Login", use_container_width=True):
                     log_user = log_user.strip()
                     if verify_user(log_user, log_pass):
                         st.session_state.authenticated = True
                         st.session_state.username = log_user
-                        st.session_state.remember_me = remember_me
                         st.session_state.contact_linked = True
                         st.session_state.contact_info = None
-
-                        if remember_me:
-                            try:
-                                if cookie_manager:
-                                    cookie_manager.set("remembered_username", log_user, expires_at=datetime.now() + timedelta(days=30))
-                            except Exception as e:
-                                logging.debug(f"Cookie set error: {e}")
 
                         settings_manager_instance = SettingsManager(log_user)
                         st.session_state.user_settings = settings_manager_instance.load_settings()
