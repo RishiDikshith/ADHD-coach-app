@@ -27,3 +27,4 @@ gunicorn
 fpdf2
 python-dotenv==1.0.0
 groq==0.15.0
+extra-streamlit-components

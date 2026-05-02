@@ -54,7 +54,9 @@ try:
     import extra_streamlit_components as stx
     cookie_manager = stx.CookieManager(key="cookie_manager")
 except ImportError:
-    logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
+    if "missing_stx_logged" not in st.session_state:
+        logging.warning("extra_streamlit_components not found. 'Remember Me' functionality will be disabled.")
+        st.session_state.missing_stx_logged = True
     class MockCookieManager:
         def get(self, cookie, *args, **kwargs): return None
         def set(self, cookie, val, *args, **kwargs): pass
