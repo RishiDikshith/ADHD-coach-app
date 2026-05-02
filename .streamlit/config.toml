@@ -1,18 +1,10 @@
-[client]
-showErrorDetails = false
-showWarningOnDirectExecution = false
-toolbarMode = "minimal"
-logger.level = "error"
-
-[logger]
-level = "error"
-
 [server]
 headless = true
-enableXsrfProtection = true
 enableCORS = false
-maxUploadSize = 200
-maxMessageSize = 200
+enableXsrfProtection = false
+port = 10000
+address = "0.0.0.0"
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false

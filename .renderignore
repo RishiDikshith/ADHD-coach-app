@@ -1,0 +1,12 @@
+@"
+catboost_info/
+notebooks/
+tests/
+.pytest_cache/
+logs/
+data/
+__pycache__/
+*.log
+test_*.py
+*.md
+"@ | Out-File -Encoding utf8 .renderignore

@@ -47,3 +47,29 @@ catboost_info/
 
 # IDE / Editor
 .vscode/
+
+# Extra cleanup (add these)
+
+# Session / local app data
+.session_data/
+.settings_data/
+
+# Tests & dev scripts
+tests/
+test_*.py
+view_feedback.py
+view_users.py
+
+# Notebooks
+notebooks/
+
+# Cache
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Docs (keep only README)
+*.md
+!README.md
