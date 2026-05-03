@@ -208,7 +208,7 @@ def apply_theme():
         margin-bottom: 24px;
         padding-right: 12px;
         display: flex;
-        flex-direction: column-reverse; /* Auto-scrolls to bottom natively */
+        flex-direction: column; /* Auto-scrolls to bottom */
         gap: 12px;
     }}
 
@@ -265,79 +265,64 @@ def apply_theme():
         line-height: 1.6;
     }}
 
-    /* Sticky Form Container */
-    div[data-testid="stForm"] {{
-        background: var(--bg-color);
-        padding: 10px 0;
-    }}
-
-    /* Pill Design for Chat Form */
-    form[aria-label="chat_input_form"] {{
+    /* Pill Design for Chat Input Bar */
+    div[data-testid="stHorizontalBlock"]:has(input[aria-label="Message"]) {{
         background: var(--input-bg) !important;
-        border-radius: 40px !important;
-        border: 1px solid var(--border-color) !important;
-        padding: 5px 15px !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
-    }}
-
-    /* Force chat input and button to stay on one line on mobile */
-    form[aria-label="chat_input_form"] [data-testid="stHorizontalBlock"] {{
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
+        border-radius: 50px !important;
+        border: 2px solid var(--border-color) !important;
+        padding: 8px 16px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+        transition: all 0.3s ease !important;
         align-items: center !important;
-        gap: 8px !important;
     }}
 
-    form[aria-label="chat_input_form"] [data-testid="column"]:first-child {{
-        width: 100% !important;
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
+    div[data-testid="stHorizontalBlock"]:has(input[aria-label="Message"]):focus-within {{
+        border-color: #6ee7b7 !important;
+        box-shadow: 0 6px 20px rgba(110, 231, 183, 0.15) !important;
     }}
 
-    form[aria-label="chat_input_form"] [data-testid="column"]:last-child {{
-        width: auto !important;
-        flex: 0 0 auto !important;
-        min-width: max-content !important;
-    }}
-
-    /* Make inputs inside chat form transparent */
-    form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input {{
+    /* Text input transparency */
+    div[data-testid="stTextInput"] div[data-baseweb="input"] {{
         background: transparent !important;
         border: none !important;
+    }}
+    
+    input[aria-label="Message"] {{
+        background: transparent !important;
         color: var(--text-color) !important;
         box-shadow: none !important;
         font-size: 18px !important;
-        padding: 14px 20px !important;
-        font-family: sans-serif !important;
-        -webkit-text-fill-color: var(--text-color) !important;
     }}
     
-    form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input:focus {{
-        border: none !important;
-        box-shadow: none !important;
+    input[aria-label="Message"]:focus {{
+        outline: none !important;
     }}
 
-    /* Submit button */
-    form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button {{
+    /* Audio Input Widget Integration */
+    div[data-testid="stAudioInput"] {{
         background: var(--btn-bg) !important;
+        background-color: transparent !important;
         border: none !important;
-        color: var(--text-color) !important;
-        font-size: 22px !important;
-        width: 44px !important;
-        height: 44px !important;
-        border-radius: 50% !important;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         padding: 0 !important;
-        margin: 0 !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stAudioInput"] button {{
+        background-color: transparent !important;
+        color: var(--text-color) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease !important;
     }}
     
-    form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button:hover {{
-        background: var(--btn-hover) !important;
-        color: var(--text-color) !important;
+    div[data-testid="stAudioInput"] button:hover {{
+        background-color: rgba(110, 231, 183, 0.1) !important;
+        border-color: #6ee7b7 !important;
+        color: #6ee7b7 !important;
     }}
+    
 
     /* Feedback Expander Sticky */
     .main div[data-testid="stExpander"]:last-of-type {{
@@ -518,23 +503,112 @@ def apply_theme():
         box-shadow: 0 0 5px rgba(255,255,255,0.5) !important;
     }}
     
-    /* Fix Audio Input Buttons */
-    div[data-testid="stAudioInput"] {{
-        background-color: var(--input-bg) !important;
-        border: 1px solid var(--border-color) !important;
-        border-radius: 12px;
-        padding: 8px;
-    }}
-    div[data-testid="stAudioInput"] button {{
-        background-color: var(--btn-bg) !important;
+    /* Make slider numbers visible */
+    div[data-testid="stTickBarMin"], 
+    div[data-testid="stTickBarMax"] {{
         color: var(--text-color) !important;
-        border: 1px solid var(--border-color) !important;
+        font-weight: bold !important;
     }}
-    div[data-testid="stAudioInput"] button:hover {{
-        background-color: var(--btn-hover) !important;
+    
+    [data-testid="stSidebar"] div[data-testid="stTickBarMin"],
+    [data-testid="stSidebar"] div[data-testid="stTickBarMax"] {{
+        color: var(--sidebar-text) !important;
     }}
-    div[data-testid="stAudioInput"] svg {{
-        fill: var(--text-color) !important;
+    
+    /* Fix Slider Tooltip and Static Value to always be visible as a distinct badge */
+    div[data-testid="stThumbValue"] {{
+        background-color: #1f2937 !important;
+        color: #6ee7b7 !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+        font-size: 16px !important;
+        border: 1px solid #6ee7b7 !important;
+        font-weight: bold !important;
+    }}
+    
+
+    /* Enhanced Chat Input Bar - Modern Design */
+    .chat-input-wrapper {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--input-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 50px;
+        padding: 12px 20px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }}
+
+    .chat-input-wrapper:focus-within {{
+        border-color: #6ee7b7;
+        box-shadow: 0 6px 20px rgba(110, 231, 183, 0.15);
+        padding: 14px 24px;
+    }}
+
+    .chat-input-wrapper.expanded {{
+        padding: 16px 24px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }}
+
+    /* Text input in chat wrapper */
+    .chat-input-wrapper input {{
+        background: transparent !important;
+        border: none !important;
+        color: var(--text-color) !important;
+        font-size: 18px !important;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 8px 0 !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        -webkit-text-fill-color: var(--text-color) !important;
+    }}
+
+    .chat-input-wrapper input::placeholder {{
+        color: var(--muted-text) !important;
+        opacity: 0.7 !important;
+    }}
+
+    .chat-input-wrapper input:focus {{
+        outline: none !important;
+        box-shadow: none !important;
+    }}
+
+    /* Send button */
+    .send-btn {{
+        background: var(--btn-bg);
+        border: none;
+        color: var(--text-color);
+        font-size: 20px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }}
+
+    .send-btn:hover {{
+        background: #6ee7b7;
+        color: #000000;
+        transform: scale(1.05);
+    }}
+
+    .send-btn:active {{
+        transform: scale(0.95);
+    }}
+
+    .send-btn:focus {{
+        outline: 2px solid #6ee7b7;
+        outline-offset: 2px;
+    }}
+
+    .send-btn:disabled {{
+        opacity: 0.5;
+        cursor: not-allowed;
     }}
 
     /* Responsive Adjustments for Mobile */
@@ -547,14 +621,43 @@ def apply_theme():
         }}
         .header-title {{ font-size: 24px; }}
         .header-subtitle {{ font-size: 16px; }}
-        form[aria-label="chat_input_form"] div[data-testid="stTextInput"] input {{
-            font-size: 16px !important;
-            padding: 10px 15px !important;
+        
+        .chat-input-wrapper {{
+            padding: 10px 16px;
+            gap: 10px;
+            border-radius: 40px;
         }}
-        form[aria-label="chat_input_form"] div[data-testid="stFormSubmitButton"] button {{
-            width: 40px !important;
-            height: 40px !important;
-            font-size: 20px !important;
+
+        .chat-input-wrapper:focus-within {{
+            padding: 12px 16px;
+        }}
+
+        .chat-input-wrapper input {{
+            font-size: 16px !important;
+            padding: 6px 0 !important;
+        }}
+
+        .send-btn {{
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+        }}
+    }}
+
+    @media (max-width: 480px) {{
+        .chat-input-wrapper {{
+            padding: 8px 12px;
+            gap: 8px;
+        }}
+
+        .chat-input-wrapper input {{
+            font-size: 14px !important;
+        }}
+
+        .send-btn {{
+            width: 36px;
+            height: 36px;
+            font-size: 16px;
         }}
     }}
     </style>
@@ -854,7 +957,7 @@ with st.sidebar:
                 st.session_state.timer_seconds = st.session_state.timer_duration
                 st.rerun()
                 
-    @st_fragment
+    @st_fragment(run_every=1)
     def render_focus_timer_display():
         status_text = "🟢 Active" if st.session_state.timer_active else "⚪ Inactive"
         remaining = st.session_state.timer_seconds
@@ -1129,12 +1232,22 @@ def render_settings_modal():
             key="timer_slider_settings"
         )
         
-        language = st.selectbox(
-            "Language",
-            options=["en", "es", "fr", "de"],
-            index=["en", "es", "fr", "de"].index(settings.get("language", "en")),
+        SUPPORTED_LANGUAGES = {
+            "English": "en", "Spanish": "es", "French": "fr", "German": "de",
+            "Hindi": "hi-IN", "Telugu": "te-IN", "Malayalam": "ml-IN", 
+            "Tamil": "ta-IN", "Kannada": "kn-IN", "Bengali": "bn-IN",
+            "Marathi": "mr-IN", "Gujarati": "gu-IN"
+        }
+        current_lang_code = settings.get("language", "en")
+        current_lang_name = next((name for name, code in SUPPORTED_LANGUAGES.items() if code == current_lang_code), "English")
+        
+        selected_lang_name = st.selectbox(
+            "Language (Used for Voice & Chat)",
+            options=list(SUPPORTED_LANGUAGES.keys()),
+            index=list(SUPPORTED_LANGUAGES.keys()).index(current_lang_name),
             key="lang_select"
         )
+        language = SUPPORTED_LANGUAGES[selected_lang_name]
         
         st.divider()
         if st.button("Logout from all devices", use_container_width=True):
@@ -1249,61 +1362,114 @@ with header_col2:
 st.markdown("<div style='border-bottom: 1px solid var(--border-color); margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
 
-
 # Chat interface - make it expandable
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
 chat_placeholder = st.empty()
 
-LANGUAGES = {
-    "English": "en", "Spanish": "es", "French": "fr", "German": "de", 
-    "Hindi": "hi", "Chinese (Simplified)": "zh-CN", "Arabic": "ar", 
-    "Portuguese": "pt", "Russian": "ru", "Japanese": "ja"
-}
+st.markdown('<div class="chat-input-sticky">', unsafe_allow_html=True)
 
-# Inline Chat Input Form - stays above feedback
-user_input = st.chat_input("Ask your ADHD Coach...")
+# Create columns for the new chat input bar design
+col_main = st.columns([1])[0]
 
-with st.expander("🎙️ Voice Assistant (Multilingual)"):
-    voice_lang_name = st.selectbox("Select your spoken language", options=list(LANGUAGES.keys()), index=0)
-    audio_bytes = st.audio_input("Record your message")
+with col_main:
+    # Enhanced Chat Input Bar with Keyboard Shortcuts
+    keyboard_shortcuts_js = """
+    <script>
+    (function() {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                // Focus on text input: Ctrl+Shift+M
+                if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+                    e.preventDefault();
+                    const input = document.querySelector('form[aria-label="chat_input_form"] input[type="text"]');
+                    if (input) input.focus();
+                }
+                // Submit on Ctrl+Enter
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    const submitBtn = document.querySelector('button[kind="primary"]');
+                    if (submitBtn) submitBtn.click();
+                }
+                // Submit on Enter (if not in multiline)
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    const input = document.activeElement;
+                    if (input && input.type === 'text' && input.getAttribute('aria-label') === 'Message') {
+                        e.preventDefault();
+                        const submitBtn = document.querySelector('button[kind="primary"]');
+                        if (submitBtn) submitBtn.click();
+                    }
+                }
+            });
+        });
+    })();
+    </script>
+    """
+    st.markdown(keyboard_shortcuts_js, unsafe_allow_html=True)
+    
+    def submit_text():
+        text = st.session_state.get("chat_text_input", "").strip()
+        if text:
+            st.session_state.messages.append({"role": "user", "content": text})
+            st.session_state.chat_text_input = ""
 
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input, "is_voice": False})
-    # Do not call st.rerun() here so the UI updates immediately!
+    # Create columns for the new chat input bar design
+    col_input, col_mic, col_send = st.columns([7, 2, 1], gap="small")
+    
+    with col_input:
+        st.text_input(
+            "Message",
+            placeholder="Ask your ADHD Coach…",
+            label_visibility="collapsed",
+            key="chat_text_input",
+            on_change=submit_text
+        )
+    
+    with col_mic:
+        audio_buffer = st.audio_input("Record", label_visibility="collapsed", key="chat_audio_input")
+        
+    with col_send:
+        st.button(
+            "➤",
+            use_container_width=True,
+            help="Send message (Enter or Ctrl+Enter)",
+            type="primary",
+            on_click=submit_text
+        )
 
-if audio_bytes:
-    current_audio_data = audio_bytes.getvalue()
-    if st.session_state.get("last_audio_data") != current_audio_data:
-        st.session_state.last_audio_data = current_audio_data
-        with st.spinner("Transcribing and translating audio..."):
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Process audio immediately if we have a new buffer ready
+if audio_buffer is not None and audio_buffer != st.session_state.get("last_processed_audio"):
+    st.session_state.last_processed_audio = audio_buffer
+    with st.spinner("Processing voice..."):
+        try:
+            import speech_recognition as sr
+            r = sr.Recognizer()
+            with sr.AudioFile(audio_buffer) as source:
+                audio_data = r.record(source)
+            
+            user_lang = st.session_state.user_settings.get("language", "en")
             try:
-                import speech_recognition as sr
-                from deep_translator import GoogleTranslator
-                r = sr.Recognizer()
-                audio_bytes.seek(0)
-                with sr.AudioFile(audio_bytes) as source:
-                    audio_data = r.record(source)
-                
-                voice_lang_code = LANGUAGES[voice_lang_name]
-                native_text = r.recognize_google(audio_data, language=voice_lang_code)
-                
-                if voice_lang_code != "en":
-                    english_text = GoogleTranslator(source=voice_lang_code, target='en').translate(native_text)
-                    display_text = f"🗣️ {native_text}\n\n*(Translated to English): {english_text}*"
-                else:
-                    english_text = native_text
-                    display_text = f"🗣️ {native_text}"
-                    
-                st.session_state.messages.append({
-                    "role": "user", "content": english_text, "display": display_text, "is_voice": True, "lang": voice_lang_code
-                })
-                # Immediately rerun so the UI shows the new message before the AI processes it
-                st.rerun()
+                # Explicitly use the user's selected language first to support regional languages like Telugu/Malayalam
+                text = r.recognize_google(audio_data, language=user_lang)
             except sr.UnknownValueError:
-                st.error("Could not understand the audio. Please try speaking clearly again.")
-            except Exception as e:
-                st.error(f"Audio Error: {e}")
+                # Fallback to auto-detect if the explicit language failed (useful for mixed English context)
+                try:
+                    text = r.recognize_google(audio_data, language="auto")
+                except:
+                    raise sr.UnknownValueError()
+                
+            if text:
+                st.session_state.messages.append({"role": "user", "content": text, "is_voice": True, "lang": user_lang})
+                st.rerun()
+        except sr.UnknownValueError:
+            st.error("Could not understand audio. Please try speaking clearly again.")
+            st.session_state.last_processed_audio = None
+        except Exception as e:
+            st.error(f"Audio Error: {e}")
+            st.session_state.last_processed_audio = None
 
 is_thinking = st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
@@ -1314,8 +1480,8 @@ else:
     if is_thinking:
         chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
 
-    for msg in reversed(st.session_state.messages):
-        content_to_render = msg.get("display", msg["content"])
+    for msg in st.session_state.messages:
+        content_to_render = msg.get("display", msg.get("content", ""))
         if msg["role"] == "user":
             chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
         else:
@@ -1331,9 +1497,9 @@ if not is_thinking and st.session_state.messages and st.session_state.messages[-
 
 # Process the backend call if we are thinking
 if is_thinking:
-    with st.status("🧠 Analyzing your message...", expanded=True) as status:
+    with st.status("Analyzing your message...", expanded=True) as status:
         try:
-            status.write("Extracting context and history...")
+            status.write("Extracting context and user intent...")
             user_input_text = st.session_state.messages[-1]["content"]
             
             # Clean history to only include essential fields to prevent serialization issues
@@ -1348,7 +1514,6 @@ if is_thinking:
                 except Exception as e:
                     logging.debug(f"Error cleaning history message: {e}")
             
-            # Ensure user_data has default values
             user_data = st.session_state.user_data or {}
             
             try:
@@ -1415,39 +1580,35 @@ if is_thinking:
                         
             # Check if voice translation & TTS is needed
             last_msg = st.session_state.messages[-1]
-            audio_data = None
-            display_reply = reply
+            audio_data_bytes = None
             
             if last_msg.get("is_voice"):
-                status.write("Translating response and generating audio...")
-                target_lang = last_msg.get("lang", "en")
-                from deep_translator import GoogleTranslator
-                if target_lang != "en":
-                    translated_reply = GoogleTranslator(source='en', target=target_lang).translate(reply)
-                    display_reply = f"{translated_reply}\n\n*(English): {reply}*"
-                    tts_text = translated_reply
-                else:
-                    tts_text = reply
+                status.write("Generating voice response...")
+                try:
+                    from langdetect import detect
+                    target_lang = detect(reply)
+                except ImportError:
+                    target_lang = last_msg.get("lang", "en")
                     
-                # Generate Audio
                 try:
                     from gtts import gTTS
-                    tts = gTTS(text=tts_text, lang=target_lang)
+                    # gTTS requires 2-letter language codes (e.g., 'te' instead of 'te-IN')
+                    gtts_lang = target_lang.split('-')[0] if target_lang else "en"
+                    tts = gTTS(text=reply, lang=gtts_lang)
                     fp = io.BytesIO()
                     tts.write_to_fp(fp)
                     fp.seek(0)
-                    audio_data = fp.read()
+                    audio_data_bytes = fp.read()
                 except Exception as e:
                     logging.error(f"TTS Error: {e}")
-            
+
             status.update(label="✅ Response ready!", state="complete", expanded=False)
         except Exception as e:
             status.update(label="❌ Error generating response", state="error", expanded=False)
             reply = f"❌ Error: {str(e)}"
-            display_reply = reply
-            audio_data = None
+            audio_data_bytes = None
 
-    st.session_state.messages.append({"role": "assistant", "content": reply, "display": display_reply, "audio": audio_data})
+    st.session_state.messages.append({"role": "assistant", "content": reply, "audio": audio_data_bytes})
     st.session_state.session_count += 1
     
     # Update gamification
@@ -1463,10 +1624,11 @@ if is_thinking:
     st.session_state.last_session_date = today.isoformat()
     st.session_state.points += 5
     st.session_state.progress.append({"Time": datetime.now().strftime("%H:%M"), "Points": st.session_state.points})
-    new_level = (st.session_state.points // 50) + 1
     
+    new_level = (st.session_state.points // 50) + 1
     if new_level > st.session_state.level:
         st.session_state.level = new_level
+        
     if st.session_state.current_streak >= 3 and "3-Day Streak" not in st.session_state.badges:
         st.session_state.badges.append("3-Day Streak")
     if st.session_state.current_streak >= 7 and "Week Warrior" not in st.session_state.badges:
@@ -1476,7 +1638,6 @@ if is_thinking:
     
     st.rerun()
 
-# Feedback Section - collapsed by default
 @st_fragment
 def render_feedback_section():
     with st.expander("💡 Help Us Improve"):
@@ -1488,8 +1649,7 @@ def render_feedback_section():
                 feedback_text = st.text_area("📝 Your Feedback", placeholder="Tell us what you think...", height=100, label_visibility="collapsed")
             with feedback_col2:
                 feedback_rating = st.selectbox("Rating", ["⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"], index=4, label_visibility="collapsed")
-
-            submit_feedback = st.form_submit_button("💬 Submit Feedback", use_container_width=True)
+                submit_feedback = st.form_submit_button("💬 Submit Feedback", use_container_width=True)
             
             if submit_feedback:
                 if feedback_text:
@@ -1500,22 +1660,18 @@ def render_feedback_section():
                     }
                     st.session_state.feedback_list.append(feedback_entry)
                     
-                    # Save feedback to Database
-                    success = True
                     try:
                         save_feedback(st.session_state.username, feedback_rating, feedback_text)
-                    except Exception as e:
-                        success = False
-                        st.error(f"Error saving feedback: {e}")
-                        print(f"Error saving feedback: {e}")
+                    except Exception:
+                        pass
                     
-                    if success:
-                        st.success("✅ Thank you! Your feedback has been recorded.")
-                        st.balloons()
-                        time.sleep(0.8)
-                        st.rerun()
+                    st.success("✅ Thank you! Your feedback has been recorded.")
+                    st.balloons()
+                    time.sleep(0.8)
+                    st.rerun()
                 else:
                     st.warning("Please enter some feedback before submitting.")
+
 render_feedback_section()
 
 # Display feedback summary

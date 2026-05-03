@@ -23,3 +23,6 @@ fpdf2
 # --- AI API ---
 groq==0.15.0
 catboost==1.2.2
+SpeechRecognition
+deep-translator
+openai-whisper

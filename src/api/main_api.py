@@ -119,6 +119,8 @@ class ChatRequest(BaseModel):
     history: List[Any] = Field(default_factory=list)
     user_data: Dict[str, Any] = Field(default_factory=dict)
     session_data: Dict[str, Any] = Field(default_factory=dict)
+    language: str = "en"
+    language_name: str = "English"
 
 
 class ScoreRequest(BaseModel):
@@ -333,7 +335,14 @@ def format_history(history):
     return " ".join(formatted)
 
 
-def build_prompt(user_input: str, analysis: Dict[str, Any], history: List[Any], scores: Dict[str, Any] = None):
+def build_prompt(
+    user_input: str,
+    analysis: Dict[str, Any],
+    history: List[Any],
+    scores: Dict[str, Any] = None,
+    language: str = "en",
+    language_name: str = "English",
+):
     history_text = format_history(history)
     scores = scores or {}
 
@@ -354,6 +363,7 @@ Score Summary:
 User's current emotional state: {analysis['emotion']}
 User's productivity level: {analysis['productivity']}
 Conversation history: {history_text}
+User's selected language: {language_name} ({language})
 {score_summary}
 """
 
@@ -376,32 +386,47 @@ Your instructions for this specific turn: {instruction}
 
 User input: "{user_input}"
 
+CRITICAL LANGUAGE RULE: Reply only in {language_name}. If the user wrote or spoke in {language_name}, keep the same language and script. Do not translate the user's message into English in your final answer.
 CRITICAL: Avoid long paragraphs at all costs. Format your advice using short bullet points and a mix of emojis. End with a single question.
 """
 
     return prompt
 
 
+def translate_reply_if_needed(reply: str, language: str):
+    target_language = (language or "en").split("-")[0]
+    if target_language == "en":
+        return reply
+
+    try:
+        from deep_translator import GoogleTranslator
+        return GoogleTranslator(source="auto", target=target_language).translate(reply)
+    except Exception:
+        logging.debug("Reply translation failed; returning original reply", exc_info=True)
+        return reply
+
+
 def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
     if any(keyword in prompt_lower for keyword in ["focus", "distract", "attention", "overwhelm", "concentration"]):
-        return (
+        reply = (
             "It sounds like you're feeling pretty overwhelmed, which makes focus really hard. "
             "If we could pick just *one* tiny thing to knock out right now, what would it be?"
         )
-    if any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
-        return (
+    elif any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
+        reply = (
             "Planning can definitely be tricky. Instead of looking at the whole schedule, "
             "what is the very next thing you need to do in the next 10 minutes?"
         )
-    if any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
-        return (
+    elif any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
+        reply = (
             "It's totally normal to hit a wall with motivation. What if we just do a 2-minute 'starter' task? "
             "What's the smallest possible step you could take right now?"
         )
-    return (
-        "I hear you, and I'm here to help. What is the main thing you want us to tackle together today?"
-    )
+    else:
+        reply = "I hear you, and I'm here to help. What is the main thing you want us to tackle together today?"
+
+    return reply
 
 # Queueing mechanism to prevent slowing down under load
 # Limits how many concurrent LLM generations can happen at once
@@ -409,7 +434,7 @@ MAX_CONCURRENT_AI_REQUESTS = int(os.getenv("MAX_CONCURRENT_AI_REQUESTS", "4"))
 ai_queue_semaphore = threading.Semaphore(MAX_CONCURRENT_AI_REQUESTS)
 
 @lru_cache(maxsize=1000)
-def get_ai_reply(prompt):
+def get_ai_reply(prompt, language: str = "en"):
     # Wait up to 15 seconds in the queue before gracefully degrading
     acquired = ai_queue_semaphore.acquire(timeout=15.0)
     if not acquired:
@@ -465,9 +490,9 @@ def chat(data: ChatRequest):
     try:
         analysis = analyze(data.text)
         scores = build_user_scores(data.user_data, text=data.text) if data.user_data else {}
-        prompt = build_prompt(data.text, analysis, data.history, scores)
-        raw = get_ai_reply(prompt)
-        reply = format_reply(raw)
+        prompt = build_prompt(data.text, analysis, data.history, scores, data.language, data.language_name)
+        raw = get_ai_reply(prompt, data.language)
+        reply = format_reply(translate_reply_if_needed(raw, data.language))
 
         interventions = generate_interventions(data.user_data, scores) if data.user_data else []
 

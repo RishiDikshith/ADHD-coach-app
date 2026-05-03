@@ -13,7 +13,8 @@ class SettingsManager:
         "timer_duration": 25,
         "auto_check_in": True,
         "sound_enabled": True,
-        "use_12h_format": False
+        "use_12h_format": False,
+        "pin_hash": None
     }
     
     def __init__(self, username, settings_dir=".settings_data"):
