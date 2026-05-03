@@ -265,6 +265,14 @@ def apply_theme():
         line-height: 1.6;
     }}
 
+    .chat-input-sticky {{
+        position: sticky;
+        bottom: 0;
+        background: var(--bg-color);
+        padding-top: 10px;
+        z-index: 100;
+    }}
+
     /* Pill Design for Chat Input Bar */
     div[data-testid="stHorizontalBlock"]:has(input[aria-label="Message"]) {{
         background: var(--input-bg) !important;
@@ -1367,6 +1375,27 @@ st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
 chat_placeholder = st.empty()
 
+def update_chat_ui(placeholder, is_thinking=False):
+    if not st.session_state.messages:
+        placeholder.markdown('<div class="chat-messages"><div style="height: 30vh;"></div><div style="text-align:center; color:#aaaaaa; font-size:20px;">Start a conversation below!</div></div>', unsafe_allow_html=True)
+    else:
+        chat_parts = ['<div class="chat-messages">']
+        for msg in st.session_state.messages:
+            content_to_render = msg.get("display", msg.get("content", ""))
+            if msg["role"] == "user":
+                chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
+            else:
+                chat_parts.append(f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(content_to_render)}</div></div>')
+        
+        if is_thinking:
+            chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
+            
+        chat_parts.append('</div>')
+        placeholder.markdown("".join(chat_parts), unsafe_allow_html=True)
+
+# Pre-fill the placeholder so it doesn't collapse during audio processing
+update_chat_ui(chat_placeholder, is_thinking=(st.session_state.messages and st.session_state.messages[-1]["role"] == "user"))
+
 st.markdown('<div class="chat-input-sticky">', unsafe_allow_html=True)
 
 # Create columns for the new chat input bar design
@@ -1440,6 +1469,8 @@ with col_main:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+audio_processed_now = False
+
 # Process audio immediately if we have a new buffer ready
 if audio_buffer is not None and audio_buffer != st.session_state.get("last_processed_audio"):
     st.session_state.last_processed_audio = audio_buffer
@@ -1463,7 +1494,7 @@ if audio_buffer is not None and audio_buffer != st.session_state.get("last_proce
                 
             if text:
                 st.session_state.messages.append({"role": "user", "content": text, "is_voice": True, "lang": user_lang})
-                st.rerun()
+                audio_processed_now = True
         except sr.UnknownValueError:
             st.error("Could not understand audio. Please try speaking clearly again.")
             st.session_state.last_processed_audio = None
@@ -1473,31 +1504,22 @@ if audio_buffer is not None and audio_buffer != st.session_state.get("last_proce
 
 is_thinking = st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
-if not st.session_state.messages:
-    chat_placeholder.markdown('<div style="height: 30vh;"></div><div style="text-align:center; color:#aaaaaa; font-size:20px;">Start a conversation below!</div><div style="height: 10vh;"></div>', unsafe_allow_html=True)
-else:
-    chat_parts = ['<div class="chat-messages">']
-    if is_thinking:
-        chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
-
-    for msg in st.session_state.messages:
-        content_to_render = msg.get("display", msg.get("content", ""))
-        if msg["role"] == "user":
-            chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
-        else:
-            chat_parts.append(f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(content_to_render)}</div></div>')
-    chat_parts.append('</div>')
-    chat_placeholder.markdown("".join(chat_parts), unsafe_allow_html=True)
+if audio_processed_now:
+    update_chat_ui(chat_placeholder, is_thinking=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+audio_placeholder = st.empty()
+
 # Play audio if the latest message was from the assistant and contains voice data
-if not is_thinking and st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant" and st.session_state.messages[-1].get("audio"):
-    st.audio(st.session_state.messages[-1]["audio"], format="audio/mp3", autoplay=True)
+if not is_thinking and st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant" and st.session_state.messages[-1].get("audio") and not st.session_state.messages[-1].get("audio_played"):
+    audio_placeholder.audio(st.session_state.messages[-1]["audio"], format="audio/mp3", autoplay=True)
+    st.session_state.messages[-1]["audio_played"] = True
 
 # Process the backend call if we are thinking
 if is_thinking:
-    with st.status("Analyzing your message...", expanded=True) as status:
+    status_placeholder = st.empty()
+    with status_placeholder.status("Analyzing your message...", expanded=True) as status:
         try:
             status.write("Extracting context and user intent...")
             user_input_text = st.session_state.messages[-1]["content"]
@@ -1608,7 +1630,7 @@ if is_thinking:
             reply = f"❌ Error: {str(e)}"
             audio_data_bytes = None
 
-    st.session_state.messages.append({"role": "assistant", "content": reply, "audio": audio_data_bytes})
+    st.session_state.messages.append({"role": "assistant", "content": reply, "audio": audio_data_bytes, "audio_played": False})
     st.session_state.session_count += 1
     
     # Update gamification
@@ -1636,7 +1658,14 @@ if is_thinking:
     if st.session_state.points >= 100 and "Century Club" not in st.session_state.badges:
         st.session_state.badges.append("Century Club")
     
-    st.rerun()
+    # Dynamically update the chat UI without a full page refresh
+    update_chat_ui(chat_placeholder, is_thinking=False)
+    
+    if audio_data_bytes:
+        audio_placeholder.audio(audio_data_bytes, format="audio/mp3", autoplay=True)
+        st.session_state.messages[-1]["audio_played"] = True
+        
+    status_placeholder.empty()
 
 @st_fragment
 def render_feedback_section():
