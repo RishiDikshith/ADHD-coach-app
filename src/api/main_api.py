@@ -337,6 +337,7 @@ def format_history(history):
 
 def build_prompt(
     user_input: str,
+    english_translation: str,
     analysis: Dict[str, Any],
     history: List[Any],
     scores: Dict[str, Any] = None,
@@ -384,13 +385,26 @@ User's selected language: {language_name} ({language})
 Your instructions for this specific turn: {instruction}
 ---
 
-User input: "{user_input}"
+User input (Original): "{user_input}"
+User input (English Translation context): "{english_translation}"
 
-CRITICAL LANGUAGE RULE: Reply only in {language_name}. If the user wrote or spoke in {language_name}, keep the same language and script. Do not translate the user's message into English in your final answer.
-CRITICAL: Avoid long paragraphs at all costs. Format your advice using short bullet points and a mix of emojis. End with a single question.
+CRITICAL LANGUAGE RULE: You MUST reply in the EXACT SAME language and script as "User input (Original)". If it is transliterated (e.g. "ela unnav"), reply in the same transliterated language. Do NOT reply in Catalan, Spanish, or other unrelated languages.
+CRITICAL FORMATTING: Avoid long paragraphs at all costs. Format your advice using short bullet points and a mix of emojis. End with a single question.
 """
 
     return prompt
+
+def translate_to_english(text: str) -> str:
+    """Translates any non-English text to English for accurate NLP and ML processing."""
+    if not text or len(text.strip()) < 2:
+        return text
+    try:
+        from deep_translator import GoogleTranslator
+        translated = GoogleTranslator(source="auto", target="en").translate(text)
+        return translated if translated else text
+    except Exception as e:
+        logging.debug(f"Translation to English failed: {e}")
+        return text
 
 
 def translate_reply_if_needed(reply: str, language: str):
@@ -488,9 +502,10 @@ def format_reply(reply):
 @app.post("/chat")
 def chat(data: ChatRequest):
     try:
-        analysis = analyze(data.text)
-        scores = build_user_scores(data.user_data, text=data.text) if data.user_data else {}
-        prompt = build_prompt(data.text, analysis, data.history, scores, data.language, data.language_name)
+        english_text = translate_to_english(data.text)
+        analysis = analyze(english_text)
+        scores = build_user_scores(data.user_data, text=english_text) if data.user_data else {}
+        prompt = build_prompt(data.text, english_text, analysis, data.history, scores, data.language, data.language_name)
         raw = get_ai_reply(prompt, data.language)
         reply = format_reply(translate_reply_if_needed(raw, data.language))
 
@@ -520,9 +535,10 @@ def chat(data: ChatRequest):
 
 @app.post("/calculate_scores")
 def calculate_scores(request: ScoreRequest):
+    english_text = translate_to_english(request.text)
     scores = build_user_scores(
         request.user_data,
-        text=request.text,
+        text=english_text,
         adhd_answers=request.adhd_answers
     )
     interventions = generate_interventions(request.user_data, scores)

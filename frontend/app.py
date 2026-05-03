@@ -1538,11 +1538,29 @@ if is_thinking:
             
             user_data = st.session_state.user_data or {}
             
+            # --- LANGUAGE DETECTION FOR LLM ---
+            msg_lang_code = st.session_state.messages[-1].get("lang")
+            if not msg_lang_code:
+                msg_lang_code = st.session_state.user_settings.get("language", "en")
+            
+            short_lang = msg_lang_code.split('-')[0] if msg_lang_code else "en"
+            
+            LANG_MAP = {
+                "en": "English", "es": "Spanish", "fr": "French", "de": "German",
+                "hi": "Hindi", "te": "Telugu", "ml": "Malayalam", "ta": "Tamil", 
+                "kn": "Kannada", "bn": "Bengali", "mr": "Marathi", "gu": "Gujarati",
+                "telugu": "Telugu", "tamil": "Tamil", "malayalam": "Malayalam", "hindi": "Hindi",
+                "kannada": "Kannada", "bengali": "Bengali", "marathi": "Marathi", "gujarati": "Gujarati"
+            }
+            lang_name = LANG_MAP.get(short_lang.lower(), short_lang)
+            
             try:
                 request_data = ChatRequest(
                     text=user_input_text,
                     history=history,
-                    user_data=user_data
+                    user_data=user_data,
+                    language=short_lang,
+                    language_name=lang_name
                 )
             except Exception as validation_error:
                 logging.error(f"ChatRequest validation error: {validation_error}")
