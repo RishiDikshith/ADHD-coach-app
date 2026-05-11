@@ -44,14 +44,30 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models"
 STRESS_KEYWORDS = {
     "stress", "stressed", "overwhelm", "overwhelmed", "anxious", "panic",
-    "too much", "hard", "stuck", "tired", "sad", "depressed", "burned out"
+    "too much", "hard", "stuck", "tired", "sad", "depressed", "burned out",
+    "tension", "tense", "cant focus", "can't focus", "cant understand", "can't understand"
+}
+
+POSITIVE_KEYWORDS = {
+    "happy", "great", "good", "awesome", "fantastic", "amazing", "productive",
+    "done", "finished", "excited", "glad", "joy", "better", "calm", "relaxed"
+}
+
+PRODUCTIVE_KEYWORDS = {
+    "productive", "done", "finished", "completed", "focused", "progress",
+    "did it", "working", "achieved", "accomplished", "on track", "next"
+}
+
+UNPRODUCTIVE_KEYWORDS = {
+    "distracted", "procrastinating", "lazy", "unproductive", "cant focus",
+    "can't focus", "behind", "stuck", "failing", "off track", "cant understand", "can't understand"
 }
 
 
 # -------- EFFICIENT MODEL LOADING WITH CACHING --------
 try:
     adhd_inference = EfficientInference(
-        str(MODELS_DIR / "adhd_risk_model.pkl"), 
+        str(MODELS_DIR / "adhd_risk_model.pkl"),
         "ADHD Risk Model"
     )
     logging.info("✅ ADHD Risk Model loaded with optimization")
@@ -209,7 +225,7 @@ def estimate_depression_health_score(user_data: Dict[str, Any], engineered_df: p
     return float(max(20, min(85, (1 - estimated_risk) * 100)))
 
 
-def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: List[str] | None = None) -> Dict[str, Any]:
+def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: List[str] | None = None, analysis: Dict[str, str] = None) -> Dict[str, Any]:
     if not user_data:
         return {}
 
@@ -249,13 +265,38 @@ def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: L
         final_adhd_risk = adhd_risk
         adhd_health_pct = max(0, min(100, (1 - adhd_risk) * 100))
 
+    depression_pct = estimate_depression_health_score(user_snapshot, engineered_df)
+
     mental_health_probability = predict_mental_health_probability(text)
     if mental_health_probability is not None:
         mental_health_pct = float(mental_health_score(mental_health_probability))
+        # Real-time perturbation: adjust static ML outputs based on current chat sentiment
+        final_adhd_risk = min(1.0, final_adhd_risk + (mental_health_probability * 0.3))
+        productivity_pct = max(0.0, productivity_pct - (mental_health_probability * 40.0))
+        depression_pct = (depression_pct * 0.6) + (mental_health_pct * 0.4)
     else:
         mental_health_pct = float(max(0, min(100, 100 - (calculated_stress * 10))))
 
-    depression_pct = estimate_depression_health_score(user_snapshot, engineered_df)
+    # Strongly force variance based on analyzed text labels
+    if analysis:
+        emotion = analysis.get("emotion", "neutral")
+        prod = analysis.get("productivity", "medium")
+
+        if emotion == "stress":
+            final_adhd_risk = min(1.0, final_adhd_risk + 0.35)
+            depression_pct = max(0.0, depression_pct - 30.0) # lower score means higher depression risk
+            mental_health_pct = max(0.0, mental_health_pct - 40.0)
+        elif emotion == "positive":
+            final_adhd_risk = max(0.0, final_adhd_risk - 0.25)
+            depression_pct = min(100.0, depression_pct + 25.0)
+            mental_health_pct = min(100.0, mental_health_pct + 30.0)
+
+        if prod == "high":
+            productivity_pct = min(100.0, productivity_pct + 35.0)
+            final_adhd_risk = max(0.0, final_adhd_risk - 0.15)
+        elif prod == "low":
+            productivity_pct = max(0.0, productivity_pct - 35.0)
+            final_adhd_risk = min(1.0, final_adhd_risk + 0.2)
 
     final, level, description, weights = final_score(
         productivity_pct,
@@ -297,15 +338,48 @@ def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: L
 
 
 def analyze(text):
+    import json
+    import re
+    try:
+        # 1. Try robust LLM zero-shot classification first
+        prompt = f"""Analyze the following text from a user seeking productivity and mental health coaching. Classify the user's emotion as exactly one of: 'positive', 'neutral', or 'stress'. Classify their productivity status as exactly one of: 'high', 'medium', or 'low'. Respond with ONLY a valid JSON object in this format: {{"emotion": "...", "productivity": "..."}}. Do not include any other text. Text to analyze: '{text}'"""
+        raw_response = get_ai_reply(prompt)
+        match = re.search(r'\{.*\}', raw_response.replace('\n', ' '), re.DOTALL)
+        if match:
+            result = json.loads(match.group())
+            return {
+                "emotion": result.get("emotion", "neutral").lower(),
+                "productivity": result.get("productivity", "medium").lower()
+            }
+    except Exception as e:
+        logging.debug(f"LLM analysis failed, falling back to heuristics: {e}")
+
+    # 2. Fallback to heuristics and local ML
     try:
         predicted_probability = predict_mental_health_probability(text)
-        if predicted_probability is None:
-            prompt_lower = text.lower()
-            emotion_label = "stress" if any(keyword in prompt_lower for keyword in STRESS_KEYWORDS) else "normal"
+        prompt_lower = text.lower()
+        
+        # Analyze emotion
+        if any(keyword in prompt_lower for keyword in POSITIVE_KEYWORDS):
+            emotion_label = "positive"
+        elif predicted_probability is None:
+            if any(keyword in prompt_lower for keyword in STRESS_KEYWORDS):
+                emotion_label = "stress"
+            else:
+                emotion_label = "neutral"
         else:
-            emotion_label = "stress" if predicted_probability >= 0.5 else "normal"
+            if predicted_probability >= 0.25 or any(keyword in prompt_lower for keyword in STRESS_KEYWORDS):
+                emotion_label = "stress"
+            else:
+                emotion_label = "neutral"
 
-        productivity = "low" if len(text) < 30 else "medium"
+        # Analyze productivity
+        if any(keyword in prompt_lower for keyword in PRODUCTIVE_KEYWORDS):
+            productivity = "high"
+        elif any(keyword in prompt_lower for keyword in UNPRODUCTIVE_KEYWORDS):
+            productivity = "low"
+        else:
+            productivity = "medium"
 
         return {
             "emotion": emotion_label,
@@ -369,9 +443,9 @@ User's selected language: {language_name} ({language})
 """
 
     if not history:
-        instruction = "Your goal is to understand the user's main challenge today. Greet them, use bullet points with emojis for structure, and ask ONE short question to get them talking."
+        instruction = "Respond directly to the user's input first. Then gently guide the conversation by asking ONE short question to understand their main challenge or goal for today. Use bullet points with emojis for structure."
     else:
-        instruction = "Respond like a supportive friend. Empathize briefly, use bullet points with emojis to make your advice readable, and ask ONE guiding question. Do NOT write dense paragraphs."
+        instruction = "Respond directly to the user's input like a supportive friend. Empathize briefly, use bullet points with emojis to make your advice readable, and ask ONE guiding question. Do NOT write dense paragraphs."
 
     if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
         instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle. Do not push productivity. Focus on emotional support."
@@ -390,6 +464,14 @@ User input (English Translation context): "{english_translation}"
 
 CRITICAL LANGUAGE RULE: You MUST reply in the EXACT SAME language and script as "User input (Original)". If it is transliterated (e.g. "ela unnav"), reply in the same transliterated language. Do NOT reply in Catalan, Spanish, or other unrelated languages.
 CRITICAL FORMATTING: Avoid long paragraphs at all costs. Format your advice using short bullet points and a mix of emojis. End with a single question.
+
+You MUST format your entire response exactly like this:
+
+REPLY:
+[Your conversational response here. Empathize and ask your ONE guiding question. DO NOT include any task lists or bullet points of tasks here.]
+
+TASKS:
+[Provide 1 to 3 tiny, actionable tasks based on the user's input and their current stress level. If stress is high, make the tasks extremely small and gentle. List them with a dash e.g. "- Drink water"]
 """
 
     return prompt
@@ -424,21 +506,27 @@ def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
     if any(keyword in prompt_lower for keyword in ["focus", "distract", "attention", "overwhelm", "concentration"]):
         reply = (
-            "It sounds like you're feeling pretty overwhelmed, which makes focus really hard. "
-            "If we could pick just *one* tiny thing to knock out right now, what would it be?"
+            "REPLY:\nIt sounds like you're feeling pretty overwhelmed, which makes focus really hard. "
+            "If we could pick just *one* tiny thing to knock out right now, what would it be?\n\n"
+            "TASKS:\n- Take 3 deep breaths\n- Open your notes\n- Start a 5-minute timer"
         )
     elif any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
         reply = (
-            "Planning can definitely be tricky. Instead of looking at the whole schedule, "
-            "what is the very next thing you need to do in the next 10 minutes?"
+            "REPLY:\nPlanning can definitely be tricky. Instead of looking at the whole schedule, "
+            "what is the very next thing you need to do in the next 10 minutes?\n\n"
+            "TASKS:\n- List top 3 priorities\n- Pick the easiest one\n- Block out 15 minutes"
         )
     elif any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
         reply = (
-            "It's totally normal to hit a wall with motivation. What if we just do a 2-minute 'starter' task? "
-            "What's the smallest possible step you could take right now?"
+            "REPLY:\nIt's totally normal to hit a wall with motivation. What if we just do a 2-minute 'starter' task? "
+            "What's the smallest possible step you could take right now?\n\n"
+            "TASKS:\n- Drink a glass of water\n- Clear your desk space\n- Do a 2-minute starter task"
         )
     else:
-        reply = "I hear you, and I'm here to help. What is the main thing you want us to tackle together today?"
+        reply = (
+            "REPLY:\nI hear you, and I'm here to help. What is the main thing you want us to tackle together today?\n\n"
+            "TASKS:\n- Define your main goal for today\n- Break it into 3 small steps\n- Start the first step"
+        )
 
     return reply
 
@@ -504,12 +592,46 @@ def chat(data: ChatRequest):
     try:
         english_text = translate_to_english(data.text)
         analysis = analyze(english_text)
-        scores = build_user_scores(data.user_data, text=english_text) if data.user_data else {}
+        scores = build_user_scores(data.user_data, text=english_text, analysis=analysis) if data.user_data else {}
         prompt = build_prompt(data.text, english_text, analysis, data.history, scores, data.language, data.language_name)
         raw = get_ai_reply(prompt, data.language)
-        reply = format_reply(translate_reply_if_needed(raw, data.language))
+        
+        reply_part = raw
+        dynamic_tasks = []
+        
+        import re
+        if re.search(r'\bTASKS\s*[:\-]', raw, flags=re.IGNORECASE):
+            parts = re.split(r'\bTASKS\s*[:\-]', raw, flags=re.IGNORECASE)
+            reply_part = re.sub(r'^REPLY\s*[:\-]*\s*', '', parts[0], flags=re.IGNORECASE).strip()
+            tasks_part = parts[1].strip()
+            for line in tasks_part.split('\n'):
+                line = line.strip()
+                if line.startswith("-") or line.startswith("*") or line.startswith("☐"):
+                    clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
+                    if clean_task:
+                        dynamic_tasks.append(clean_task)
+                else:
+                    clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                    if clean_line and len(clean_line) > 2:
+                        dynamic_tasks.append(clean_line)
+        else:
+            reply_part = re.sub(r'^REPLY\s*[:\-]*\s*', '', raw, flags=re.IGNORECASE).strip()
+            
+        reply = format_reply(translate_reply_if_needed(reply_part, data.language))
 
-        interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+        interventions = []
+        if dynamic_tasks:
+            for task in dynamic_tasks[:3]:
+                interventions.append({
+                    "priority": "high",
+                    "category": "dynamic",
+                    "title": "AI Suggested Task",
+                    "action": task
+                })
+
+        rule_based_interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+        interventions.extend(rule_based_interventions)
+        interventions = interventions[:5]
 
         logging.info(
             "Chat completed: text=%s emotion=%s adhd_risk=%s",
@@ -536,10 +658,12 @@ def chat(data: ChatRequest):
 @app.post("/calculate_scores")
 def calculate_scores(request: ScoreRequest):
     english_text = translate_to_english(request.text)
+    analysis = analyze(english_text)
     scores = build_user_scores(
         request.user_data,
         text=english_text,
-        adhd_answers=request.adhd_answers
+        adhd_answers=request.adhd_answers,
+        analysis=analysis
     )
     interventions = generate_interventions(request.user_data, scores)
     return {"scores": scores, "interventions": interventions}

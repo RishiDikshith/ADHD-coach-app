@@ -132,6 +132,8 @@ def analyze_stress_text(text):
         "breaking down": 0.6,
         "can't cope": 0.65,
         "falling apart": 0.6,
+        "tension": 0.6,
+        "tense": 0.55,
     }
     
     # Level 3: Moderate stress indicators
@@ -148,9 +150,13 @@ def analyze_stress_text(text):
         "drained": 0.4,
         "worn out": 0.4,
         "tired all the time": 0.45,
-        "can't focus": 0.35,
-        "can't concentrate": 0.35,
-        "difficulty focusing": 0.3,
+        "can't focus": 0.45,
+        "cant focus": 0.45,
+        "can't concentrate": 0.45,
+        "cant concentrate": 0.45,
+        "difficulty focusing": 0.35,
+        "distracted": 0.35,
+        "no motivation": 0.4,
         "struggling": 0.35,
         "having trouble": 0.25,
         "hard time": 0.25,
@@ -173,7 +179,7 @@ def analyze_stress_text(text):
         "annoyed": 0.15,
         "irritable": 0.2,
         "impatient": 0.1,
-        "procrastinating": 0.2,
+        "procrastinating": 0.25,
         "behind": 0.15,
         "stuck": 0.2,
         "difficult": 0.15,
@@ -194,6 +200,10 @@ def analyze_stress_text(text):
         "doing well": -0.15,
         "improving": -0.1,
         "better now": -0.2,
+        "listen to music": -0.15,
+        "listening to music": -0.15,
+        "meditate": -0.15,
+        "take a break": -0.1,
     }
     
     stress_score = 0.0

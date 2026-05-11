@@ -1,64 +1,204 @@
+# train_adhd_risk_model.py
+
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
-from catboost import CatBoostRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
+import numpy as np
 import joblib
+import warnings
+warnings.filterwarnings("ignore")
 
-df = pd.read_csv("data/featured/behavioral_scaled.csv")
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-# Create ADHD Risk Score
-df["adhd_risk_score"] = (
-    df["phone_usage_hours"]
-    + df["social_media_hours"]
-    + df["youtube_hours"]
-    + df["gaming_hours"]
-    + df["stress_level"]
-    + df["caffeine_stress"]
-    - df["sleep_hours"]
-    - df["exercise_minutes"] / 60
-    - df["study_hours_per_day"]
-    - df["break_efficiency"]
-    - df["health_productivity"]
-)
+print("="*70)
+print("FINAL ADHD MODEL (FULLY FIXED)")
+print("="*70)
 
-target = "adhd_risk_score"
+# =========================
+# LOAD DATA
+# =========================
+df = pd.read_csv("data/cleaned/adhd_cleaned.csv")
 
-# 🚨 FIXING DATA LEAKAGE: 
-# The target 'adhd_risk_score' was calculated directly from these features.
-# If we don't drop them, the model just memorizes the formula and overfits perfectly.
-leakage_features = [
-    "phone_usage_hours", "social_media_hours", "youtube_hours",
-    "gaming_hours", "stress_level", "caffeine_stress",
-    "sleep_hours", "exercise_minutes", "study_hours_per_day",
-    "break_efficiency", "health_productivity"
+# =========================
+# CREATE TARGET
+# =========================
+if "adhd_risk" not in df.columns:
+    if "asrs_total" in df.columns:
+        threshold = df["asrs_total"].median()
+        df["adhd_risk"] = (df["asrs_total"] > threshold).astype(int)
+        print("✓ Target created from asrs_total")
+    else:
+        raise ValueError("❌ Missing 'asrs_total' column")
+
+y = df["adhd_risk"]
+
+# =========================
+# LOAD MODELS
+# =========================
+print("\nLoading models...")
+
+nlp_available = False
+prod_available = False
+
+# NLP
+try:
+    nlp_bundle = joblib.load("models/mental_health_nlp_final.pkl")
+
+    if isinstance(nlp_bundle, tuple):
+        nlp_model, tfidf = nlp_bundle
+    else:
+        nlp_model = nlp_bundle["model"]
+        tfidf = nlp_bundle["vectorizer"]
+
+    nlp_available = True
+    print("✓ NLP model loaded")
+
+except Exception as e:
+    print("⚠️ NLP not available:", str(e))
+
+# Productivity
+try:
+    prod_bundle = joblib.load("models/productivity_model_final.pkl")
+
+    if isinstance(prod_bundle, tuple):
+        prod_model, prod_features = prod_bundle
+    else:
+        prod_model = prod_bundle["model"]
+        prod_features = prod_bundle["features"]
+
+    prod_available = True
+    print("✓ Productivity model loaded")
+
+except Exception as e:
+    print("⚠️ Productivity not available:", str(e))
+
+# =========================
+# NLP FEATURE
+# =========================
+if nlp_available:
+    text_col = None
+    for col in ["cleaned_text", "text", "response"]:
+        if col in df.columns:
+            text_col = col
+            break
+
+    if text_col:
+        text_data = df[text_col].fillna("")
+        X_text = tfidf.transform(text_data)
+        df["nlp_risk"] = nlp_model.predict_proba(X_text)[:, 1]
+        print("✓ NLP feature added")
+    else:
+        df["nlp_risk"] = 0.5
+        print("⚠️ No text column → default NLP")
+else:
+    df["nlp_risk"] = 0.5
+
+# =========================
+# PRODUCTIVITY FEATURE (FIXED)
+# =========================
+if prod_available:
+    try:
+        prod_input = pd.DataFrame()
+
+        for col in prod_features:
+            if col in df.columns:
+                prod_input[col] = df[col]
+            else:
+                prod_input[col] = 0
+
+        prod_input = prod_input[prod_features]
+
+        df["productivity_score"] = prod_model.predict(prod_input)
+        print("✓ Productivity feature added")
+
+    except Exception as e:
+        print("⚠️ Productivity failed:", str(e))
+        df["productivity_score"] = 0.5
+else:
+    df["productivity_score"] = 0.5
+
+# =========================
+# FINAL FEATURES
+# =========================
+features = [
+    "nlp_risk",
+    "productivity_score",
+    "age",
+    "sex",
+    "home_language",
+    "psy1004_grade",
+    "nbt_ave",
+    "nbt_math",
+    "nbt_al",
+    "matric_mark"
 ]
 
-# Remove productivity score, target, and all constituent leakage features
-cols_to_drop = [target, "productivity_score"] + [col for col in leakage_features if col in df.columns]
-X = df.drop(columns=cols_to_drop)
-y = df[target]
+features = [f for f in features if f in df.columns]
 
+print("\nUsing features:", features)
+
+X = df[features]
+
+# =========================
+# PREPROCESSING
+# =========================
+num_cols = X.select_dtypes(include=["int64", "float64"]).columns
+cat_cols = X.select_dtypes(include=["object"]).columns
+
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), num_cols),
+    ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
+])
+
+# =========================
+# MODEL
+# =========================
+model = Pipeline([
+    ("pre", preprocessor),
+    ("clf", LogisticRegression(
+        max_iter=500,
+        class_weight="balanced"
+    ))
+])
+
+# =========================
+# TRAIN TEST SPLIT
+# =========================
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.2, stratify=y, random_state=42
 )
 
-# Use CatBoost with early stopping and regularization to prevent overfitting
-model = CatBoostRegressor(
-    iterations=1000, 
-    learning_rate=0.05, 
-    depth=6, 
-    l2_leaf_reg=5, 
-    verbose=100, 
-    random_state=42
-)
+# =========================
+# TRAIN
+# =========================
+model.fit(X_train, y_train)
 
-model.fit(X_train, y_train, eval_set=(X_test, y_test), early_stopping_rounds=50)
+# =========================
+# EVALUATE
+# =========================
+y_pred = model.predict(X_test)
+y_prob = model.predict_proba(X_test)[:, 1]
 
-print("Train R2:", model.score(X_train, y_train))
-print("Test R2:", model.score(X_test, y_test))
-print("MAE:", mean_absolute_error(y_test, model.predict(X_test)))
-print("R2 Score:", r2_score(y_test, model.predict(X_test)))
+print("\n=== PERFORMANCE ===")
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("F1:", f1_score(y_test, y_pred))
+print("AUC:", roc_auc_score(y_test, y_prob))
 
-joblib.dump(model, "models/adhd_risk_model.pkl")
+# =========================
+# CROSS VALIDATION
+# =========================
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+cv_scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc")
 
-print("\nFinal ADHD Risk Model Saved!")
+print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std()*2)
+
+# =========================
+# SAVE MODEL
+# =========================
+joblib.dump(model, "models/adhd_risk_model_final.pkl")
+
+print("\n✓ FINAL MODEL SAVED")
+print("="*70)

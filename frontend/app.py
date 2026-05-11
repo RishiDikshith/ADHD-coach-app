@@ -747,6 +747,9 @@ if "reflection" not in st.session_state:
 if "feedback_list" not in st.session_state:
     st.session_state.feedback_list = []
 
+if "latest_scores" not in st.session_state:
+    st.session_state.latest_scores = {}
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -937,6 +940,14 @@ with st.sidebar:
                         calc_stress -= 1  # Low distraction
                     
                     st.session_state.user_data["stress_level"] = max(1, min(10, calc_stress))
+                    
+                    # Update Goals & Tasks dynamically based on check-in
+                    from src.intervention.intervention_engine import generate_interventions
+                    interventions = generate_interventions(st.session_state.user_data, st.session_state.latest_scores)
+                    if interventions:
+                        st.session_state.goals = [f"🎯 {inv['title']}" for inv in interventions]
+                        st.session_state.tasks = [inv['action'] for inv in interventions]
+                    
                     st.session_state.check_in_completed = True
                     st.rerun()
     render_daily_checkin()
@@ -1027,6 +1038,33 @@ with st.sidebar:
 
     st.divider()
     
+    # AI Diagnostics (Powered by ML Models)
+    if st.session_state.latest_scores:
+        st.markdown('### 🤖 AI Diagnostics')
+        scores = st.session_state.latest_scores
+        
+        # ADHD Risk
+        adhd_risk = scores.get("adhd_risk", 0) * 100
+        st.markdown(f"<div style='font-size:14px; margin-bottom:2px;'>ADHD Risk: <b>{adhd_risk:.1f}%</b></div>", unsafe_allow_html=True)
+        st.progress(min(1.0, max(0.0, adhd_risk / 100)))
+        
+        # Mental Health Score
+        mh_score = scores.get("mental_health_score", 0)
+        st.markdown(f"<div style='font-size:14px; margin-bottom:2px; margin-top:8px;'>Mental Health: <b>{mh_score:.1f}%</b></div>", unsafe_allow_html=True)
+        st.progress(min(1.0, max(0.0, mh_score / 100)))
+        
+        # Productivity Score
+        prod_score = scores.get("productivity_score", 0)
+        st.markdown(f"<div style='font-size:14px; margin-bottom:2px; margin-top:8px;'>Productivity Forecast: <b>{prod_score:.1f}%</b></div>", unsafe_allow_html=True)
+        st.progress(min(1.0, max(0.0, prod_score / 100)))
+        
+        # Depression / Burnout Score
+        dep_score = scores.get("depression_score", 0)
+        st.markdown(f"<div style='font-size:14px; margin-bottom:2px; margin-top:8px;'>Burnout Resistance: <b>{dep_score:.1f}%</b></div>", unsafe_allow_html=True)
+        st.progress(min(1.0, max(0.0, dep_score / 100)))
+        
+        st.divider()
+    
     # Goals
     st.markdown('### 🎯 Today\'s Goals')
     for goal in st.session_state.goals:
@@ -1036,8 +1074,23 @@ with st.sidebar:
     
     # Tasks
     st.markdown('### ✓ Tasks')
-    for task in st.session_state.tasks:
-        st.markdown(f'<div class="task-item">□ {task}</div>', unsafe_allow_html=True)
+    tasks_to_remove = []
+    for i, task in enumerate(st.session_state.tasks):
+        completed = st.checkbox(task, key=f"task_{i}_{task}")
+        if completed:
+            tasks_to_remove.append(task)
+            
+    if tasks_to_remove:
+        for task in tasks_to_remove:
+            if task in st.session_state.tasks:
+                st.session_state.tasks.remove(task)
+            
+            # Send message to model to evaluate task completion and update scores
+            st.session_state.messages.append({
+                "role": "user", 
+                "content": f"I just completed this task from my list: '{task}'. Please evaluate my new productivity score and give me a brief word of encouragement."
+            })
+        st.rerun()
     
     st.divider()
     
@@ -1582,26 +1635,43 @@ if is_thinking:
             analysis = data.get("analysis", {})
             scores = data.get("scores", {})
             
-            # Extract current stress level from session
+            # Save the latest scores to update the AI Diagnostics sidebar
+            st.session_state.latest_scores = scores
+            
+            # Get current stress level to prevent sudden overriding of check-in data
             current_stress = st.session_state.user_data.get("stress_level", 5)
             
-            # Make an adjustment based on the current message's emotion
-            is_stressed_in_text = analysis.get("emotion") == "stress"
-            
-            # Fallback heuristic
+            # Determine emotion and adjust stress dynamically
+            emotion = analysis.get("emotion", "neutral")
             stress_keywords = ["stress", "overwhelm", "anxious", "panic", "too much", "hard", "stuck", "tired", "sad", "depressed"]
-            if any(kw in user_input_text.lower() for kw in stress_keywords):
-                is_stressed_in_text = True
-                
-            if is_stressed_in_text:
-                new_stress = min(10, current_stress + 2) # Nudge up stronger
+            
+            # Calculate ML-based stress from mental health score
+            if "mental_health_score" in scores:
+                mh_score = scores["mental_health_score"]
+                # Inverse Map: 100 MH (excellent) -> 1 (low stress), and 10 MH (critical) -> 10 (high stress)
+                ml_stress = max(1, min(10, int(11 - (mh_score / 10))))
             else:
-                new_stress = max(1, current_stress - 1) # Nudge down when calm
+                ml_stress = current_stress
+                
+            # Nudge stress dynamically based on user input for every turn
+            if emotion == "stress" or any(kw in user_input_text.lower() for kw in stress_keywords):
+                new_stress = min(10, current_stress + 2) # Nudge up stronger
+            elif emotion == "positive":
+                new_stress = max(1, current_stress - 2) # Nudge down when happy/productive
+            else:
+                # If neutral, slowly pull towards ML's predicted stress
+                if ml_stress > current_stress:
+                    new_stress = min(10, current_stress + 1)
+                elif ml_stress < current_stress:
+                    new_stress = max(1, current_stress - 1)
+                else:
+                    new_stress = current_stress
             
             st.session_state.user_data["stress_level"] = new_stress
             
-            # Dynamic Updates based on AI analysis
+            # Dynamic Updates based on AI analysis and nudged state
             interventions = data.get("interventions", [])
+            
             if interventions:
                 st.session_state.goals = []
                 st.session_state.tasks = []
@@ -1676,14 +1746,12 @@ if is_thinking:
     if st.session_state.points >= 100 and "Century Club" not in st.session_state.badges:
         st.session_state.badges.append("Century Club")
     
-    # Dynamically update the chat UI without a full page refresh
-    update_chat_ui(chat_placeholder, is_thinking=False)
-    
+    # Update UI by re-running to reflect new scores, badges, and stress levels dynamically
     if audio_data_bytes:
-        audio_placeholder.audio(audio_data_bytes, format="audio/mp3", autoplay=True)
-        st.session_state.messages[-1]["audio_played"] = True
+        st.session_state.messages[-1]["audio_played"] = False
         
     status_placeholder.empty()
+    st.rerun()
 
 @st_fragment
 def render_feedback_section():
