@@ -668,6 +668,58 @@ def apply_theme():
             font-size: 16px;
         }}
     }}
+    
+    /* Task Card Styles for Chat Interface */
+    .tasks-card-container {{
+        display: flex;
+        justify-content: flex-start;
+        margin: 12px 0;
+    }}
+    
+    .tasks-card {{
+        background: linear-gradient(135deg, rgba(72, 187, 120, 0.1) 0%, rgba(56, 161, 105, 0.1) 100%);
+        border: 2px solid #48bb78;
+        border-radius: 16px;
+        padding: 16px 20px;
+        max-width: 85%;
+        word-wrap: break-word;
+        font-size: 18px;
+        line-height: 1.6;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }}
+    
+    .tasks-card-header {{
+        font-weight: bold;
+        color: #6ee7b7;
+        margin-bottom: 12px;
+        font-size: 19px;
+    }}
+    
+    .task-item-inline {{
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(72, 187, 120, 0.2);
+        font-size: 18px;
+        color: #e2e7ff;
+    }}
+    
+    .task-item-inline:last-child {{
+        border-bottom: none;
+    }}
+    
+    .task-emoji {{
+        margin-right: 10px;
+        font-size: 22px;
+        width: 30px;
+        text-align: center;
+    }}
+    
+    .task-text {{
+        flex: 1;
+        color: #e2e7ff;
+    }}
+    
     </style>
     """,unsafe_allow_html=True)
 
@@ -680,18 +732,13 @@ if "analysis" not in st.session_state:
     st.session_state.analysis = {}
 
 if "goals" not in st.session_state:
-    st.session_state.goals = [
-        "📚 Improve focus sessions",
-        "✅ Complete daily tasks",
-        "💪 Build consistency"
-    ]
+    st.session_state.goals = []
+
+if "ai_suggestions" not in st.session_state:
+    st.session_state.ai_suggestions = []
 
 if "tasks" not in st.session_state:
-    st.session_state.tasks = [
-        "Review medication schedule",
-        "Practice time blocking",
-        "Reflect on productivity"
-    ]
+    st.session_state.tasks = []
 
 if "habits" not in st.session_state:
     st.session_state.habits = ["Morning Routine", "Exercise", "Meditation"]
@@ -941,11 +988,11 @@ with st.sidebar:
                     
                     st.session_state.user_data["stress_level"] = max(1, min(10, calc_stress))
                     
-                    # Update Goals & Tasks dynamically based on check-in
+                    # Update AI Suggestions & Tasks dynamically based on check-in
                     from src.intervention.intervention_engine import generate_interventions
                     interventions = generate_interventions(st.session_state.user_data, st.session_state.latest_scores)
                     if interventions:
-                        st.session_state.goals = [f"🎯 {inv['title']}" for inv in interventions]
+                        st.session_state.ai_suggestions = [f"🤖 {inv['title']}" for inv in interventions]
                         st.session_state.tasks = [inv['action'] for inv in interventions]
                     
                     st.session_state.check_in_completed = True
@@ -1064,33 +1111,68 @@ with st.sidebar:
         st.progress(min(1.0, max(0.0, dep_score / 100)))
         
         st.divider()
-    
-    # Goals
+
+    # Goals - User defined, not AI suggestions
     st.markdown('### 🎯 Today\'s Goals')
-    for goal in st.session_state.goals:
-        st.markdown(f'<div class="goal-item">{goal}</div>', unsafe_allow_html=True)
-    
+
+    # Input to add new goal
+    with st.form("add_goal_form", clear_on_submit=True):
+        new_goal = st.text_input("Add a goal...", placeholder="e.g., Complete math homework", label_visibility="collapsed", key="new_goal_input")
+        add_goal = st.form_submit_button("➕ Add", use_container_width=False)
+        if add_goal and new_goal.strip():
+            if new_goal.strip() not in st.session_state.goals:
+                st.session_state.goals.append(f"📌 {new_goal.strip()}")
+                st.rerun()
+
+    # Display user-defined goals with delete option
+    if st.session_state.goals:
+        goals_to_remove = []
+        for i, goal in enumerate(st.session_state.goals):
+            col1, col2 = st.columns([6, 1])
+            with col1:
+                st.markdown(f'<div class="goal-item">{goal}</div>', unsafe_allow_html=True)
+            with col2:
+                if st.button("❌", key=f"del_goal_{i}", help="Remove goal"):
+                    goals_to_remove.append(goal)
+        if goals_to_remove:
+            for g in goals_to_remove:
+                if g in st.session_state.goals:
+                    st.session_state.goals.remove(g)
+            st.rerun()
+    else:
+        st.info("Add your own goals above!", icon="➡️")
+
     st.divider()
-    
+
+    # AI Recommendations (separate from user goals)
+    if st.session_state.get("ai_suggestions"):
+        st.markdown('### 💡 AI Recommendations')
+        for suggestion in st.session_state.ai_suggestions:
+            st.markdown(f'<div class="goal-item" style="border-left-color: #667eea;">{suggestion}</div>', unsafe_allow_html=True)
+        st.divider()
+
     # Tasks
-    st.markdown('### ✓ Tasks')
-    tasks_to_remove = []
-    for i, task in enumerate(st.session_state.tasks):
-        completed = st.checkbox(task, key=f"task_{i}_{task}")
-        if completed:
-            tasks_to_remove.append(task)
-            
-    if tasks_to_remove:
-        for task in tasks_to_remove:
-            if task in st.session_state.tasks:
-                st.session_state.tasks.remove(task)
-            
-            # Send message to model to evaluate task completion and update scores
-            st.session_state.messages.append({
-                "role": "user", 
-                "content": f"I just completed this task from my list: '{task}'. Please evaluate my new productivity score and give me a brief word of encouragement."
-            })
-        st.rerun()
+    st.markdown('### ✓ Suggested Tasks')
+    if st.session_state.tasks:
+        tasks_to_remove = []
+        for i, task in enumerate(st.session_state.tasks):
+            completed = st.checkbox(task, key=f"task_{i}_{task}")
+            if completed:
+                tasks_to_remove.append(task)
+                
+        if tasks_to_remove:
+            for task in tasks_to_remove:
+                if task in st.session_state.tasks:
+                    st.session_state.tasks.remove(task)
+                
+                # Send message to model to evaluate task completion and update scores
+                st.session_state.messages.append({
+                    "role": "user", 
+                    "content": f"I just completed this task from my list: '{task}'. Please evaluate my new productivity score and give me a brief word of encouragement."
+                })
+            st.rerun()
+    else:
+        st.info("📋 Tasks suggested by your AI Coach will appear here once generated!", icon="⚡")
     
     st.divider()
     
@@ -1438,11 +1520,23 @@ def update_chat_ui(placeholder, is_thinking=False):
             if msg["role"] == "user":
                 chat_parts.append(f'<div class="user-message"><div class="user-message-bubble">{render_chat_text(content_to_render)}</div></div>')
             else:
+                # Bot message
                 chat_parts.append(f'<div class="bot-message"><div class="bot-message-bubble">{render_chat_text(content_to_render)}</div></div>')
-        
+
+                # Render task cards if message has tasks
+                msg_tasks = msg.get("tasks", [])
+                if msg_tasks:
+                    tasks_html = '<div class="tasks-card-container"><div class="tasks-card"><div class="tasks-card-header">📋 Suggested Tasks</div>'
+                    for task in msg_tasks:
+                        emoji = task.get("emoji", "✓")
+                        text = task.get("text", "")
+                        tasks_html += f'<div class="task-item-inline"><span class="task-emoji">{emoji}</span><span class="task-text">{html.escape(text)}</span></div>'
+                    tasks_html += '</div></div>'
+                    chat_parts.append(tasks_html)
+
         if is_thinking:
             chat_parts.append('<div class="thinking"><div class="thinking-bubble">⏳ Thinking...</div></div>')
-            
+
         chat_parts.append('</div>')
         placeholder.markdown("".join(chat_parts), unsafe_allow_html=True)
 
@@ -1572,6 +1666,7 @@ if not is_thinking and st.session_state.messages and st.session_state.messages[-
 # Process the backend call if we are thinking
 if is_thinking:
     status_placeholder = st.empty()
+    interventions = []  # Initialize before try block
     with status_placeholder.status("Analyzing your message...", expanded=True) as status:
         try:
             status.write("Extracting context and user intent...")
@@ -1671,22 +1766,18 @@ if is_thinking:
             
             # Dynamic Updates based on AI analysis and nudged state
             interventions = data.get("interventions", [])
-            
+
             if interventions:
-                st.session_state.goals = []
+                # Store AI suggestions separately from user goals
+                if "ai_suggestions" not in st.session_state:
+                    st.session_state.ai_suggestions = []
+
+                st.session_state.ai_suggestions = []  # Reset and rebuild
                 st.session_state.tasks = []
-                
-                timer_triggered = False
+
                 for inv in interventions:
-                    st.session_state.goals.append(f"🎯 {inv['title']}")
+                    st.session_state.ai_suggestions.append(f"🤖 {inv['title']}")
                     st.session_state.tasks.append(inv['action'])
-                    
-                    # Auto-start focus timer if suggested
-                    if inv['category'] == 'focus' and not st.session_state.timer_active and not timer_triggered:
-                        st.session_state.timer_active = True
-                        st.session_state.timer_start = time.time()
-                        timer_triggered = True
-                        st.toast("Auto-started focus timer based on AI suggestion!", icon="⏱️")
                         
             # Check if voice translation & TTS is needed
             last_msg = st.session_state.messages[-1]
@@ -1717,8 +1808,26 @@ if is_thinking:
             status.update(label="❌ Error generating response", state="error", expanded=False)
             reply = f"❌ Error: {str(e)}"
             audio_data_bytes = None
+            interventions = []
 
-    st.session_state.messages.append({"role": "assistant", "content": reply, "audio": audio_data_bytes, "audio_played": False})
+    # Build tasks list from interventions for chat display
+    chat_tasks = []
+    for inv in interventions:
+        task_action = inv.get('action', inv.get('title', ''))
+        task_emoji = inv.get('emoji', '✓')
+        if task_action:
+            chat_tasks.append({"emoji": task_emoji, "text": task_action})
+
+    # Add message to chat history
+    msg_data = {
+        "role": "assistant",
+        "content": reply,
+        "audio": audio_data_bytes,
+        "audio_played": False,
+        "tasks": chat_tasks
+    }
+    
+    st.session_state.messages.append(msg_data)
     st.session_state.session_count += 1
     
     # Update gamification

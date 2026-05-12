@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uvicorn src.api.main_api:app --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I need to finish my machine learning project but I keep avoiding it.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 7, \\\\\"phone_distractions\\\\\": 2}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"Help me start studying for exams when I have zero motivation.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 7}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I have 5 assignments due this week and I feel frozen.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 6, \\\\\"stress_level\\\\\": 8}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I wasted the whole day scrolling.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 5}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"Create a 45-minute focus session for coding.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I feel completely useless.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(powershell -Command \"Stop-Process -Name python -Force -ErrorAction SilentlyContinue\")",
+      "Bash(cd /d d:\\\\ADHD_Productivity_MVP)",
+      "Bash(python -m uvicorn src.api.main_api:app --host 127.0.0.1 --port 8000)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 4\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"Help me prioritize these: Study DSA, Build portfolio, Finish PPT, Sleep\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 6}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"Today was productive and I finally completed my tasks.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I'm stressed and falling behind.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I slept 8 hours, exercised, and completed 4 tasks.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 8, \\\\\"exercise_minutes\\\\\": 45}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I procrastinated all day and slept at 3 AM.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 3}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I know what to do but I just can't start.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"Suggest productivity techniques for ADHD students.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I opened YouTube to study but ended up watching random videos for 3 hours.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")",
+      "Bash(curl -s http://127.0.0.1:8000/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I can't handle college anymore.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")"
+    ]
+  }
+}

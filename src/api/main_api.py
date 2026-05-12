@@ -12,6 +12,10 @@ from functools import lru_cache
 import threading
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the 'src' directory to the Python path to resolve module imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -109,24 +113,28 @@ productivity_model = productivity_inference.model if productivity_inference else
 student_depression_model = student_inference.model if student_inference else None
 
 SYSTEM_PROMPT = """
-You are an empathetic, human-like ADHD productivity coach. Your goal is to be helpful and visually engaging.
+You are an empathetic, dynamic, and highly engaging ADHD productivity coach. Your goal is to be a supportive friend and an effective guide, adapting your advice to the user's unique situation.
 
-**STRICT COACHING RULES (CRITICAL TO FOLLOW):**
-1. **NO LONG PARAGRAPHS:** Never write big walls of text. ADHD users get overwhelmed by dense paragraphs.
-2. **USE BULLET POINTS & EMOJIS:** Format your main points or steps as short, punchy bullet points. Always include a mix of relevant emojis to make the text feel friendly and easy to scan.
-3. **HUMAN TONE:** Be conversational, warm, and natural. Avoid robotic formatting. Speak like a friend giving structured advice.
-4. **ONE QUESTION:** End your message with exactly ONE simple, guiding question to keep the conversation moving.
-5. **MICRO-ACTIONS:** If suggesting actions, break them down into tiny, 2-minute steps.
+**STRICT COACHING RULES:**
+1. **BE DYNAMIC & CONVERSATIONAL:** Never reply with just one short sentence. Provide a thoughtful, warm, and engaging response. Acknowledge the user's feelings and situation thoroughly but concisely.
+2. **USE SHORT PARAGRAPHS:** Avoid massive walls of text, but do write a few short, visually spaced paragraphs. Use emojis to keep it highly readable and friendly.
+3. **HUMAN TONE:** Be warm, encouraging, and natural. Speak like a real friend or mentor who is actively listening.
+4. **GUIDE WITH A QUESTION:** Always end your conversational reply with ONE clear, engaging question to prompt the user's next thought or action.
+5. **ACTIONABLE ADVICE (TASKS):** You MUST ALWAYS provide 1 to 3 tiny, actionable micro-steps in the dedicated TASKS section, EVEN for simple greetings like "hi".
 
-**Example of a PERFECT response:**
-"Hey! It makes total sense that you're feeling overwhelmed right now. 🌪️ 
+**Example Format:**
 
-Let's break this down into super tiny steps:
-- 🧹 Clear just one small corner of your desk.
-- ⏱️ Set a timer for 5 minutes.
-- 🎵 Put on your favorite focus playlist.
+REPLY:
+Hey! It makes total sense that you're feeling overwhelmed right now. 🌪️ 
 
-What is the absolute smallest thing you could tackle first? 🤔"
+Sometimes the hardest part is just figuring out where to start when everything feels like too much. But don't worry, we've got this together!
+
+What is the absolute smallest thing you could tackle first today? 🤔
+
+TASKS:
+- 🧹 Clear one small corner of your desk.
+- ⏱️ Set a timer for just 5 minutes.
+- 💧 Drink a glass of water.
 """
 
 
@@ -443,12 +451,12 @@ User's selected language: {language_name} ({language})
 """
 
     if not history:
-        instruction = "Respond directly to the user's input first. Then gently guide the conversation by asking ONE short question to understand their main challenge or goal for today. Use bullet points with emojis for structure."
+        instruction = "Start by warmly welcoming the user and responding directly to their input. Provide a thoughtful, engaging, and dynamic response spanning a few short paragraphs. Use emojis and bullet points to make it visually appealing, and end with a single, gentle guiding question."
     else:
-        instruction = "Respond directly to the user's input like a supportive friend. Empathize briefly, use bullet points with emojis to make your advice readable, and ask ONE guiding question. Do NOT write dense paragraphs."
+        instruction = "Respond to the user as a supportive, dynamic friend. Give a thoughtful and empathetic reply, acknowledge their progress or struggles in a few short paragraphs, provide actionable but small advice using bullet points, and end with an engaging question to keep the conversation flowing."
 
     if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
-        instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle. Do not push productivity. Focus on emotional support."
+        instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic. Focus on emotional support rather than pushing productivity right now."
 
     prompt = f"""
 {SYSTEM_PROMPT}
@@ -468,10 +476,10 @@ CRITICAL FORMATTING: Avoid long paragraphs at all costs. Format your advice usin
 You MUST format your entire response exactly like this:
 
 REPLY:
-[Your conversational response here. Empathize and ask your ONE guiding question. DO NOT include any task lists or bullet points of tasks here.]
+[Your conversational, multi-paragraph response here. Empathize and ask your ONE guiding question. DO NOT include any task lists or bullet points of tasks here.]
 
 TASKS:
-[Provide 1 to 3 tiny, actionable tasks based on the user's input and their current stress level. If stress is high, make the tasks extremely small and gentle. List them with a dash e.g. "- Drink water"]
+[You MUST ALWAYS provide 1 to 3 tiny, actionable tasks, EVEN IF the user just says "hi" or asks a question. Suggest small grounding steps if no specific task is discussed. List them with a dash e.g. "- Drink water"]
 """
 
     return prompt
@@ -506,25 +514,22 @@ def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
     if any(keyword in prompt_lower for keyword in ["focus", "distract", "attention", "overwhelm", "concentration"]):
         reply = (
-            "REPLY:\nIt sounds like you're feeling pretty overwhelmed, which makes focus really hard. "
-            "If we could pick just *one* tiny thing to knock out right now, what would it be?\n\n"
+            "REPLY:\nHey there! It sounds like you're feeling pretty overwhelmed right now, which makes focusing incredibly difficult. That's completely normal and okay! 🌬️\n\nSometimes our brains just need a tiny reset before diving back in. Let's take it slow and try not to force it.\n\nIf we could pick just *one* super tiny thing to knock out right now, what would it be? 🤔\n\n"
             "TASKS:\n- Take 3 deep breaths\n- Open your notes\n- Start a 5-minute timer"
         )
     elif any(keyword in prompt_lower for keyword in ["time", "schedule", "plan", "deadline", "routine"]):
         reply = (
-            "REPLY:\nPlanning can definitely be tricky. Instead of looking at the whole schedule, "
-            "what is the very next thing you need to do in the next 10 minutes?\n\n"
+            "REPLY:\nPlanning can definitely be tricky, especially when there's so much on your plate! 🗓️\n\nInstead of looking at the whole schedule and getting stressed, let's just zoom in on right now.\n\nWhat is the very next thing you need to do in the next 10 minutes to feel a little better? ⏳\n\n"
             "TASKS:\n- List top 3 priorities\n- Pick the easiest one\n- Block out 15 minutes"
         )
     elif any(keyword in prompt_lower for keyword in ["motivation", "procrast", "lazy", "energy"]):
         reply = (
-            "REPLY:\nIt's totally normal to hit a wall with motivation. What if we just do a 2-minute 'starter' task? "
-            "What's the smallest possible step you could take right now?\n\n"
+            "REPLY:\nIt's totally normal to hit a wall with motivation. We all have those days where our energy is just completely zapped! 🔋\n\nSometimes starting is the hardest part. What if we just do a 2-minute 'starter' task to build a tiny bit of momentum?\n\nWhat's the absolute smallest possible step you could take right now? ✨\n\n"
             "TASKS:\n- Drink a glass of water\n- Clear your desk space\n- Do a 2-minute starter task"
         )
     else:
         reply = (
-            "REPLY:\nI hear you, and I'm here to help. What is the main thing you want us to tackle together today?\n\n"
+            "REPLY:\nI hear you, and I completely understand where you're coming from. I'm right here to support you! 🤝\n\nLet's figure this out together step by step so it doesn't feel like too much.\n\nWhat is the main thing you want us to tackle together today? 🚀\n\n"
             "TASKS:\n- Define your main goal for today\n- Break it into 3 small steps\n- Start the first step"
         )
 
@@ -614,6 +619,9 @@ def chat(data: ChatRequest):
                     clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
                     if clean_line and len(clean_line) > 2:
                         dynamic_tasks.append(clean_line)
+            
+            # Format the reply to natively include tasks and the reminder to tick checkboxes
+            reply_part = f"{reply_part}\n\n**Tasks:**\n{tasks_part}\n\n*(If you complete any of these tasks, please tick the checkbox in the sidebar!)*"
         else:
             reply_part = re.sub(r'^REPLY\s*[:\-]*\s*', '', raw, flags=re.IGNORECASE).strip()
             
@@ -621,15 +629,44 @@ def chat(data: ChatRequest):
 
         interventions = []
         if dynamic_tasks:
+            # Create interventions for each task without appending to reply
+            # (reply will be formatted separately in frontend)
             for task in dynamic_tasks[:3]:
+                # Extract emoji if present or assign based on task keywords
+                emoji = "✓"
+                if "breath" in task.lower():
+                    emoji = "🧘"
+                elif "water" in task.lower():
+                    emoji = "💧"
+                elif "timer" in task.lower():
+                    emoji = "⏱️"
+                elif "desk" in task.lower():
+                    emoji = "🧹"
+                elif "priority" in task.lower():
+                    emoji = "📋"
+                elif "goal" in task.lower():
+                    emoji = "🎯"
+                
                 interventions.append({
                     "priority": "high",
-                    "category": "dynamic",
-                    "title": "AI Suggested Task",
-                    "action": task
+                    "category": "task",
+                    "title": task,
+                    "action": task,
+                    "emoji": emoji
                 })
 
         rule_based_interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+        
+        # If the AI omitted tasks (e.g. returned a 1-line reply), fallback to injecting AI-suggested rule-based tasks natively into the chat reply
+        if not dynamic_tasks and rule_based_interventions:
+            tasks_list_text = "\n".join([f"- {inv.get('action', inv.get('title', 'Task'))}" for inv in rule_based_interventions[:3]])
+            fallback_tasks_text = f"\n\n**Tasks:**\n{tasks_list_text}\n\n*(If you complete any of these tasks, please tick the checkbox in the sidebar!)*"
+            
+            if data.language and not data.language.startswith("en"):
+                fallback_tasks_text = translate_reply_if_needed(fallback_tasks_text, data.language)
+                
+            reply += fallback_tasks_text
+
         interventions.extend(rule_based_interventions)
         interventions = interventions[:5]
 

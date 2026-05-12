@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:minimax-algeng-chat-tts-us.oss-us-east-1.aliyuncs.com)",
+      "Bash(python -m py_compile frontend/app.py)",
+      "Bash(streamlit run *)",
+      "Bash(timeout 5)",
+      "Bash(Start-Sleep -Seconds 5)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 3\")",
+      "Bash(curl -s http://localhost:8501/chat -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"text\\\\\": \\\\\"I need to finish my machine learning project but I keep avoiding it.\\\\\", \\\\\"history\\\\\": [], \\\\\"user_data\\\\\": {\\\\\"sleep_hours\\\\\": 7, \\\\\"phone_distractions\\\\\": 2}, \\\\\"language\\\\\": \\\\\"en\\\\\"}\")"
+    ]
+  }
+}
