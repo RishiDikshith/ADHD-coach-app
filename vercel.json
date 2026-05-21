@@ -1,0 +1,15 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd frontend-next && npm run build",
+  "outputDirectory": "frontend-next/.next",
+  "installCommand": "cd frontend-next && npm install",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://adhd-backend.onrender.com"
+  }
+}

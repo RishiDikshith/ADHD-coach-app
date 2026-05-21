@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#050a18"/>
+    </linearGradient>
+    <linearGradient id="brain" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="40%" stop-color="#667eea"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6ee7b7" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#c084fc" stop-opacity="0.1"/>
+    </linearGradient>
+    <filter id="neonGlow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="192" height="192" rx="40" fill="url(#bg)"/>
+  <!-- Glow behind brain -->
+  <ellipse cx="96" cy="96" rx="68" ry="68" fill="url(#glow)" filter="url(#neonGlow)"/>
+  <!-- Brain icon (simplified) -->
+  <g fill="none" stroke="url(#brain)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left hemisphere -->
+    <path d="M96 52c-22 0-40 16-40 36 0 8 3 15.5 8 21.5-3 4-4.5 8.5-4.5 13.5 0 8 5 15 12 18-2 3-3 6.5-3 10 0 8 7 14.5 15.5 14.5 3.5 0 6.5-1 9-3"/>
+    <!-- Right hemisphere -->
+    <path d="M96 52c22 0 40 16 40 36 0 8-3 15.5-8 21.5 3 4 4.5 8.5 4.5 13.5 0 8-5 15-12 18 2 3 3 6.5 3 10 0 8-7 14.5-15.5 14.5-3.5 0-6.5-1-9-3"/>
+    <!-- Center line -->
+    <path d="M96 52v84"/>
+    <!-- Neural connections -->
+    <path d="M72 70c0 0 12 6 24 0" opacity="0.6"/>
+    <path d="M120 70c0 0-12 6-24 0" opacity="0.6"/>
+    <path d="M76 88c0 0 10 5 20 0" opacity="0.4"/>
+    <path d="M116 88c0 0-10 5-20 0" opacity="0.4"/>
+    <!-- Small dots for neural activity -->
+    <circle cx="72" cy="80" r="2.5" fill="#6ee7b7" opacity="0.8"/>
+    <circle cx="120" cy="80" r="2.5" fill="#667eea" opacity="0.8"/>
+    <circle cx="68" cy="100" r="2" fill="#c084fc" opacity="0.6"/>
+    <circle cx="124" cy="100" r="2" fill="#6ee7b7" opacity="0.6"/>
+    <circle cx="96" cy="66" r="2" fill="#fbbf24" opacity="0.7"/>
+  </g>
+  <!-- Sparkle accents -->
+  <circle cx="56" cy="48" r="2" fill="#6ee7b7" opacity="0.5"/>
+  <circle cx="136" cy="48" r="2" fill="#c084fc" opacity="0.5"/>
+  <circle cx="48" cy="140" r="1.5" fill="#667eea" opacity="0.4"/>
+  <circle cx="144" cy="140" r="1.5" fill="#6ee7b7" opacity="0.4"/>
+</svg>

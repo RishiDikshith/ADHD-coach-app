@@ -43,13 +43,13 @@ def prepare_model_for_inference(model):
     if hasattr(model, "n_jobs") and getattr(model, "n_jobs") not in (None, 1):
         try:
             model.n_jobs = 1
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Could not set n_jobs=1 on model: {e}")
     
     if hasattr(model, "thread_count") and getattr(model, "thread_count") not in (None, 1):
         try:
             model.thread_count = 1
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Could not set thread_count=1 on model: {e}")
     
     return model

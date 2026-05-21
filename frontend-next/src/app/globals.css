@@ -1,0 +1,455 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --color-background: #000000;
+  --color-background-secondary: #050a18;
+  --color-foreground: #ffffff;
+  --color-muted: #94a3b8;
+  --color-muted-foreground: #64748b;
+  --color-border: #1e293b;
+  --color-border-light: #334155;
+  --color-surface: #0f172a;
+  --color-surface-elevated: #1a2332;
+  --color-surface-glass: rgba(15, 23, 42, 0.6);
+
+  /* ADHD Calming Color System */
+  --color-calm-50: #f0fdf4;
+  --color-calm-100: #dcfce7;
+  --color-calm-200: #bbf7d0;
+  --color-calm-300: #86efac;
+  --color-calm-400: #4ade80;
+  --color-calm-500: #6ee7b7;
+  --color-calm-600: #34d399;
+  --color-calm-700: #15803d;
+  --color-calm-800: #166534;
+  --color-calm-900: #14532d;
+
+  --color-focus-50: #f0f5ff;
+  --color-focus-100: #e0e7ff;
+  --color-focus-200: #c7d2fe;
+  --color-focus-300: #a5b4fc;
+  --color-focus-400: #818cf8;
+  --color-focus-500: #667eea;
+  --color-focus-600: #5b6abf;
+  --color-focus-700: #4c51bf;
+  --color-focus-800: #3730a3;
+  --color-focus-900: #1e1b4b;
+
+  --color-warm-50: #fff7ed;
+  --color-warm-100: #ffedd5;
+  --color-warm-200: #fed7aa;
+  --color-warm-300: #fdba74;
+  --color-warm-400: #fb923c;
+  --color-warm-500: #fbbf24;
+  --color-warm-600: #f59e0b;
+  --color-warm-700: #d97706;
+  --color-warm-800: #92400e;
+  --color-warm-900: #78350f;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-400: #f87171;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+
+  --color-purple-400: #c084fc;
+  --color-purple-500: #a855f7;
+  --color-pink-400: #f472b6;
+  --color-pink-500: #ec4899;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-dyslexia: var(--font-sans);
+
+  /* Premium Animations */
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-fade-in-up: fade-in-up 0.5s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+  --animate-bounce-in: bounce-in 0.5s ease-out;
+  --animate-scale-in: scale-in 0.3s ease-out;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+  --animate-shimmer: shimmer 2s ease-in-out infinite;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+  --animate-rotate-gradient: rotate-gradient 8s linear infinite;
+  --animate-typing-cursor: typing-cursor 1s step-end infinite;
+  --animate-breathing: breathing 4s ease-in-out infinite;
+  --animate-heartbeat: heartbeat 1.5s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 6s linear infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bounce-in {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { transform: scale(1.08); }
+  70% { transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.02); }
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 8px rgba(110, 231, 183, 0.15); }
+  to { box-shadow: 0 0 32px rgba(110, 231, 183, 0.35), 0 0 60px rgba(110, 231, 183, 0.1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes rotate-gradient {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes typing-cursor {
+  50% { border-color: transparent; }
+}
+
+@keyframes breathing {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.08); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.06); }
+  56% { transform: scale(1); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== Base ==================== */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==================== Glassmorphism ==================== */
+.glass {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-strong {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.gradient-border {
+  position: relative;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(110, 231, 183, 0.4), rgba(102, 126, 234, 0.4), rgba(192, 132, 252, 0.4));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ==================== Scrollbar ==================== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b transparent;
+}
+
+/* ==================== Focus ==================== */
+*:focus-visible {
+  outline: 2px solid var(--color-calm-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==================== Selection ==================== */
+::selection {
+  background: rgba(110, 231, 183, 0.2);
+  color: white;
+}
+
+/* ==================== Shimmer Loading ==================== */
+.shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.shimmer-card {
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* ==================== Animated Text ==================== */
+.gradient-text {
+  background: linear-gradient(135deg, #6ee7b7, #667eea, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, #fbbf24, #fb923c, #f87171);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ==================== ADHD UX Classes ==================== */
+.overwhelm-banner {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(180, 30, 30, 0.12));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+}
+
+.streak-achievement {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.12));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Confetti canvas */
+#confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Breathing animation container */
+.breathing-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.3), rgba(102, 126, 234, 0.1));
+  animation: breathing 4s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(110, 231, 183, 0.15);
+}
+
+/* Full-screen overlay for focus mode */
+.focus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: radial-gradient(ellipse at center, #0a1628 0%, #000000 100%);
+}
+
+/* Animated background gradient for focus mode */
+.focus-gradient {
+  background: linear-gradient(135deg, #0a1628, #050a18, #0a1628, #050a18);
+  background-size: 400% 400%;
+  animation: rotate-gradient 8s linear infinite;
+}
+
+/* ==================== Accessibility ==================== */
+
+/* Reduced motion — disable ALL animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .shimmer {
+    animation: none !important;
+    background: #1e293b;
+  }
+
+  .breathing-circle {
+    animation: none !important;
+  }
+
+  .focus-gradient {
+    animation: none !important;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #6ee7b7, #667eea, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Dyslexia-friendly font mode */
+.font-dyslexia {
+  font-family: var(--font-dyslexia), sans-serif;
+  letter-spacing: 0.035em;
+  word-spacing: 0.15em;
+  line-height: 1.7;
+}
+
+.font-dyslexia p,
+.font-dyslexia li,
+.font-dyslexia h1,
+.font-dyslexia h2,
+.font-dyslexia h3 {
+  font-weight: 500;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .glass, .glass-strong {
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .text-muted {
+    color: #cbd5e1;
+  }
+
+  *:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* ==================== Mobile UX ==================== */
+
+/* Thumb-friendly touch targets */
+@media (max-width: 768px) {
+  .glass-strong {
+    backdrop-filter: blur(12px);
+  }
+
+  /* Increase touch target size for buttons and interactive elements */
+  button, a, summary, [role="button"], input, select, textarea {
+    cursor: pointer;
+  }
+
+  /* Minimum touch target size */
+  .min-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Reduce visual density on mobile */
+  .mobile-compact {
+    padding: 0.5rem;
+  }
+
+  .mobile-hide {
+    display: none;
+  }
+
+  /* Bottom sheet-style cards */
+  .mobile-sheet {
+    border-radius: 16px 16px 0 0;
+    margin-top: auto;
+  }
+
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* Bottom-safe area */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  /* Full-width on mobile */
+  .mobile-full {
+    width: 100%;
+  }
+
+  /* Sticky bottom bar */
+  .mobile-sticky-bottom {
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    background: var(--color-background);
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .tablet-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ==================== Print ==================== */
+@media print {
+  .no-print { display: none; }
+  body { background: white; color: black; }
+}

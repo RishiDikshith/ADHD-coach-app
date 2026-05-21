@@ -1,52 +1,43 @@
-# Python cache
+# Python
 __pycache__/
-*.py[cod]
-*$py.class
 *.pyc
 
-# Logs
-*.log
-logs/
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-dist/
-.eggs/
-*.egg-info/
-*.egg
-
-# Virtual environments
-.env
-.venv
-env/
+# Virtual env
+global_env/
 venv/
-ENV/
 
-# Large datasets
-data/
-
-# Local database
-database/
-*.db
-
-# Training artifacts
-catboost_info/
+# Secrets
+.env
+.env.*
+*.backup
 
 # IDE
 .vscode/
 
-# Session/local app data
-.session_data/
-.settings_data/
+# Database
+*.db
 
-# Notebooks
-notebooks/
-.ipynb_checkpoints/
+# Logs
+*.log
 
-# OS files
-.DS_Store
-Thumbs.db
+# Secrets
+.env
+.env.*
+*.backup
+
+# Memory/Data
+.adhd_memory_db/
+.session_memories/
+.user_profiles/
+data/
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+global_env/
+venv/
+
+# VS Code
+.vscode/
