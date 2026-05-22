@@ -1,8 +1,9 @@
 """
 Agent Orchestrator
 ==================
-Lightweight orchestrator that coordinates all 7 ADHD agents,
+Lightweight orchestrator that coordinates all ADHD agents,
 injects their context into AI prompts, and manages agent lifecycle.
+Upgraded to support multi-chatbot prompt routing and cross-agent handoffs.
 """
 
 import logging
@@ -15,12 +16,14 @@ logger = logging.getLogger(__name__)
 
 class AgentOrchestrator:
     """
-    Coordinates all 7 specialized ADHD agents.
+    Coordinates all specialized ADHD agents.
     Provides a unified interface for:
     - Building system prompt extensions
     - Getting agent suggestions
     - Detecting intervention needs
     - Managing agent lifecycle
+    - Routing chat requests to specialized chatbots
+    - Generating intelligent chatbot handoffs
     """
 
     _agent_classes = None
@@ -31,7 +34,7 @@ class AgentOrchestrator:
         self._init_agents()
 
     def _init_agents(self):
-        """Initialize all 7 agents with shared memory."""
+        """Initialize all specialized agents with shared memory."""
         if self._agent_classes is None:
             from agents.productivity_coach import ProductivityCoachAgent
             from agents.task_breakdown import TaskBreakdownAgent
@@ -40,6 +43,7 @@ class AgentOrchestrator:
             from agents.habit_builder import HabitBuilderAgent
             from agents.intervention import InterventionAgent
             from agents.accountability import AccountabilityAgent
+            from agents.study_assistant import StudyAssistantAgent
 
             self._agent_classes = {
                 "productivity_coach": ProductivityCoachAgent,
@@ -49,6 +53,7 @@ class AgentOrchestrator:
                 "habit_builder": HabitBuilderAgent,
                 "intervention": InterventionAgent,
                 "accountability": AccountabilityAgent,
+                "study_assistant": StudyAssistantAgent,
             }
 
         for name, cls in self._agent_classes.items():
@@ -80,17 +85,107 @@ class AgentOrchestrator:
 
         return "\n\n".join(prompts)
 
-    def build_combined_prompt_extension(
+    def detect_handoff_suggestion(self, user_message: str, current_agent_id: str) -> Optional[dict]:
+        """
+        Analyze user message to check if they should be handed off to another chatbot agent.
+        """
+        msg_lower = user_message.lower()
+
+        # 1. Handoff to Burnout Support if talking about high stress, panic, or guilt
+        burnout_triggers = ["overwhelm", "stressed", "burnout", "burnt out", "anxious", "panic", "guilt", "resting", "tired", "exhausted", "shame"]
+        if current_agent_id != "burnout-support" and any(t in msg_lower for t in burnout_triggers):
+            return {
+                "agent_id": "burnout-support",
+                "message": "It sounds like you might be feeling overwhelmed or exhausted. Would you like to switch to Burnout Support for some gentle, shame-free grounding? 🌿"
+            }
+
+        # 2. Handoff to Task Breakdown if struggling with a massive task, starting, or procrastination
+        task_triggers = ["big task", "massive project", "overwhelming project", "don't know where to start", "stuck on starting", "cant start", "procrastinating", "putting off", "break down"]
+        if current_agent_id != "task-breakdown" and any(t in msg_lower for t in task_triggers):
+            return {
+                "agent_id": "task-breakdown",
+                "message": "Are you facing a heavy task and feeling stuck at the starting line? Would you like to switch to Task Breakdown to slice it into quick 2-minute steps? 🔨"
+            }
+
+        # 3. Handoff to Focus Coach if distracted or having a hard time staying on task
+        focus_triggers = ["distracted", "can't focus", "scrolling", "phone distraction", "timer", "pomodoro", "concentration", "distraction"]
+        if current_agent_id != "focus-coach" and any(t in msg_lower for t in focus_triggers):
+            return {
+                "agent_id": "focus-coach",
+                "message": "Struggling with distractions or keeping your attention locked in? Would you like to switch to Focus Coach to open a Pomodoro flow and shield your focus? 🎯"
+            }
+
+        # 4. Handoff to Mood Support if wanting to journal, feeling emotional or stressed
+        mood_triggers = ["journal", "diary", "mood", "feeling low", "sad", "angry", "emotional"]
+        if current_agent_id != "mood-support" and any(t in msg_lower for t in mood_triggers):
+            return {
+                "agent_id": "mood-support",
+                "message": "Would you like to switch to Mood Support to journal your thoughts and process these emotions together? 😌"
+            }
+
+        # 5. Handoff to Habit Builder if talking about routines, consistency, or streaks
+        habit_triggers = ["habit", "routine", "morning routine", "night routine", "consistency", "stick to", "streak"]
+        if current_agent_id != "habit-builder" and any(t in msg_lower for t in habit_triggers):
+            return {
+                "agent_id": "habit-builder",
+                "message": "Are you working on building a new routine or staying consistent? Let's switch to Habit Builder to design a dopamine-rich loop! 🔄"
+            }
+
+        # 6. Handoff to Study Assistant if talking about school, study, revision, exam, paper
+        study_triggers = ["study", "revision", "exam", "assignment", "paper", "homework", "school", "college", "test", "academic"]
+        if current_agent_id != "study-assistant" and any(t in msg_lower for t in study_triggers):
+            return {
+                "agent_id": "study-assistant",
+                "message": "Tackling academic revision, exam prep, or writing a paper? Let's switch to Study Assistant to design a realistic study plan! 🎓"
+            }
+
+        return None
+
+    def build_agent_specific_prompt(
         self,
+        agent_id: str,
         user_message: str,
         context: dict,
         current_streak: int = 0,
-        existing_habits: list = None,
     ) -> str:
         """
-        Build a combined system prompt extension from all agents.
-        This is the primary method used by the chat system.
+        Builds a custom system prompt injecting shared global context, specialized memory,
+        and chatbot-specific personality.
         """
+        from agents.chatbot_registry import get_chatbot_system_prompt, retrieve_specialized_memory
+
+        # 1. Get the custom chatbot base prompt
+        system_prompt = get_chatbot_system_prompt(agent_id)
+
+        # 2. Retrieve specialized local memory context
+        specialized_memory = retrieve_specialized_memory(agent_id, self.memory)
+
+        # 3. Assemble full system prompt extension
+        parts = []
+
+        if specialized_memory:
+            parts.append(f"[SPECIALIZED LOCAL MEMORY FOR {agent_id.upper()}]\n{specialized_memory}")
+
+        # Add any high-priority insights from specific agents (like task breakdown, focus, etc.)
+        agent_insights = self.build_combined_prompt_extension(agent_id, user_message, context, current_streak)
+        if agent_insights:
+            parts.append(agent_insights)
+
+        combined_context = "\n\n".join(parts)
+
+        return system_prompt + "\n\n" + combined_context
+
+    def build_combined_prompt_extension(
+        self,
+        agent_id: str,
+        user_message: str,
+        context: dict,
+        current_streak: int = 0,
+    ) -> str:
+        """Build combined system prompt extension from standard heuristic agents based on active agent role."""
+        if agent_id == "support-agent":
+            return ""
+
         parts = []
         parts.append("[ADHD AGENT INSIGHTS]")
 
@@ -105,64 +200,81 @@ class AgentOrchestrator:
                 logger.debug(f"Intervention agent error: {e}")
 
         # 2. Task Breakdown Agent (detect task paralysis)
-        task_breakdown = self.agents.get("task_breakdown")
-        if task_breakdown:
-            try:
-                ext = task_breakdown.get_system_prompt_extension(user_message, context)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Task Breakdown agent error: {e}")
+        if agent_id == "task-breakdown":
+            task_breakdown = self.agents.get("task_breakdown")
+            if task_breakdown:
+                try:
+                    ext = task_breakdown.get_system_prompt_extension(user_message, context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Task Breakdown agent error: {e}")
 
         # 3. Mood & Burnout Agent
-        mood = self.agents.get("mood_burnout")
-        if mood:
-            try:
-                ext = mood.get_system_prompt_extension(context)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Mood/Burnout agent error: {e}")
+        if agent_id in ["mood-support", "burnout-support"]:
+            mood = self.agents.get("mood_burnout")
+            if mood:
+                try:
+                    ext = mood.get_system_prompt_extension(context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Mood/Burnout agent error: {e}")
 
-        # 4. Focus Optimization Agent
-        focus = self.agents.get("focus_optimization")
-        if focus:
-            try:
-                ext = focus.get_system_prompt_extension(context)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Focus agent error: {e}")
+        # 4. Focus Optimization Agent (maps to focus-coach)
+        if agent_id == "focus-coach":
+            focus = self.agents.get("focus_optimization")
+            if focus:
+                try:
+                    ext = focus.get_system_prompt_extension(context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Focus agent error: {e}")
 
         # 5. Productivity Coach Agent
-        coach = self.agents.get("productivity_coach")
-        if coach:
-            try:
-                ext = coach.get_system_prompt_extension(context)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Productivity coach error: {e}")
+        if agent_id == "productivity-coach":
+            coach = self.agents.get("productivity_coach")
+            if coach:
+                try:
+                    ext = coach.get_system_prompt_extension(context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Productivity coach error: {e}")
 
         # 6. Habit Builder Agent
-        habit = self.agents.get("habit_builder")
-        if habit:
-            try:
-                ext = habit.get_system_prompt_extension(context, current_streak)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Habit builder error: {e}")
+        if agent_id == "habit-builder":
+            habit = self.agents.get("habit_builder")
+            if habit:
+                try:
+                    ext = habit.get_system_prompt_extension(context, current_streak)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Habit builder error: {e}")
 
         # 7. Accountability Agent
-        accountability = self.agents.get("accountability")
-        if accountability:
-            try:
-                ext = accountability.get_system_prompt_extension(context)
-                if ext:
-                    parts.append(ext)
-            except Exception as e:
-                logger.debug(f"Accountability agent error: {e}")
+        if agent_id == "accountability-coach":
+            accountability = self.agents.get("accountability")
+            if accountability:
+                try:
+                    ext = accountability.get_system_prompt_extension(context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Accountability agent error: {e}")
+
+        # 8. Study Assistant Agent
+        if agent_id == "study-assistant":
+            study = self.agents.get("study_assistant")
+            if study:
+                try:
+                    ext = study.get_system_prompt_extension(context)
+                    if ext:
+                        parts.append(ext)
+                except Exception as e:
+                    logger.debug(f"Study Assistant agent error: {e}")
 
         return "\n\n".join(parts)
 
@@ -214,6 +326,13 @@ class AgentOrchestrator:
                 if summary:
                     suggestions.append(summary)
 
+            # Study recommendations
+            study = self.agents.get("study_assistant")
+            if study:
+                rec = study.get_study_recommendation(context)
+                if rec:
+                    suggestions.append(rec)
+
         except Exception as e:
             logger.error(f"Error collecting agent suggestions: {e}")
 
@@ -233,7 +352,7 @@ class AgentOrchestrator:
                 logger.debug(f"Intervention detection error: {e}")
         return None
 
-    def get_context_for_prompt(self, user_message: str, current_streak: int = 0) -> dict:
+    def get_context_for_prompt(self, user_message: str, current_streak: int = 0, agent_id: str = "productivity-coach") -> dict:
         """
         Build complete context dict for prompt injection.
         Combines memory context, agent insights, and suggestions.
@@ -243,7 +362,7 @@ class AgentOrchestrator:
 
         # Add agent insights
         agent_extension = self.build_combined_prompt_extension(
-            user_message, context, current_streak
+            agent_id, user_message, context, current_streak
         )
         context["agent_insights"] = agent_extension
 
@@ -265,3 +384,4 @@ class AgentOrchestrator:
             "agent_names": list(self.agents.keys()),
             "memory_stats": self.memory.get_stats() if self.memory else {},
         }
+

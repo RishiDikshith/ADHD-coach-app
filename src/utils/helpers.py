@@ -1,5 +1,5 @@
 import logging
-
+import numpy as np
 import pandas as pd
 
 
@@ -23,7 +23,7 @@ def get_model_feature_names(model):
     return None
 
 
-def align_features_to_model(df, model, fill_value=0):
+def align_features_to_model(df, model, fill_value=np.nan):
     """Align dataframe features to model requirements"""
     feature_names = get_model_feature_names(model)
     if not feature_names:

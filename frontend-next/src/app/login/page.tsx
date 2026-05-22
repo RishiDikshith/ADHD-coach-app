@@ -33,7 +33,7 @@ export default function LoginPage() {
     try {
       const res = await api.login(data.username, data.password);
       if (res.success) {
-        loginUser(data.username);
+        loginUser(data.username, res.role);
         router.push("/dashboard");
       } else {
         setError("root", { message: res.error || "Login failed. Please check your credentials." });

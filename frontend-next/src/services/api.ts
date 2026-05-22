@@ -162,4 +162,73 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ task: taskDescription, user_data: userData }),
     }),
+
+  // ==================== Feedback & Support ====================
+  submitFeedback: (
+    username: string,
+    rating: number,
+    category: string,
+    feedbackText?: string
+  ) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      xp_awarded: number;
+      skill_status: { level: number; xp: number; xp_to_next: number; leveled_up: boolean };
+      new_achievements: Array<{ id: string; title: string; description: string; xp_reward: number }>;
+    }>("/feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        rating,
+        category,
+        feedback_text: feedbackText,
+      }),
+    }),
+
+  submitSupportTicket: (
+    username: string,
+    type: string,
+    subject: string,
+    description: string
+  ) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      ticket: {
+        id: number;
+        type: string;
+        subject: string;
+        description: string;
+        status: string;
+        created_at: string;
+      };
+    }>("/support/ticket", {
+      method: "POST",
+      body: JSON.stringify({ username, type, subject, description }),
+    }),
+
+  getFaqs: () =>
+    fetchApi<
+      Array<{ id: string; question: string; answer: string }>
+    >("/support/faqs"),
+
+  getUserTickets: (username: string) =>
+    fetchApi<{ success: boolean; tickets: any[] }>(`/support/tickets/${encodeURIComponent(username)}`),
+
+  getAdminFeedbacks: () =>
+    fetchApi<{ success: boolean; feedbacks: any[] }>("/admin/feedbacks"),
+
+  getAdminTickets: () =>
+    fetchApi<{ success: boolean; tickets: any[] }>("/admin/tickets"),
+
+  updateTicketStatus: (id: number, status: string) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      ticket: { id: number; status: string };
+    }>(`/admin/tickets/${id}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
 };

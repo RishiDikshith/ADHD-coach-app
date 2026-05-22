@@ -232,6 +232,8 @@ class ChatRequest(BaseModel):
     language: str = "en"
     language_name: str = "English"
     username: str = "default"
+    agent_id: Optional[str] = "productivity-coach"
+
 
 class ScoreRequest(BaseModel):
     user_data: Dict[str, Any] = Field(default_factory=dict)
@@ -712,6 +714,16 @@ def update_settings(username: str, settings: SettingsUpdateRequest):
 @app.post("/chat")
 def chat(data: ChatRequest):
     try:
+        # === LANGUAGE AUTO-DETECTION ===
+        if data.text and len(data.text.strip()) > 1:
+            try:
+                import langdetect
+                detected = langdetect.detect(data.text)
+                if detected and len(detected) == 2:
+                    data.language = detected
+            except Exception as e:
+                logging.debug(f"Langdetect failed in /chat: {e}")
+
         username = data.username or "default"
         memory = MemoryManager(user_id=username)
         orchestrator = AgentOrchestrator(memory)
@@ -722,6 +734,8 @@ def chat(data: ChatRequest):
             memory.set_db_manager(_db_manager)
             _rag_engine.memory = memory
 
+        # === ROUTE TO AGENT PERSONALITY ===
+        agent_id = data.agent_id or "productivity-coach"
         current_streak = data.session_data.get('current_streak', 0) if data.session_data else 0
 
         # === RAG: Retrieve rich context from all memory sources ===
@@ -736,8 +750,8 @@ def chat(data: ChatRequest):
         intent = _llm_router.classify_intent(data.text)
         route_instruction = _llm_router.format_response_instruction(intent)
 
-        # Get agent context
-        agent_context = orchestrator.get_context_for_prompt(data.text, current_streak)
+        # Get agent context (passing agent_id)
+        agent_context = orchestrator.get_context_for_prompt(data.text, current_streak, agent_id)
         agent_insights = agent_context.get("agent_insights", "")
 
         # === ADHD State Detection ===
@@ -764,6 +778,12 @@ def chat(data: ChatRequest):
                 paralysis_prompt_ext = ext
             memory.set_task_paralysis(True)
 
+        # Mute ADHD/coaching insights for support-agent
+        if agent_id == "support-agent":
+            state_prompt_ext = ""
+            coach_extension = ""
+            paralysis_prompt_ext = ""
+
         # === Combine all context ===
         all_context_parts = [rag_context, agent_insights, state_prompt_ext, coach_extension, paralysis_prompt_ext, route_instruction]
         all_context = "\n\n".join([p for p in all_context_parts if p])
@@ -772,7 +792,42 @@ def chat(data: ChatRequest):
         analysis_result = analyze(english_text)
         scores = build_user_scores(data.user_data, text=english_text, analysis=analysis_result) if data.user_data else {}
 
-        prompt = build_prompt(data.text, english_text, analysis_result, data.history, scores, data.language, data.language_name, all_context)
+        # === ROUTE PROMPT TO SPECIFIC CHATBOT PERSONALITY ===
+        agent_system_prompt = orchestrator.build_agent_specific_prompt(
+            agent_id, data.text, agent_context, current_streak
+        )
+
+        # Inject standard instructions
+        instruction = "Start by warmly welcoming the user and responding directly to their input." if not data.history else f"Respond to the user as the supportive {agent_id} companion."
+        if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
+            instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
+
+        prompt = f"""
+{agent_system_prompt}
+
+{all_context}
+
+---
+Your instructions for this specific turn: {instruction}
+User's current emotional state: {analysis_result['emotion']}
+User's productivity level: {analysis_result['productivity']}
+---
+
+User input (Original): "{data.text}"
+User input (English Translation context): "{english_text}"
+
+CRITICAL LANGUAGE RULE: You MUST reply in the EXACT SAME language and script as "User input (Original)".
+CRITICAL FORMATTING: Keep your paragraphs extremely brief (2-3 sentences max). Use formatting like bold, lists, and emojis strategically. 
+
+You MUST format your entire response exactly like this:
+
+REPLY:
+[Your conversational, multi-paragraph response here.]
+
+TASKS:
+[1 to 3 tiny, actionable tasks. List them with a dash e.g. "- Drink water"]
+"""
+
         raw = get_ai_reply(prompt, data.language)
 
         reply_part = raw
@@ -798,12 +853,15 @@ def chat(data: ChatRequest):
 
         reply = format_reply(translate_reply_if_needed(reply_part, data.language))
 
+        # Detect cross-agent handoffs
+        handoff_suggestion = orchestrator.detect_handoff_suggestion(data.text, agent_id)
+
         # Record conversation, emotion, and extract facts
         memory.record_conversation_turn(
             user_message=data.text,
             assistant_message=reply[:500],
             interaction_type="chat",
-            metadata={"language": data.language}
+            metadata={"language": data.language, "agent_id": agent_id}
         )
         memory.record_emotion(
             emotion=analysis_result.get("emotion", "neutral"),
@@ -859,6 +917,7 @@ def chat(data: ChatRequest):
             "analysis": analysis_result,
             "scores": scores,
             "interventions": interventions,
+            "handoff_suggestion": handoff_suggestion,
             "state": {
                 "detected_state": state_result.get("state"),
                 "state_label": state_result.get("state_label"),
@@ -874,6 +933,254 @@ def chat(data: ChatRequest):
         logging.exception("Error in /chat endpoint")
         traceback.print_exc()
         return {"reply": f"ERROR: {str(e)}", "analysis": {"emotion": "normal", "productivity": "medium"}, "scores": {}, "interventions": []}
+
+
+@app.post("/chat/stream")
+def chat_stream(data: ChatRequest):
+    """Streaming chat support using Server-Sent Events (SSE) and AsyncGroq."""
+    # === LANGUAGE AUTO-DETECTION ===
+    if data.text and len(data.text.strip()) > 1:
+        try:
+            import langdetect
+            detected = langdetect.detect(data.text)
+            if detected and len(detected) == 2:
+                data.language = detected
+        except Exception as e:
+            logging.debug(f"Langdetect failed in /chat/stream: {e}")
+
+    from fastapi.responses import StreamingResponse
+    import json
+    import asyncio
+
+    username = data.username or "default"
+    memory = MemoryManager(user_id=username)
+    orchestrator = AgentOrchestrator(memory)
+    paralysis_engine = TaskParalysisRecoveryEngine(memory)
+
+    if _db_manager:
+        memory.set_db_manager(_db_manager)
+        _rag_engine.memory = memory
+
+    current_streak = data.session_data.get('current_streak', 0) if data.session_data else 0
+
+    async def event_generator():
+        # === ROUTE TO AGENT PERSONALITY ===
+        agent_id = data.agent_id or "productivity-coach"
+
+        # === RAG: Retrieve context ===
+        rag_context = _rag_engine.retrieve_context(
+            username=username,
+            query=data.text,
+            user_data=data.user_data,
+            session_data=data.session_data,
+        )
+        intent = _llm_router.classify_intent(data.text)
+        route_instruction = _llm_router.format_response_instruction(intent)
+
+        # Get agent context (passing agent_id)
+        agent_context = orchestrator.get_context_for_prompt(data.text, current_streak, agent_id)
+        agent_insights = agent_context.get("agent_insights", "")
+
+        state_result = _state_detector.analyze(data.text, {
+            "current_stress": data.user_data.get("stress_level", 5),
+            "current_energy": data.user_data.get("energy_level", 5),
+            "text": data.text,
+        })
+        state_prompt_ext = _state_detector.get_system_prompt_extension(data.text)
+
+        coach_extension = _adaptive_coach.get_system_prompt_extension(
+            data.text,
+            {"current_stress": data.user_data.get("stress_level", 5)},
+            data.user_data.get("mood"),
+        )
+
+        paralysis_result = paralysis_engine.process_user_message(data.text, agent_context)
+        paralysis_prompt_ext = ""
+        if paralysis_result["paralysis_detected"]:
+            ext = paralysis_engine.get_system_prompt_extension(data.text, agent_context)
+            if ext:
+                paralysis_prompt_ext = ext
+            memory.set_task_paralysis(True)
+
+        # Mute ADHD/coaching insights for support-agent
+        if agent_id == "support-agent":
+            state_prompt_ext = ""
+            coach_extension = ""
+            paralysis_prompt_ext = ""
+
+        all_context_parts = [rag_context, agent_insights, state_prompt_ext, coach_extension, paralysis_prompt_ext, route_instruction]
+        all_context = "\n\n".join([p for p in all_context_parts if p])
+
+        english_text = translate_to_english(data.text)
+        analysis_result = analyze(english_text)
+        scores = build_user_scores(data.user_data, text=english_text, analysis=analysis_result) if data.user_data else {}
+
+        # ROUTE TO AGENT PERSONALITY
+        agent_system_prompt = orchestrator.build_agent_specific_prompt(
+            agent_id, data.text, agent_context, current_streak
+        )
+
+        instruction = "Start by warmly welcoming the user and responding directly to their input." if not data.history else f"Respond to the user as the supportive {agent_id} companion."
+        if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
+            instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
+
+        prompt = f"""
+{agent_system_prompt}
+
+{all_context}
+
+---
+Your instructions for this specific turn: {instruction}
+User's current emotional state: {analysis_result['emotion']}
+User's productivity level: {analysis_result['productivity']}
+---
+
+User input (Original): "{data.text}"
+User input (English Translation context): "{english_text}"
+
+CRITICAL LANGUAGE RULE: You MUST reply in the EXACT SAME language and script as "User input (Original)".
+CRITICAL FORMATTING: Keep your paragraphs extremely brief (2-3 sentences max). Use formatting like bold, lists, and emojis strategically. 
+
+You MUST format your entire response exactly like this:
+
+REPLY:
+[Your conversational, multi-paragraph response here.]
+
+TASKS:
+[1 to 3 tiny, actionable tasks. List them with a dash e.g. "- Drink water"]
+"""
+
+        full_raw_response = ""
+        groq_api_key = os.getenv("GROQ_API_KEY")
+
+        if not groq_api_key:
+            # Yield offline response
+            offline_reply = generate_offline_reply(prompt)
+            for char in offline_reply:
+                yield f"data: {json.dumps({'token': char})}\n\n"
+                await asyncio.sleep(0.01)
+            full_raw_response = offline_reply
+        else:
+            try:
+                from groq import AsyncGroq
+                client = AsyncGroq(api_key=groq_api_key)
+                completion_stream = await client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="llama-3.1-8b-instant",
+                    temperature=0.7,
+                    max_tokens=1024,
+                    stream=True,
+                )
+                async for chunk in completion_stream:
+                    token = chunk.choices[0].delta.content
+                    if token:
+                        full_raw_response += token
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+            except Exception as e:
+                logging.error(f"Error in Groq streaming: {e}")
+                offline_reply = generate_offline_reply(prompt)
+                for char in offline_reply:
+                    yield f"data: {json.dumps({'token': char})}\n\n"
+                    await asyncio.sleep(0.01)
+                full_raw_response = offline_reply
+
+        # Process post-stream computations & database persistence
+        try:
+            raw = full_raw_response
+            reply_part = raw
+            dynamic_tasks = []
+            import re
+            if re.search(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE):
+                parts = re.split(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE)
+                reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', parts[0], flags=re.IGNORECASE).strip()
+                tasks_part = parts[1].strip()
+                for line in tasks_part.split('\n'):
+                    line = line.strip()
+                    if line.startswith("-") or line.startswith("*") or line.startswith("☐"):
+                        clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
+                        if clean_task:
+                            dynamic_tasks.append(clean_task)
+                    else:
+                        clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                        if clean_line and len(clean_line) > 2:
+                            dynamic_tasks.append(clean_line)
+                reply_part = f"{reply_part}\n\n**Tasks:**\n{tasks_part}"
+            else:
+                reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', raw, flags=re.IGNORECASE).strip()
+
+            reply = format_reply(translate_reply_if_needed(reply_part, data.language))
+            handoff_suggestion = orchestrator.detect_handoff_suggestion(data.text, agent_id)
+
+            # Record in memory
+            memory.record_conversation_turn(
+                user_message=data.text,
+                assistant_message=reply[:500],
+                interaction_type="chat",
+                metadata={"language": data.language, "agent_id": agent_id}
+            )
+            memory.record_emotion(
+                emotion=analysis_result.get("emotion", "neutral"),
+                stress=scores.get("summary", {}).get("stress_level", 5),
+            )
+
+            # Database persistence
+            if _db_manager:
+                try:
+                    _db_manager.save_chat_message(username, "user", data.text, analysis_result.get("emotion"))
+                    _db_manager.save_chat_message(username, "assistant", reply[:1000])
+                    _gamification.award_xp(username, "mood_checkin")
+                except Exception as db_err:
+                    logging.warning(f"Async stream DB error: {db_err}")
+
+            interventions = []
+            if dynamic_tasks:
+                for task in dynamic_tasks[:3]:
+                    emoji = "✓"
+                    if "breath" in task.lower(): emoji = "🧘"
+                    elif "water" in task.lower(): emoji = "💧"
+                    elif "timer" in task.lower(): emoji = "⏱️"
+                    elif "desk" in task.lower(): emoji = "🧹"
+                    elif "priority" in task.lower(): emoji = "📋"
+                    elif "goal" in task.lower(): emoji = "🎯"
+                    interventions.append({"priority": "high", "category": "task", "title": task, "action": task, "emoji": emoji})
+
+            rule_based_interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+            interventions.extend(rule_based_interventions)
+            interventions = interventions[:5]
+
+            for inv in interventions:
+                memory.record_intervention(inv.get('title', ''))
+
+            if _db_manager and interventions:
+                try:
+                    _gamification.award_xp(username, "intervention_completed")
+                except Exception:
+                    pass
+
+            # Yield metadata payload
+            metadata = {
+                "reply": reply,
+                "analysis": analysis_result,
+                "scores": scores,
+                "interventions": interventions,
+                "handoff_suggestion": handoff_suggestion,
+                "state": {
+                    "detected_state": state_result.get("state"),
+                    "state_label": state_result.get("state_label"),
+                    "state_emoji": state_result.get("state_emoji"),
+                    "ui_mode": state_result.get("ui_mode"),
+                    "coaching_tone": state_result.get("coaching_tone"),
+                    "focus_mode": state_result.get("focus_mode"),
+                    "task_size": state_result.get("task_size"),
+                }
+            }
+            yield f"data: {json.dumps({'metadata': metadata})}\n\n"
+
+        except Exception as async_err:
+            logging.error(f"Error in stream post-processing: {async_err}")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 
 # ==================== EXISTING ENDPOINTS ====================
@@ -961,7 +1268,7 @@ def analyze_with_agent(request: AgentAnalyzeRequest):
         agent = orchestrator.get_agent(request.agent_type)
         if not agent:
             return {"success": False, "error": f"Agent '{request.agent_type}' not found", "agents_available": list(orchestrator.agents.keys())}
-        context = orchestrator.get_context_for_prompt(request.context.get("message", ""), request.context.get("current_streak", 0))
+        context = orchestrator.get_context_for_prompt(request.context.get("message", ""), request.context.get("current_streak", 0), request.agent_type)
         analysis = agent.analyze(context, request.context)
         return {"success": True, "agent_type": request.agent_type, "analysis": analysis, "suggestions": context.get("agent_suggestions", []), "intervention": context.get("intervention")}
     except Exception as e:
@@ -1309,6 +1616,205 @@ def health_check():
             "focus_engine": True,
             "fact_extraction": True,
         },
+    }
+
+
+# ==================== FEEDBACK & SUPPORT ====================
+
+class FeedbackRequest(BaseModel):
+    username: str
+    rating: int
+    category: str
+    feedback_text: Optional[str] = None
+
+class SupportTicketRequest(BaseModel):
+    username: str
+    type: str
+    subject: str
+    description: str
+
+@app.post("/feedback")
+def submit_feedback(request: FeedbackRequest):
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    # Save feedback
+    feedback = _db_manager.save_feedback(
+        username=request.username,
+        rating=request.rating,
+        category=request.category,
+        feedback_text=request.feedback_text
+    )
+    if not feedback:
+        raise HTTPException(status_code=400, detail="Failed to save feedback. User not found.")
+    
+    # Award 15 XP to consistency skill
+    xp_result = _db_manager.add_xp(request.username, 15, "consistency")
+    
+    # Check if achievements unlocked
+    new_achievements = _db_manager.check_and_award_achievements(request.username)
+    new_ach_list = [
+        {
+            "id": a.achievement_id,
+            "title": a.title,
+            "description": a.description,
+            "xp_reward": a.xp_reward
+        }
+        for a in new_achievements
+    ]
+    
+    return {
+        "success": True,
+        "message": "Feedback submitted successfully!",
+        "xp_awarded": 15,
+        "skill_status": xp_result,
+        "new_achievements": new_ach_list
+    }
+
+@app.post("/support/ticket")
+def submit_support_ticket(request: SupportTicketRequest):
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    ticket = _db_manager.save_support_ticket(
+        username=request.username,
+        type=request.type,
+        subject=request.subject,
+        description=request.description
+    )
+    if not ticket:
+        raise HTTPException(status_code=400, detail="Failed to save ticket. User not found.")
+        
+    return {
+        "success": True,
+        "message": "Support ticket created successfully!",
+        "ticket": {
+            "id": ticket.id,
+            "type": ticket.type,
+            "subject": ticket.subject,
+            "description": ticket.description,
+            "status": ticket.status,
+            "created_at": ticket.created_at.isoformat()
+        }
+    }
+
+@app.get("/support/faqs")
+def get_support_faqs():
+    # Curated shame-free ADHD coping FAQs
+    return [
+        {
+            "id": "faq-paralysis",
+            "question": "🌪️ How do I overcome sudden task paralysis?",
+            "answer": "When task paralysis strikes, your brain is treating the threat of starting a task like a literal physical danger. Don't fight it! Give yourself absolute permission to do the task badly or do just *one single detail* for 2 minutes. Start a micro-timer, and if you want to stop after 2 minutes, you have fully succeeded."
+        },
+        {
+            "id": "faq-hyperfocus",
+            "question": "🌀 Help, I am stuck in an intense hyperfocus spiral!",
+            "answer": "Hyperfocus is a powerful ADHD gift, but it can drain your body. Transitioning out is hard. Use a transitional bridge: instead of stopping immediately, tell yourself you will stop in 5 minutes, stand up and stretch without looking away, then grab a glass of water. A change of physical state helps reset the brain."
+        },
+        {
+            "id": "faq-blindness",
+            "question": "⏳ How can I handle time blindness during work?",
+            "answer": "ADHD brains perceive time as 'Now' or 'Not Now'. To make time visible, use visual timers (like the standard countdown visual arc in our Focus page) rather than digital numbers. Set soft, chime-based alarms 5 minutes *before* you actually need to transition to prevent jump-scares."
+        },
+        {
+            "id": "faq-burnout",
+            "question": "🔋 What is an ADHD shutdown, and how do I recover?",
+            "answer": "When you have overstimulated or pushed your brain too hard, it goes into a power-saving mode (shutdown/burnout). This is a physical necessity. Rest shame-free. Lie down in a dark or quiet room, drink some hydration, and avoid complex decision-making for at least 1-2 hours."
+        },
+        {
+            "id": "faq-glitch",
+            "question": "🐛 What if the coach or the app glitches?",
+            "answer": "No worries! This is a shame-free technical zone. Simply submit a glitch report on the left panel. Include a tiny description of what happened. Our support bots will log it, clean up the SQLite files, and restart the cache to get you focused again."
+        }
+    ]
+
+
+class TicketStatusUpdateRequest(BaseModel):
+    status: str
+
+
+@app.get("/support/tickets/{username}")
+def get_user_tickets(username: str):
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    tickets = _db_manager.get_user_support_tickets(username)
+    return {
+        "success": True,
+        "tickets": [
+            {
+                "id": t.id,
+                "type": t.type,
+                "subject": t.subject,
+                "description": t.description,
+                "status": t.status,
+                "created_at": t.created_at.isoformat()
+            }
+            for t in tickets
+        ]
+    }
+
+
+@app.get("/admin/feedbacks")
+def get_admin_feedbacks():
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    from src.database.models import UserFeedback, User
+    db = _db_manager.db
+    results = db.query(UserFeedback, User.username).join(User, UserFeedback.user_id == User.id).order_by(UserFeedback.created_at.desc()).all()
+    feedbacks = []
+    for fb, username in results:
+        feedbacks.append({
+            "id": fb.id,
+            "username": username,
+            "rating": fb.rating,
+            "category": fb.category,
+            "feedback_text": fb.feedback_text,
+            "created_at": fb.created_at.isoformat()
+        })
+    return {"success": True, "feedbacks": feedbacks}
+
+
+@app.get("/admin/tickets")
+def get_admin_tickets():
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    from src.database.models import SupportTicket, User
+    db = _db_manager.db
+    results = db.query(SupportTicket, User.username).join(User, SupportTicket.user_id == User.id).order_by(SupportTicket.created_at.desc()).all()
+    tickets = []
+    for t, username in results:
+        tickets.append({
+            "id": t.id,
+            "username": username,
+            "type": t.type,
+            "subject": t.subject,
+            "description": t.description,
+            "status": t.status,
+            "created_at": t.created_at.isoformat()
+        })
+    return {"success": True, "tickets": tickets}
+
+
+@app.put("/admin/tickets/{ticket_id}/status")
+def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest):
+    if not _db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    from src.database.models import SupportTicket
+    db = _db_manager.db
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    ticket.status = request.status
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Ticket status successfully updated to {request.status}",
+        "ticket": {
+            "id": ticket.id,
+            "status": ticket.status
+        }
     }
 
 

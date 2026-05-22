@@ -9,7 +9,8 @@ interface UserState {
   contactInfo: string | null;
   settings: Partial<UserSettings>;
   game: GameState;
-  login: (username: string) => void;
+  role: string | null;
+  login: (username: string, role?: string) => void;
   logout: () => void;
   updateSettings: (s: Partial<UserSettings>) => void;
   updateGame: (g: Partial<GameState>) => void;
@@ -35,13 +36,14 @@ export const useUserStore = create<UserState>()(
       contactInfo: null,
       settings: {},
       game: defaultGame,
+      role: null,
 
-      login: (username) => set({ username, isAuthenticated: true }),
+      login: (username, role) => set({ username, isAuthenticated: true, role: role || "user" }),
 
       logout: () =>
         set({
           username: null, isAuthenticated: false, contactInfo: null,
-          settings: {}, game: defaultGame,
+          settings: {}, game: defaultGame, role: null,
         }),
 
       updateSettings: (settings) =>

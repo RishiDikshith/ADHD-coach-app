@@ -111,7 +111,7 @@ export default function RegisterPage() {
     try {
       const res = await api.register(data.username, data.password);
       if (res.success) {
-        loginUser(data.username);
+        loginUser(data.username, res.role);
         setStep("focus");
       } else {
         setFormError("root", { message: res.error || "Registration failed." });
@@ -236,23 +236,35 @@ export default function RegisterPage() {
       >
         {/* Progress Bar */}
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs text-muted font-medium">
-              Step {["focus", "energy", "style", "triggers", "tone"].indexOf(step) + 1} of 5
-            </span>
-            <span className="text-xs text-muted">
-              {["Focus Style", "Energy Pattern", "Work Style", "Overwhelm", "Tone"][["focus", "energy", "style", "triggers", "tone"].indexOf(step)]}
-            </span>
-          </div>
-          <div className="h-1.5 bg-border rounded-full overflow-hidden">
-            <motion.div
-              className="h-full rounded-full"
-              style={{ background: "linear-gradient(90deg, #6ee7b7, #667eea, #c084fc)" }}
-              initial={{ width: "20%" }}
-              animate={{ width: `${((["focus", "energy", "style", "triggers", "tone"].indexOf(step) + 1) / 5) * 100}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-          </div>
+          {(() => {
+            const stepsList = ["focus", "energy", "style", "triggers", "tone"];
+            const stepIndex = step === "complete" ? 4 : stepsList.indexOf(step);
+            const stepNumber = step === "complete" ? 5 : stepIndex + 1;
+            const stepLabel = step === "complete" ? "Onboarding Complete!" : ["Focus Style", "Energy Pattern", "Work Style", "Overwhelm", "Tone"][stepIndex];
+            const progressPercent = step === "complete" ? 100 : ((stepIndex + 1) / 5) * 100;
+
+            return (
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-muted font-medium">
+                    Step {stepNumber} of 5
+                  </span>
+                  <span className="text-xs text-muted font-medium">
+                    {stepLabel}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: "linear-gradient(90deg, #6ee7b7, #667eea, #c084fc)" }}
+                    initial={{ width: "20%" }}
+                    animate={{ width: `${progressPercent}%` }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                  />
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         <AnimatePresence mode="wait">

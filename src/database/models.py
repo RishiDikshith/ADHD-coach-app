@@ -43,6 +43,20 @@ def get_db():
 def init_db():
     """Create all tables. Call on application startup."""
     Base.metadata.create_all(bind=engine)
+    
+    # Custom dynamic migration to ensure 'role' column exists in SQLite/PostgreSQL
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("users")]
+        if "role" not in columns:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user'"))
+                    conn.commit()
+            except Exception as e:
+                # Catch gracefully in case of locking or concurrency
+                pass
 
 
 # ==================== User & Auth ====================
@@ -58,6 +72,7 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = Column(DateTime, nullable=True)
     settings = Column(JSON, default=dict)
+    role = Column(String(50), default="user", server_default="user")
 
     # Relationships
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
@@ -69,6 +84,8 @@ class User(Base):
     distraction_logs = relationship("DistractionLog", back_populates="user", cascade="all, delete-orphan")
     achievements = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills = relationship("SkillProgress", back_populates="user", cascade="all, delete-orphan")
+    feedback_entries = relationship("UserFeedback", back_populates="user", cascade="all, delete-orphan")
+    support_tickets = relationship("SupportTicket", back_populates="user", cascade="all, delete-orphan")
 
 
 # ==================== Chat History ====================
@@ -227,3 +244,32 @@ class SkillProgress(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="skills")
+
+
+# ==================== Feedback & Support ====================
+
+class UserFeedback(Base):
+    __tablename__ = "user_feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False) # 1-5
+    category = Column(String(100), nullable=False) # "coach", "app", "features", etc.
+    feedback_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    user = relationship("User", back_populates="feedback_entries")
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    type = Column(String(50), nullable=False) # "glitch", "question", "urgency"
+    subject = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String(50), default="open") # "open", "resolved"
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    user = relationship("User", back_populates="support_tickets")

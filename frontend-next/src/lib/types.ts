@@ -9,6 +9,8 @@ export interface ChatMessage {
   tasks?: TaskItem[];
   display?: string;
   timestamp?: string;
+  handoff_suggestion?: { agent_id: string; message: string } | null;
+  state?: Record<string, unknown>;
 }
 
 export interface TaskItem {
@@ -26,6 +28,7 @@ export interface ChatRequest {
   language: string;
   language_name: string;
   username: string;
+  agent_id?: string;
 }
 
 export interface ChatResponse {
@@ -244,6 +247,7 @@ export interface AuthResponse {
   token?: string;
   message?: string;
   error?: string;
+  role?: string;
 }
 
 // ==================== Tasks ====================

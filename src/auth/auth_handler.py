@@ -234,6 +234,7 @@ class AuthHandler:
             "token": access_token,
             "refresh_token": refresh_token,
             "username": sanitized_username,
+            "role": getattr(user, "role", "user"),
         }
 
     def login_user(self, username: str, password: str) -> dict:
@@ -250,6 +251,14 @@ class AuthHandler:
         if not user or not verify_password(password, user.password_hash):
             return {"success": False, "error": "Invalid username or password"}
 
+        # Auto-promote "admin" user to admin role if they somehow don't have it
+        if sanitized_username.lower() == "admin" and getattr(user, "role", "user") != "admin":
+            try:
+                user.role = "admin"
+                db.db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to auto-promote admin user: {e}")
+
         # Update last login
         db.update_last_login(sanitized_username)
 
@@ -262,6 +271,7 @@ class AuthHandler:
             "token": access_token,
             "refresh_token": refresh_token,
             "username": sanitized_username,
+            "role": getattr(user, "role", "user"),
         }
 
     def refresh_token(self, refresh_token_str: str) -> dict:

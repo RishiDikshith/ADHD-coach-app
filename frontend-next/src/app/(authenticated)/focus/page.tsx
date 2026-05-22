@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Card, CardTitle, CardValue, CardLabel } from "@/components/ui/card";
@@ -164,10 +164,32 @@ export default function FocusPage() {
   const [showModePicker, setShowModePicker] = useState(false);
   const [showDistractionLog, setShowDistractionLog] = useState(false);
   const [distractionLog, setDistractionLog] = useState<{id: string; label: string; time: number}[]>([]);
+  const [recentDistractionsCount, setRecentDistractionsCount] = useState(0);
   const [sessionQuality, setSessionQuality] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [particles, setParticles] = useState<{ id: number; x: number; y: number; yOffset: number; duration: number; delay: number }[]>([]);
+
+  // Asynchronously generate random positions in useEffect to keep render phase 100% pure
+  useEffect(() => {
+    if (!isActive) return;
+    const width = typeof window !== "undefined" ? window.innerWidth : 1000;
+    const height = typeof window !== "undefined" ? window.innerHeight : 800;
+    const items = Array.from({ length: 20 }).map((_, i) => ({
+      id: i,
+      x: Math.random() * width,
+      y: Math.random() * height,
+      yOffset: -Math.random() * 100 - 50,
+      duration: 3 + Math.random() * 4,
+      delay: Math.random() * 5,
+    }));
+    const timer = setTimeout(() => {
+      setParticles(items);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isActive]);
 
   useEffect(() => {
     const quoteInterval = setInterval(() => {
@@ -292,23 +314,23 @@ export default function FocusPage() {
         />
 
         {/* Ambient particle dots */}
-        {isActive && Array.from({ length: 20 }).map((_, i) => (
+        {isActive && particles.map((p) => (
           <motion.div
-            key={i}
+            key={p.id}
             className="absolute w-1 h-1 rounded-full"
             style={{ backgroundColor: theme.accent, opacity: 0.2 }}
             initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
+              x: p.x,
+              y: p.y,
             }}
             animate={{
-              y: [0, -Math.random() * 100 - 50],
+              y: [0, p.yOffset],
               opacity: [0.1, 0.3, 0.1],
             }}
             transition={{
-              duration: 3 + Math.random() * 4,
+              duration: p.duration,
               repeat: Infinity,
-              delay: Math.random() * 5,
+              delay: p.delay,
               ease: "easeInOut",
             }}
           />
@@ -639,7 +661,12 @@ export default function FocusPage() {
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
-                          setDistractionLog((prev) => [...prev, { id: d.id, label: d.label, time: Date.now() }]);
+                          const now = Date.now();
+                          setDistractionLog((prev) => [...prev, { id: d.id, label: d.label, time: now }]);
+                          setRecentDistractionsCount((prev) => prev + 1);
+                          setTimeout(() => {
+                            setRecentDistractionsCount((prev) => Math.max(0, prev - 1));
+                          }, 60000);
                         }}
                         className="px-2.5 py-1.5 rounded-xl text-xs bg-surface border border-border hover:border-calm-500/40 transition-all"
                       >
@@ -647,13 +674,13 @@ export default function FocusPage() {
                       </motion.button>
                     ))}
                   </div>
-                  {distractionLog.filter((d) => d.time > Date.now() - 60000).length > 0 && (
+                  {recentDistractionsCount > 0 && (
                     <motion.p
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="text-[10px] text-calm-400"
                     >
-                      Logged {distractionLog.filter((d) => d.time > Date.now() - 60000).length} distraction{distractionLog.filter((d) => d.time > Date.now() - 60000).length > 1 ? "s" : ""} this session
+                      Logged {recentDistractionsCount} distraction{recentDistractionsCount > 1 ? "s" : ""} this session
                     </motion.p>
                   )}
                 </div>
@@ -675,7 +702,7 @@ export default function FocusPage() {
               )}
 
               {distractionLog.length === 0 && (
-                <p className="text-xs text-muted/50 text-center py-3">No distractions logged yet. That's great!</p>
+                <p className="text-xs text-muted/50 text-center py-3">No distractions logged yet. That&apos;s great!</p>
               )}
 
               {/* Session Quality Rating */}

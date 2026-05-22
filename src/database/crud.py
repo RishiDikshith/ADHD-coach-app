@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .models import (
     User, ChatMessage, MoodEntry, InterventionCompletion, Streak,
     UserFact, FocusSession, DistractionLog, Achievement, SkillProgress,
+    UserFeedback, SupportTicket,
     SessionLocal, init_db
 )
 
@@ -111,10 +112,12 @@ class DatabaseManager:
     def get_or_create_user(self, username: str, password_hash: str = "", email: str = "") -> User:
         user = self._safe_get_user(username)
         if not user:
+            role = "admin" if username.lower() == "admin" else "user"
             user = User(
                 username=username,
                 password_hash=password_hash,
                 email=email,
+                role=role,
                 settings={
                     "theme": "dark", "language": "en",
                     "notifications_enabled": True, "coach_tone": "encouraging",
@@ -126,7 +129,7 @@ class DatabaseManager:
                 self.db.refresh(user)
             except Exception:
                 pass
-            logger.info(f"Created user: {username}")
+            logger.info(f"Created user: {username} with role: {role}")
         return user
 
     def get_user(self, username: str) -> Optional[User]:
@@ -926,3 +929,44 @@ class DatabaseManager:
                 "sessions": data["count"],
             })
         return result
+
+    # ==================== Feedback & Support ====================
+
+    def save_feedback(
+        self, username: str, rating: int, category: str, feedback_text: Optional[str] = None
+    ) -> Optional[UserFeedback]:
+        user = self.get_user(username)
+        if not user:
+            return None
+        fb = UserFeedback(
+            user_id=user.id, rating=rating, category=category, feedback_text=feedback_text
+        )
+        self.db.add(fb)
+        self.db.commit()
+        self.db.refresh(fb)
+        return fb
+
+    def save_support_ticket(
+        self, username: str, type: str, subject: str, description: str
+    ) -> Optional[SupportTicket]:
+        user = self.get_user(username)
+        if not user:
+            return None
+        ticket = SupportTicket(
+            user_id=user.id, type=type, subject=subject, description=description, status="open"
+        )
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return ticket
+
+    def get_user_support_tickets(self, username: str) -> List[SupportTicket]:
+        user = self.get_user(username)
+        if not user:
+            return []
+        return (
+            self.db.query(SupportTicket)
+            .filter(SupportTicket.user_id == user.id)
+            .order_by(SupportTicket.created_at.desc())
+            .all()
+        )

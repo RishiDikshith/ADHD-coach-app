@@ -108,7 +108,7 @@ def unload_model_cache():
 # OPTIMIZED FEATURE ALIGNMENT
 # ============================================================================
 
-def align_features_optimized(df: pd.DataFrame, model, fill_value=0):
+def align_features_optimized(df: pd.DataFrame, model, fill_value=np.nan):
     """
     Optimized feature alignment with caching and vectorization
     

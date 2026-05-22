@@ -114,17 +114,14 @@ export default function TasksPage() {
   const [showEnergyPicker, setShowEnergyPicker] = useState(true);
   const [completedCount, setCompletedCount] = useState(0);
 
-  // Show energy picker periodically
-  useEffect(() => {
-    if (completedCount > 0 && completedCount % 5 === 0) {
-      setShowEnergyPicker(true);
-    }
-  }, [completedCount]);
-
   const handleCompleteTask = (taskText: string, points: number = 3) => {
     setCurrentTask(`✅ Done! ${taskText}`);
     addPoints(points);
-    setCompletedCount((c) => c + 1);
+    const newCount = completedCount + 1;
+    setCompletedCount(newCount);
+    if (newCount > 0 && newCount % 5 === 0) {
+      setShowEnergyPicker(true);
+    }
     setShowCelebration(true);
     setTimeout(() => {
       setShowCelebration(false);

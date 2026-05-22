@@ -33,10 +33,40 @@ def predict_mental_health_probability(model, text):
     return 1.0 if label in {"1", "stress"} else 0.0
 
 
+def chatbot_response(text, scores, user_data):
+    from agents.orchestrator import AgentOrchestrator
+    from memory.memory_manager import MemoryManager
+    from unittest.mock import MagicMock
+    
+    mock_memory = MagicMock()
+    mock_memory.store = MagicMock()
+    mock_memory.store.get_recent.return_value = []
+    
+    orchestrator = AgentOrchestrator(mock_memory)
+    handoff = orchestrator.detect_handoff_suggestion(text, "productivity-coach")
+    agent_id = handoff["agent_id"] if handoff else "productivity-coach"
+    
+    from agents.chatbot_registry import AGENT_CONFIGS
+    agent_config = AGENT_CONFIGS.get(agent_id, AGENT_CONFIGS["productivity-coach"])
+    
+    reply = f"Hey! As your dedicated {agent_config['name']}, I've tuned into your needs. "
+    if agent_id == "burnout-support":
+        reply += "Please let your shoulders drop and take a slow, deep breath. We will take it one gentle moment at a time. 🌿"
+    elif agent_id == "task-breakdown":
+        reply += "Let's smash this huge wall into small pieces. Can you start by opening your notebook or document? Just 2 minutes! 🔨"
+    elif agent_id == "focus-coach":
+        reply += "Let's build a quiet focus bubble. How about starting a 25-minute Pomodoro timer together right now? 🎯"
+    else:
+        reply += f"Let's build a customized structure for your brain today. Your calculated productivity score is {scores.get('productivity', 50)}/100. ⚡"
+        
+    return f"\n[{agent_config['emoji']} Active Chatbot: {agent_config['name']}]\nREPLY:\n{reply}\n\nTASKS:\n- Focus on one micro-step\n- Log your energy level"
+
+
 def heuristic_depression_prediction(user_data):
     stress_level = user_data.get("stress_level", 5)
     sleep_hours = user_data.get("sleep_hours", 7)
     return int(stress_level >= 8 and sleep_hours < 6)
+
 
 
 # Load models
@@ -141,4 +171,4 @@ print("\nRecommendations:")
 for r in rec:
     print(f"- [{r['priority'].upper()}] {r['title']}: {r['action']}")
 
-print("\nChatbot:", chat)
+print("\nChatbot:", chat.encode('ascii', errors='ignore').decode('ascii'))

@@ -11,7 +11,7 @@ export default function AuthenticatedLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar - hidden on mobile */}
-      <div className="hidden md:block">
+      <div className="hidden md:block h-screen shrink-0 overflow-hidden">
         <Sidebar />
       </div>
       <main className="flex-1 overflow-y-auto bg-gradient-to-b from-background via-background-secondary to-background pb-16 md:pb-0">

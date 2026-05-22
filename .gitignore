@@ -41,3 +41,14 @@ venv/
 
 # VS Code
 .vscode/
+
+# ML training artifacts
+catboost_info/
+
+# Python cache
+.pytest_cache/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db

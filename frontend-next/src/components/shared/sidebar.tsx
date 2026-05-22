@@ -20,6 +20,8 @@ const navItems = [
   { href: "/tasks", label: "Tasks", icon: "📋" },
   { href: "/mood", label: "Mood", icon: "😊" },
   { href: "/agents", label: "Agents", icon: "🤖" },
+  { href: "/feedback", label: "Feedback", icon: "📣" },
+  { href: "/support", label: "Support", icon: "🆘" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
@@ -43,25 +45,38 @@ const sidebarVariants = {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { username, game, logout } = useUserStore();
+  const { username, game, logout, role } = useUserStore();
   const { currentMood, setCurrentMood, timeBlindnessEnabled, startTinyMode, setStartTinyMode } = useAnalyticsStore();
   const timer = useTimerStore();
   const [mounted, setMounted] = useState(false);
   const [microTask, setMicroTask] = useState("");
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!mounted) return null;
 
   const tod = getTimeOfDay();
   const dayPct = getDayProgress();
 
+  const itemsToRender = role === "admin"
+    ? [
+        ...navItems.slice(0, 1),
+        { href: "/admin", label: "Admin Dashboard", icon: "🛡️" },
+        ...navItems.slice(1)
+      ]
+    : navItems;
+
   return (
     <motion.aside
       initial="hidden"
       animate="visible"
       variants={sidebarVariants}
-      className="w-72 min-h-screen bg-gradient-to-b from-[#0a0f1e] to-[#050a18] border-r border-border flex flex-col overflow-y-auto shrink-0"
+      className="w-72 h-screen bg-gradient-to-b from-[#0a0f1e] to-[#050a18] border-r border-border flex flex-col overflow-y-auto shrink-0"
     >
       {/* Header */}
       <div className="glass-strong m-3 rounded-2xl p-4 text-center">
@@ -101,7 +116,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-0.5">
-        {navItems.map((item, i) => {
+        {itemsToRender.map((item, i) => {
           const isActive = pathname === item.href;
           return (
             <motion.div
