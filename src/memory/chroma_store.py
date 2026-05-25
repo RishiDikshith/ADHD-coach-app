@@ -121,16 +121,67 @@ class ChromaMemoryStore:
         metadata: Optional[dict] = None,
         memory_type: str = "conversation",
     ):
-        """Store a memory entry with optional metadata."""
+        """Store a memory entry with optional metadata and semantic deduplication."""
         if metadata is None:
             metadata = {}
         metadata.update({
             "user_id": self.user_id,
             "memory_type": memory_type,
             "timestamp": datetime.now().isoformat(),
+            "duplicate_count": 1,
         })
 
         entry_id = self._make_id(memory_type, content[:100])
+
+        # 1. Semantic Deduplication: Check if highly similar memory already exists
+        if self.collection is not None:
+            try:
+                # Query for highly similar content
+                similar = self.collection.query(
+                    query_texts=[content],
+                    n_results=1,
+                    where={"user_id": self.user_id, "memory_type": memory_type}
+                )
+                if similar and similar.get("documents") and similar["documents"][0]:
+                    doc = similar["documents"][0][0]
+                    dist = similar["distances"][0][0] if similar.get("distances") else 1.0
+                    # Standard cosine/L2 distance threshold for near-duplicates
+                    if dist < 0.18:
+                        match_id = similar["ids"][0][0]
+                        existing_meta = similar["metadatas"][0][0] if (similar.get("metadatas") and similar["metadatas"][0]) else {}
+                        existing_meta["duplicate_count"] = existing_meta.get("duplicate_count", 1) + 1
+                        existing_meta["last_updated"] = datetime.now().isoformat()
+                        if "importance" in existing_meta:
+                            existing_meta["importance"] = min(1.0, existing_meta["importance"] + 0.05)
+                        
+                        self.collection.update(
+                            ids=[match_id],
+                            documents=[doc],
+                            metadatas=[existing_meta]
+                        )
+                        logger.debug(f"Deduplicated existing memory matching: {match_id}")
+                        return
+            except Exception as e:
+                logger.warning(f"ChromaDB deduplication check failed: {e} — writing standard entry")
+
+        # Fallback JSON deduplication
+        def content_similarity(s1, s2):
+            w1 = set(s1.lower().split())
+            w2 = set(s2.lower().split())
+            if not w1 or not w2:
+                return 0.0
+            return len(w1 & w2) / max(len(w1), len(w2))
+
+        for entry in self._fallback_data:
+            if entry.get("metadata", {}).get("memory_type") == memory_type:
+                if entry.get("content") == content or content_similarity(entry.get("content", ""), content) > 0.82:
+                    entry["metadata"]["duplicate_count"] = entry["metadata"].get("duplicate_count", 1) + 1
+                    entry["metadata"]["last_updated"] = datetime.now().isoformat()
+                    if "importance" in entry["metadata"]:
+                        entry["metadata"]["importance"] = min(1.0, entry["metadata"]["importance"] + 0.05)
+                    self._save_fallback()
+                    logger.debug(f"Deduplicated fallback memory matching content.")
+                    return
 
         if self.collection is not None:
             try:
@@ -209,6 +260,93 @@ class ChromaMemoryStore:
 
         results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
         return results[:n_results]
+
+    def search_with_sliding_window(
+        self,
+        query: str,
+        n_results: int = 3,
+        window_size: int = 2,
+        memory_type: Optional[str] = None,
+    ) -> list[dict]:
+        """
+        Semantic search with sliding window context retrieval around matching hits.
+        Returns a list of matching dicts, each with an added 'window_context' string.
+        """
+        results = self.search(query, n_results=n_results, memory_type=memory_type)
+        if not results:
+            return []
+
+        # We will build sliding window around each search match
+        if self.collection is not None:
+            try:
+                # Fetch all documents for this user to locate sequence chronologically
+                where = {"user_id": self.user_id}
+                if memory_type:
+                    where["memory_type"] = memory_type
+                
+                raw_all = self.collection.get(where=where)
+                if raw_all and raw_all.get("documents"):
+                    all_docs = []
+                    for i, doc in enumerate(raw_all["documents"]):
+                        meta = (raw_all.get("metadatas") or [{}])[i] or {}
+                        ts = meta.get("timestamp", "")
+                        all_docs.append({
+                            "id": raw_all["ids"][i],
+                            "content": doc,
+                            "metadata": meta,
+                            "timestamp": ts,
+                        })
+                    
+                    # Sort chronologically by timestamp
+                    all_docs.sort(key=lambda x: x["timestamp"])
+                    
+                    # For each match result, try to find it in chronological list
+                    for res in results:
+                        match_idx = None
+                        res_content = res.get("content", "")
+                        for idx, item in enumerate(all_docs):
+                            if item["content"] == res_content:
+                                match_idx = idx
+                                break
+                        
+                        if match_idx is not None:
+                            start_idx = max(0, match_idx - window_size)
+                            end_idx = min(len(all_docs), match_idx + window_size + 1)
+                            window_items = all_docs[start_idx:end_idx]
+                            
+                            # Format nicely
+                            context_lines = []
+                            for item in window_items:
+                                m_type = item["metadata"].get("type", "message")
+                                prefix = "User: " if m_type == "user_message" else "AI: " if m_type == "assistant_response" else ""
+                                context_lines.append(f"{prefix}{item['content']}")
+                            res["window_context"] = "\n".join(context_lines)
+            except Exception as e:
+                logger.warning(f"ChromaDB sliding window construction failed: {e}")
+
+        # Fallback sliding window context
+        if not results or "window_context" not in results[0]:
+            for res in results:
+                res_content = res.get("content", "")
+                match_idx = None
+                for idx, entry in enumerate(self._fallback_data):
+                    if entry.get("content") == res_content:
+                        match_idx = idx
+                        break
+                
+                if match_idx is not None:
+                    start_idx = max(0, match_idx - window_size)
+                    end_idx = min(len(self._fallback_data), match_idx + window_size + 1)
+                    window_items = self._fallback_data[start_idx:end_idx]
+                    
+                    context_lines = []
+                    for item in window_items:
+                        m_type = item.get("metadata", {}).get("type", "message")
+                        prefix = "User: " if m_type == "user_message" else "AI: " if m_type == "assistant_response" else ""
+                        context_lines.append(f"{prefix}{item.get('content')}")
+                    res["window_context"] = "\n".join(context_lines)
+
+        return results
 
     def get_recent(self, memory_type: Optional[str] = None, limit: int = 10) -> list[dict]:
         """Get most recent memories of a given type (or all types if None)."""

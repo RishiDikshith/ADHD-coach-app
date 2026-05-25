@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+/npm-debug.log*
+/yarn-error.log*
+/yarn-debug.log*
+/pnpm-debug.log*
+
+# Next.js Build Output
+.next/
+out/
+build/
+dist/
+
+# Test Coverage
+coverage/
+.vitest/
+
+# Environment Configurations
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Git and OS metadata
+.git
+.gitignore
+.github
+*.md
+.DS_Store
+Thumbs.db

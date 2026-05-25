@@ -91,6 +91,23 @@ FACT_PATTERNS = {
         ],
         "key_extractors": []
     },
+    "cognitive_styles": {
+        "patterns": [
+            (r"(?:i\s+)?(?:only\s+)?(?:work|focus|do\s+well)\s+(?:when|under)\s+(?:there's\s+)?(?:pressure|deadlines?|crisis)", 0.9),
+            (r"(?:i\s+)?(?:love|get|enjoy)\s+(?:hyperfocus(?:ing)?|hyper\s*focus(?:ing)?)\s*(?:on)?", 0.9),
+            (r"(?:i\s+)?(?:need|prefer)\s+(?:someone|body\s*double|co-work|buddy)\s+(?:to\s+)?(?:be\s+there|sit\s+with|work\s+with)", 0.8),
+            (r"(?:i\s+)?get\s+bored\s+(?:easily|quickly|so\s+fast)", 0.8),
+            (r"(?:i'm|i\s+am)\s+(?:interest-driven|motivated\s+by\s+interest|novelty-seeker)", 0.9),
+        ],
+        "key_extractors": []
+    },
+    "interests": {
+        "patterns": [
+            (r"i(?:\s+really)?\s+(?:like|love|enjoy)\s+(programming|coding|design|writing|drawing|music|art|reading|gaming)", 0.8),
+            (r"my\s+hobb(?:y|ies)\s+(?:is|are)\s+(\w+(?:\s+\w+)?)", 0.8),
+        ],
+        "key_extractors": []
+    },
 }
 
 # Keywords that indicate facts to extract
@@ -98,6 +115,7 @@ FACT_TRIGGER_KEYWORDS = [
     "favorite", "love", "hate", "always", "never", "usually",
     "diagnosed", "medication", "struggle", "goal", "want to",
     "i am", "i'm", "i have", "my", "every day", "every morning",
+    "hyperfocus", "co-work", "bored", "deadline", "interest",
 ]
 
 # Fact type mapping from category
@@ -109,6 +127,8 @@ FACT_TYPE_MAP = {
     "health": "health",
     "goals": "goal",
     "struggles": "struggle",
+    "cognitive_styles": "cognitive_style",
+    "interests": "interest",
 }
 
 

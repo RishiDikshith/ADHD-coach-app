@@ -45,6 +45,8 @@ class UserProfile:
             "adhd_type": None,  # inattentive, hyperactive, combined, unknown
             "primary_challenges": [],  # e.g., ["task_initiation", "focus_maintenance", "time_blindness"]
             "strengths": [],  # e.g., ["hyperfocus", "creativity", "problem_solving"]
+            "cognitive_styles": [],  # e.g. ["hyperfocus_driven", "crisis_motivated", "body_double_preferred"]
+            "interests": [],  # e.g. ["programming", "music"]
 
             # Focus patterns
             "focus_patterns": {
@@ -259,6 +261,22 @@ class UserProfile:
         self.data["preferences"].update(preferences)
         self.save()
 
+    def record_cognitive_style(self, style: str):
+        """Record a detected cognitive style."""
+        styles = self.data.get("cognitive_styles", [])
+        if style not in styles:
+            styles.append(style)
+            self.data["cognitive_styles"] = styles
+            self.save()
+
+    def record_interest(self, interest: str):
+        """Record a user interest."""
+        interests = self.data.get("interests", [])
+        if interest not in interests:
+            interests.append(interest)
+            self.data["interests"] = interests
+            self.save()
+
     def add_insight(self, insight: str):
         """Add a behavioral insight."""
         if insight not in self.data["insights"]:
@@ -331,6 +349,8 @@ class UserProfile:
         return {
             "adhd_type": self.data["adhd_type"] or "unknown",
             "primary_challenges": self.data["primary_challenges"][:3],
+            "cognitive_styles": self.data.get("cognitive_styles", [])[:3],
+            "interests": self.data.get("interests", [])[:5],
             "coach_tone": self.data["preferences"]["coach_tone"],
             "focus_area": self.data["preferences"]["focus_area"],
             "best_focus_hours": focus["best_hours"],

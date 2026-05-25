@@ -57,18 +57,21 @@ export default function MoodPage() {
   };
 
   const toggleHabit = (id: string) => {
-    setCompletedHabits((prev) => {
-      const next = prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id];
-      if (!prev.includes(id)) {
-        addPoints(3);
-        if (next.length === 5) {
-          setCelebrationType("confetti");
-          setShowCelebration(true);
-          setTimeout(() => setShowCelebration(false), 2500);
-        }
+    const isAdding = !completedHabits.includes(id);
+    const next = isAdding
+      ? [...completedHabits, id]
+      : completedHabits.filter((h) => h !== id);
+
+    setCompletedHabits(next);
+
+    if (isAdding) {
+      addPoints(3);
+      if (next.length === 5) {
+        setCelebrationType("confetti");
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 2500);
       }
-      return next;
-    });
+    }
   };
 
   const handleJournalSave = () => {

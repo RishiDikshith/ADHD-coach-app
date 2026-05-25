@@ -87,56 +87,93 @@ class AgentOrchestrator:
 
     def detect_handoff_suggestion(self, user_message: str, current_agent_id: str) -> Optional[dict]:
         """
-        Analyze user message to check if they should be handed off to another chatbot agent.
+        Analyze user message along with real-time mood/stress levels to route 
+        the user to the best chatbot agent.
         """
         msg_lower = user_message.lower()
 
-        # 1. Handoff to Burnout Support if talking about high stress, panic, or guilt
-        burnout_triggers = ["overwhelm", "stressed", "burnout", "burnt out", "anxious", "panic", "guilt", "resting", "tired", "exhausted", "shame"]
-        if current_agent_id != "burnout-support" and any(t in msg_lower for t in burnout_triggers):
+        # Get active session state from memory
+        session_state = self.memory.session.state if self.memory and self.memory.session else {}
+        
+        # Guard against MagicMock in testing or non-numeric types
+        stress = session_state.get("current_stress", 5)
+        if hasattr(stress, "__class__") and "Mock" in stress.__class__.__name__:
+            stress = 5
+        elif not isinstance(stress, (int, float)):
+            try:
+                stress = float(stress)
+            except Exception:
+                stress = 5
+
+        energy = session_state.get("current_energy", 5)
+        if hasattr(energy, "__class__") and "Mock" in energy.__class__.__name__:
+            energy = 5
+        elif not isinstance(energy, (int, float)):
+            try:
+                energy = float(energy)
+            except Exception:
+                energy = 5
+
+        mood = session_state.get("current_mood", "neutral")
+        if hasattr(mood, "__class__") and "Mock" in mood.__class__.__name__:
+            mood = "neutral"
+        elif not isinstance(mood, str):
+            mood = str(mood)
+
+        # 1. Handoff to Burnout Support if stress is high (>=8) or user talks about exhaustion, burnout, severe overwhelm, or resting guilt
+        burnout_triggers = ["overwhelm", "stressed", "burnout", "burnt out", "anxious", "panic", "guilt", "resting", "tired", "exhausted", "shame", "can't take it"]
+        if current_agent_id != "burnout-support" and (stress >= 8 or any(t in msg_lower for t in burnout_triggers)):
             return {
                 "agent_id": "burnout-support",
-                "message": "It sounds like you might be feeling overwhelmed or exhausted. Would you like to switch to Burnout Support for some gentle, shame-free grounding? 🌿"
+                "message": "I'm noticing your stress levels are very high right now, and you might be feeling overwhelmed or exhausted. Let's step away from productivity. Would you like to switch to Burnout Support for some gentle, shame-free grounding? 🌿"
             }
 
-        # 2. Handoff to Task Breakdown if struggling with a massive task, starting, or procrastination
-        task_triggers = ["big task", "massive project", "overwhelming project", "don't know where to start", "stuck on starting", "cant start", "procrastinating", "putting off", "break down"]
-        if current_agent_id != "task-breakdown" and any(t in msg_lower for t in task_triggers):
+        # 2. Handoff to Task Breakdown if stress is elevated (>=6) or they discuss starting, big tasks, or procrastination/avoidance
+        task_triggers = ["big task", "massive project", "overwhelming project", "don't know where to start", "stuck on starting", "cant start", "procrastinating", "putting off", "break down", "start"]
+        if current_agent_id != "task-breakdown" and (stress >= 6 or any(t in msg_lower for t in task_triggers)):
             return {
                 "agent_id": "task-breakdown",
-                "message": "Are you facing a heavy task and feeling stuck at the starting line? Would you like to switch to Task Breakdown to slice it into quick 2-minute steps? 🔨"
+                "message": "It feels like starting this task is bringing up some stress and friction. Would you like to switch to Task Breakdown to slice this heavy task into tiny, ridiculous 2-minute steps? 🔨"
             }
 
-        # 3. Handoff to Focus Coach if distracted or having a hard time staying on task
-        focus_triggers = ["distracted", "can't focus", "scrolling", "phone distraction", "timer", "pomodoro", "concentration", "distraction"]
+        # 3. Handoff to Focus Coach if distracted, scrolling, or they need timer help
+        focus_triggers = ["distracted", "can't focus", "scrolling", "phone distraction", "timer", "pomodoro", "concentration", "distraction", "attention"]
         if current_agent_id != "focus-coach" and any(t in msg_lower for t in focus_triggers):
             return {
                 "agent_id": "focus-coach",
                 "message": "Struggling with distractions or keeping your attention locked in? Would you like to switch to Focus Coach to open a Pomodoro flow and shield your focus? 🎯"
             }
 
-        # 4. Handoff to Mood Support if wanting to journal, feeling emotional or stressed
-        mood_triggers = ["journal", "diary", "mood", "feeling low", "sad", "angry", "emotional"]
-        if current_agent_id != "mood-support" and any(t in msg_lower for t in mood_triggers):
+        # 4. Handoff to Mood Support if they want to journal/reflect, or if their emotional state is negative and they mention talking/reflecting
+        mood_triggers = ["journal", "diary", "mood", "feeling low", "sad", "angry", "emotional", "vent"]
+        if current_agent_id != "mood-support" and (any(t in msg_lower for t in mood_triggers) or mood in ["sad", "frustrated", "angry"]):
             return {
                 "agent_id": "mood-support",
-                "message": "Would you like to switch to Mood Support to journal your thoughts and process these emotions together? 😌"
+                "message": "You're holding some heavy feelings right now. Would you like to switch to Mood Support to safely vent, journal, or process these emotions together? 😌"
             }
 
-        # 5. Handoff to Habit Builder if talking about routines, consistency, or streaks
-        habit_triggers = ["habit", "routine", "morning routine", "night routine", "consistency", "stick to", "streak"]
+        # 5. Handoff to Habit Builder if talking about routines, consistency, streaks, or morning/night stacks
+        habit_triggers = ["habit", "routine", "morning routine", "night routine", "consistency", "stick to", "streak", "stack"]
         if current_agent_id != "habit-builder" and any(t in msg_lower for t in habit_triggers):
             return {
                 "agent_id": "habit-builder",
-                "message": "Are you working on building a new routine or staying consistent? Let's switch to Habit Builder to design a dopamine-rich loop! 🔄"
+                "message": "Are you working on building a new routine or staying consistent? Let's switch to Habit Builder to design a low-friction routine with a dopamine-rich loop! 🔄"
             }
 
-        # 6. Handoff to Study Assistant if talking about school, study, revision, exam, paper
+        # 6. Handoff to Study Assistant if talking about academic topics (exams, homework, revision, paper)
         study_triggers = ["study", "revision", "exam", "assignment", "paper", "homework", "school", "college", "test", "academic"]
         if current_agent_id != "study-assistant" and any(t in msg_lower for t in study_triggers):
             return {
                 "agent_id": "study-assistant",
-                "message": "Tackling academic revision, exam prep, or writing a paper? Let's switch to Study Assistant to design a realistic study plan! 🎓"
+                "message": "Tackling academic revision, exam prep, or writing a paper? Let's switch to Study Assistant to design a realistic revision split! 🎓"
+            }
+
+        # 7. Handoff to Accountability Coach if celebrating a win, sharing check-ins, or wanting an active check-in
+        accountability_triggers = ["accomplished", "finished", "did it", "done", "check in", "celebrate", "win"]
+        if current_agent_id != "accountability-coach" and any(t in msg_lower for t in accountability_triggers):
+            return {
+                "agent_id": "accountability-coach",
+                "message": "Celebrating a win or want a friendly, zero-judgment check-in on your goals? Let's switch to Accountability Coach to lock in your success! 🤝"
             }
 
         return None

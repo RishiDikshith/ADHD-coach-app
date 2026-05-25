@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # Database Service (PostgreSQL)
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: adhd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adhd_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adhd_secure_password_99}
+      POSTGRES_DB: adhd_coach
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - adhd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adhd_admin -d adhd_coach"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Cache Service (Redis)
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: adhd-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    networks:
+      - adhd-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Backend Service (FastAPI)
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adhd-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # --- Database Configurations ---
+      # For SQLite (default, comment PostgreSQL to use SQLite):
+      # DATABASE_URL: "" # empty env falls back to local sqlite (see src/database/db.py)
+      
+      # For PostgreSQL (uncomment to activate PostgreSQL connectivity):
+      DATABASE_URL: ${DATABASE_URL:-postgresql://adhd_admin:${POSTGRES_PASSWORD:-adhd_secure_password_99}@postgres:5432/adhd_coach}
+      
+      # --- Redis Caching Configs ---
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      
+      # --- API Secrets & Logic ---
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      MAX_CONCURRENT_AI_REQUESTS: "4"
+      LOG_LEVEL: "info"
+    volumes:
+      - backend-data:/app/data
+      - backend-models:/app/models
+      - backend-logs:/app/logs
+    networks:
+      - adhd-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ==========================================
+  # Frontend Service (Next.js)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend-next
+      dockerfile: Dockerfile
+    container_name: adhd-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://backend:8000"
+      NEXT_PUBLIC_ENABLE_VOICE: "true"
+      NODE_ENV: "production"
+    networks:
+      - adhd-network
+    depends_on:
+      - backend
+
+# ==========================================
+# Network and Volume Definitions
+# ==========================================
+networks:
+  adhd-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  backend-data:
+    driver: local
+  backend-models:
+    driver: local
+  backend-logs:
+    driver: local

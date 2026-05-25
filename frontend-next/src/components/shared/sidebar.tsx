@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -45,6 +45,7 @@ const sidebarVariants = {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { username, game, logout, role } = useUserStore();
   const { currentMood, setCurrentMood, timeBlindnessEnabled, startTinyMode, setStartTinyMode } = useAnalyticsStore();
   const timer = useTimerStore();
@@ -311,7 +312,15 @@ export function Sidebar() {
 
       {/* Logout */}
       <div className="p-3 border-t border-border mt-auto">
-        <Button variant="ghost" size="sm" className="w-full text-muted" onClick={logout}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted"
+          onClick={() => {
+            logout();
+            router.push("/login");
+          }}
+        >
           Logout
         </Button>
       </div>

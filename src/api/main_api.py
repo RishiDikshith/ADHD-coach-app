@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 from functools import lru_cache
 import threading
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -50,7 +51,7 @@ from analytics.recommendation_engine import RecommendationEngine
 # === NEW SYSTEM IMPORTS ===
 from database.models import init_db, get_db
 from database.crud import DatabaseManager
-from auth.auth_handler import AuthHandler, get_password_hash, sanitize_input, sanitize_prompt, rate_limiter, sanitize_username
+from auth.auth_handler import AuthHandler, get_password_hash, sanitize_input, sanitize_prompt, rate_limiter, sanitize_username, require_user, require_coach, require_admin, optional_user
 from task_paralysis.state_detector import ADHDStateDetector
 from intervention.adaptive_coach import AdaptiveCoach
 from focus.focus_engine import FocusEngine
@@ -62,6 +63,7 @@ _insight_engines = {}
 _pattern_analyzers = {}
 _recommendation_engines = {}
 _db_manager = None
+EAGER_TASK_RESULTS = {}
 
 # Logging is now configured at the application entry point (frontend/app.py)
 # to ensure it's set up correctly for the cloud environment.
@@ -110,6 +112,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register real-time WebSocket routes for co-working, accountability, and low-latency chat
+from realtime.websocket_handlers import router as websocket_router
+app.include_router(websocket_router)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models"
@@ -244,19 +251,57 @@ class InterventionRequest(BaseModel):
     user_data: Dict[str, Any] = Field(default_factory=dict)
     scores: Dict[str, Any] = Field(default_factory=dict)
 
+from pydantic import field_validator
+import re
+
 class AuthRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+        return v
 
 class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    email: str = ""
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8)
+    email: str = Field("", max_length=255)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v):
+        if v and not re.match(r"^[^@]+@[^@]+\.[^@]+$", v):
+            raise ValueError("Invalid email format")
+        return v
 
 class ResetPasswordRequest(BaseModel):
-    username: str
-    email: str
-    new_password: str
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str = Field(..., max_length=255)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
 
 class SettingsUpdateRequest(BaseModel):
     theme: str = "dark"
@@ -623,52 +668,207 @@ def get_ai_reply(prompt, language: str = "en"):
 def format_reply(reply):
     return reply.strip()
 
+# ==================== Validation Error Handler for Auth ====================
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/auth/"):
+        errors = exc.errors()
+        err_msg = "Validation error"
+        if errors:
+            loc = errors[0].get("loc", [])
+            field = loc[-1] if loc else "field"
+            msg = errors[0].get("msg", "invalid value")
+            err_msg = f"Invalid {field}: {msg}"
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "error": err_msg}
+        )
+    # Default behavior for other endpoints
+    from fastapi.exception_handlers import request_validation_exception_handler
+    return await request_validation_exception_handler(request, exc)
+
 # ==================== Rate Limiting Middleware ====================
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     client_ip = request.client.host if request.client else "unknown"
-    allowed, remaining = rate_limiter.check(client_ip)
+    path = request.url.path
+    
+    # 1. Classify endpoint category and set limits
+    if path in ("/auth/login", "/auth/register"):
+        max_req = 5
+        window = 60
+        category = "auth"
+    elif path in ("/chat", "/calculate_scores", "/get_interventions"):
+        max_req = 10
+        window = 60
+        category = "expensive"
+    else:
+        max_req = 100
+        window = 60
+        category = "general"
+        
+    # Create a unique key combining client IP and the category
+    rate_key = f"{client_ip}:{category}"
+    
+    allowed, remaining = rate_limiter.check(rate_key, max_requests=max_req, window_seconds=window)
     if not allowed:
-        return {"detail": "Too many requests", "status_code": 429}
+        # Structured log of rate limit blocking
+        from src.utils.audit_logger import audit_log
+        audit_log(
+            username="anonymous",
+            action="rate_limit_blocked",
+            status="BLOCKED",
+            ip_address=client_ip,
+            details={"path": path, "category": category},
+            severity="WARN"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Too many requests. Please try again later."},
+            headers={"Retry-After": str(window)}
+        )
+        
+    # Call the next handler
     response = await call_next(request)
+    
+    # Inject RateLimit headers into response for transparency
+    response.headers["X-RateLimit-Limit"] = str(max_req)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
     return response
 
 
 # ==================== AUTH ENDPOINTS (JWT + bcrypt) ====================
 
 @app.post("/auth/register")
-def auth_register(request: RegisterRequest):
+def auth_register(request: RegisterRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
         return {"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."}
     if len(request.password) < 8:
         return {"success": False, "error": "Password must be at least 8 characters"}
+    
     result = auth_handler.register_user(sanitized_username, request.password, request.email)
     if not result.get("success"):
         return result
+        
     # Initialize DB user
     if _db_manager:
         _db_manager.get_or_create_user(sanitized_username, get_password_hash(request.password), request.email)
+        
+    # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
+    access_token = result.get("token")
+    refresh_token = result.get("refresh_token")
+    
+    if access_token:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="strict",
+            max_age=30 * 60,
+        )
+    if refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="strict",
+            max_age=7 * 24 * 3600,
+        )
+        
     return result
 
 @app.post("/auth/login")
-def auth_login(request: AuthRequest):
+def auth_login(request: AuthRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
         return {"success": False, "error": "Invalid username format"}
+        
     if _db_manager:
         result = auth_handler.login_user(sanitized_username, request.password)
         if result.get("success"):
             _db_manager.update_streak(sanitized_username, "daily")
+            
+            # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
+            access_token = result.get("token")
+            refresh_token = result.get("refresh_token")
+            
+            if access_token:
+                response.set_cookie(
+                    key="access_token",
+                    value=access_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="strict",
+                    max_age=30 * 60,
+                )
+            if refresh_token:
+                response.set_cookie(
+                    key="refresh_token",
+                    value=refresh_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="strict",
+                    max_age=7 * 24 * 3600,
+                )
         return result
     return {"success": False, "error": "Database not initialized"}
 
 @app.post("/auth/refresh")
-def auth_refresh(request: dict):
-    refresh_token = request.get("refresh_token", "")
+async def auth_refresh(request: Request, response: Response, payload: Optional[dict] = None):
+    # Resolve token from request body or cookies
+    refresh_token = None
+    if payload:
+        refresh_token = payload.get("refresh_token")
+    if not refresh_token:
+        try:
+            body = await request.json()
+            refresh_token = body.get("refresh_token")
+        except Exception:
+            pass
+    if not refresh_token:
+        refresh_token = request.cookies.get("refresh_token")
+        
     if not refresh_token:
         return {"success": False, "error": "Refresh token required"}
-    return auth_handler.refresh_token(refresh_token)
+        
+    result = auth_handler.refresh_token(refresh_token)
+    if result.get("success"):
+        new_access = result.get("token")
+        new_refresh = result.get("refresh_token")
+        
+        # Set updated secure cookies
+        if new_access:
+            response.set_cookie(
+                key="access_token",
+                value=new_access,
+                httponly=True,
+                secure=True,
+                samesite="strict",
+                max_age=30 * 60,
+            )
+        if new_refresh:
+            response.set_cookie(
+                key="refresh_token",
+                value=new_refresh,
+                httponly=True,
+                secure=True,
+                samesite="strict",
+                max_age=7 * 24 * 3600,
+            )
+    return result
+
+@app.post("/auth/logout")
+def auth_logout(response: Response):
+    response.delete_cookie(key="access_token")
+    response.delete_cookie(key="refresh_token")
+    return {"success": True, "message": "Successfully logged out"}
 
 @app.post("/auth/reset-password")
 def auth_reset_password(request: ResetPasswordRequest):
@@ -691,7 +891,14 @@ def auth_reset_password(request: ResetPasswordRequest):
     return {"success": True, "message": "Password reset successfully"}
 
 @app.get("/settings/{username}")
-def get_settings(username: str):
+def get_settings(username: str, active_user: Optional[str] = Depends(optional_user)):
+    # Security: If a token is provided, verify ownership or admin access
+    if active_user and active_user != username:
+        if _db_manager:
+            curr_db_user = _db_manager.get_user(active_user)
+            if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
     if not _db_manager:
         return {"theme": "dark", "language": "en", "notifications_enabled": True}
     user = _db_manager.get_user(username)
@@ -700,12 +907,32 @@ def get_settings(username: str):
     return user.settings
 
 @app.put("/settings/{username}")
-def update_settings(username: str, settings: SettingsUpdateRequest):
+def update_settings(username: str, settings: SettingsUpdateRequest, current_user: str = Depends(require_user)):
+    # Security: Ensure user can only update their own settings, or is an admin!
+    if current_user != username:
+        if _db_manager:
+            curr_db_user = _db_manager.get_user(current_user)
+            if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Permission denied. You can only update your own settings."
+                )
+
     if not _db_manager:
         return {"success": False, "error": "Database not available"}
     updated = _db_manager.update_user_settings(username, settings.model_dump())
     if not updated:
         return {"success": False, "error": "User not found"}
+        
+    # Transaction Audit Log
+    from src.utils.audit_logger import audit_log
+    audit_log(
+        username=username,
+        action="update_settings",
+        status="SUCCESS",
+        details={"updated_fields": list(settings.model_dump().keys())}
+    )
+    
     return {"success": True, "settings": updated.settings}
 
 
@@ -725,6 +952,7 @@ def chat(data: ChatRequest):
                 logging.debug(f"Langdetect failed in /chat: {e}")
 
         username = data.username or "default"
+        data.text = sanitize_prompt(data.text, username)
         memory = MemoryManager(user_id=username)
         orchestrator = AgentOrchestrator(memory)
         paralysis_engine = TaskParalysisRecoveryEngine(memory)
@@ -926,6 +1154,10 @@ TASKS:
                 "coaching_tone": state_result.get("coaching_tone"),
                 "focus_mode": state_result.get("focus_mode"),
                 "task_size": state_result.get("task_size"),
+                "task_paralysis_detected": paralysis_result.get("paralysis_detected", False),
+                "task_paralysis_severity": paralysis_result.get("severity", "none"),
+                "microtasks": paralysis_result.get("microtasks"),
+                "just_begin_offer": paralysis_result.get("just_begin_offer"),
             },
         }
     except Exception as e:
@@ -953,6 +1185,7 @@ def chat_stream(data: ChatRequest):
     import asyncio
 
     username = data.username or "default"
+    data.text = sanitize_prompt(data.text, username)
     memory = MemoryManager(user_id=username)
     orchestrator = AgentOrchestrator(memory)
     paralysis_engine = TaskParalysisRecoveryEngine(memory)
@@ -1172,6 +1405,10 @@ TASKS:
                     "coaching_tone": state_result.get("coaching_tone"),
                     "focus_mode": state_result.get("focus_mode"),
                     "task_size": state_result.get("task_size"),
+                    "task_paralysis_detected": paralysis_result.get("paralysis_detected", False),
+                    "task_paralysis_severity": paralysis_result.get("severity", "none"),
+                    "microtasks": paralysis_result.get("microtasks"),
+                    "just_begin_offer": paralysis_result.get("just_begin_offer"),
                 }
             }
             yield f"data: {json.dumps({'metadata': metadata})}\n\n"
@@ -1206,6 +1443,23 @@ def get_analytics(data: dict):
     try:
         username = data.get("username", "default")
         user_data = data.get("user_data", {})
+        force_refresh = data.get("force_refresh", False)
+
+        # Try to read cached precompiled analytics from DB first (if not forced refresh)
+        if _db_manager and not force_refresh:
+            try:
+                facts = _db_manager.get_facts(username, fact_type="behavior")
+                for fact in facts:
+                    if fact.key == "precompiled_analytics":
+                        import json
+                        cached_data = json.loads(fact.value)
+                        # Add a flag to show this is cached
+                        cached_data["cached"] = True
+                        logging.info(f"Analytics: Returned cached analytics compilation for '{username}'")
+                        return cached_data
+            except Exception as cache_err:
+                logging.warning(f"Analytics: Failed to fetch precompiled cache: {cache_err}")
+
         if username not in _insight_engines:
             memory = MemoryManager(user_id=username)
             _insight_engines[username] = InsightEngine(memory)
@@ -1239,7 +1493,7 @@ def get_analytics(data: dict):
             except Exception:
                 pass
 
-        return {
+        results = {
             "insights": insights,
             "insight_summary": insight_summary,
             "focus_patterns": focus_patterns,
@@ -1252,6 +1506,16 @@ def get_analytics(data: dict):
             "weekly_report": db_weekly,
             "peak_focus_hours": db_focus_hours,
         }
+
+        # Cache the results in the background so next request is O(1)
+        if _db_manager:
+            try:
+                from utils.celery_tasks import generate_analytics_task
+                generate_analytics_task.delay(username, user_data)
+            except Exception as task_err:
+                logging.debug(f"Failed to queue background analytics cache refresh: {task_err}")
+
+        return results
     except Exception as e:
         logging.exception(f"Analytics generation error: {e}")
         return {"insights": [], "insight_summary": "Analytics temporarily unavailable.", "focus_patterns": {}, "mood_patterns": {}, "correlations": [], "temporal_patterns": {}, "recommendations": [], "priority_recommendations": [], "formatted_recommendations": ""}
@@ -1291,10 +1555,10 @@ def analyze_task_paralysis(request: TaskParalysisRequest):
         two_minute_starter = micro_gen.get_two_minute_starter(request.task)
         return {
             "task": request.task, "paralysis_detected": result["paralysis_detected"],
-            "severity": result["severity"], "recovery_priority": result.get("recovery_suggestions", {}).get("priority", "normal"),
-            "recovery_steps": result.get("recovery_suggestions", {}).get("steps", []),
+            "severity": result["severity"], "recovery_priority": (result.get("recovery_suggestions") or {}).get("priority", "normal"),
+            "recovery_steps": (result.get("recovery_suggestions") or {}).get("steps", []),
             "microtasks": microtasks, "two_minute_starter": two_minute_starter,
-            "just_begin": result.get("just_begin_offer"), "message": result.get("recovery_suggestions", {}).get("message", ""),
+            "just_begin": result.get("just_begin_offer"), "message": (result.get("recovery_suggestions") or {}).get("message", ""),
         }
     except Exception as e:
         return {"task": request.task, "paralysis_detected": False, "error": str(e), "microtasks": [], "two_minute_starter": None}
@@ -1756,7 +2020,7 @@ def get_user_tickets(username: str):
 
 
 @app.get("/admin/feedbacks")
-def get_admin_feedbacks():
+def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from src.database.models import UserFeedback, User
@@ -1772,11 +2036,20 @@ def get_admin_feedbacks():
             "feedback_text": fb.feedback_text,
             "created_at": fb.created_at.isoformat()
         })
+        
+    # Security Audit Log
+    from src.utils.audit_logger import audit_log
+    audit_log(
+        username=current_admin,
+        action="view_admin_feedbacks",
+        status="SUCCESS"
+    )
+    
     return {"success": True, "feedbacks": feedbacks}
 
 
 @app.get("/admin/tickets")
-def get_admin_tickets():
+def get_admin_tickets(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from src.database.models import SupportTicket, User
@@ -1793,11 +2066,20 @@ def get_admin_tickets():
             "status": t.status,
             "created_at": t.created_at.isoformat()
         })
+        
+    # Security Audit Log
+    from src.utils.audit_logger import audit_log
+    audit_log(
+        username=current_admin,
+        action="view_admin_tickets",
+        status="SUCCESS"
+    )
+    
     return {"success": True, "tickets": tickets}
 
 
 @app.put("/admin/tickets/{ticket_id}/status")
-def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest):
+def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest, current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from src.database.models import SupportTicket
@@ -1806,8 +2088,19 @@ def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest):
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
+    old_status = ticket.status
     ticket.status = request.status
     db.commit()
+    
+    # Transaction Audit Log
+    from src.utils.audit_logger import audit_log
+    audit_log(
+        username=current_admin,
+        action="update_ticket_status",
+        status="SUCCESS",
+        details={"ticket_id": ticket_id, "old_status": old_status, "new_status": request.status}
+    )
+    
     return {
         "success": True,
         "message": f"Ticket status successfully updated to {request.status}",
@@ -1817,8 +2110,125 @@ def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest):
         }
     }
 
+# ==================== BACKGROUND TASK SYSTEM ENDPOINTS ====================
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    result: Optional[Any] = None
+    error: Optional[str] = None
+
+@app.post("/tasks/calculate_scores")
+def calculate_scores_async(request: ScoreRequest, async_task: bool = True, username: str = "default"):
+    """
+    Triggers heavy ML model inference asynchronously in Celery.
+    If async_task=False, runs synchronously and returns results immediately.
+    """
+    if not async_task:
+        # Run synchronously for backward compatibility and tests
+        return calculate_scores(request)
+        
+    try:
+        from utils.celery_tasks import calculate_ml_scores_task
+        task = calculate_ml_scores_task.delay(
+            request.user_data,
+            request.text,
+            request.adhd_answers,
+            username
+        )
+        from utils.celery_app import celery_app
+        if getattr(celery_app.conf, "task_always_eager", False):
+            EAGER_TASK_RESULTS[task.id] = task.result
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        # Fallback to sync if Celery fails to queue
+        logging.warning(f"Failed to queue task, running synchronously: {e}")
+        return calculate_scores(request)
+
+@app.post("/tasks/analytics")
+def generate_analytics_async(request: dict):
+    """
+    Triggers analytics calculation task in the background.
+    """
+    username = request.get("username", "default")
+    user_data = request.get("user_data", {})
+    try:
+        from utils.celery_tasks import generate_analytics_task
+        task = generate_analytics_task.delay(username, user_data)
+        from utils.celery_app import celery_app
+        if getattr(celery_app.conf, "task_always_eager", False):
+            EAGER_TASK_RESULTS[task.id] = task.result
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+
+@app.post("/tasks/synthesize_personality")
+def synthesize_personality_async(request: dict):
+    """
+    Triggers multi-agent personality synthesis task in the background.
+    """
+    username = request.get("username", "default")
+    try:
+        from utils.celery_tasks import synthesize_personality_task
+        task = synthesize_personality_task.delay(username)
+        from utils.celery_app import celery_app
+        if getattr(celery_app.conf, "task_always_eager", False):
+            EAGER_TASK_RESULTS[task.id] = task.result
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+
+@app.post("/tasks/compile_context")
+def compile_context_async(request: dict):
+    """
+    Triggers long-running context compilation task in the background.
+    """
+    username = request.get("username", "default")
+    try:
+        from utils.celery_tasks import compile_context_task
+        task = compile_context_task.delay(username)
+        from utils.celery_app import celery_app
+        if getattr(celery_app.conf, "task_always_eager", False):
+            EAGER_TASK_RESULTS[task.id] = task.result
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+
+@app.get("/tasks/status/{task_id}")
+def get_task_status(task_id: str):
+    """
+    Retrieves the status and results of an asynchronous task.
+    """
+    if task_id in EAGER_TASK_RESULTS:
+        return {
+            "task_id": task_id,
+            "status": "SUCCESS",
+            "result": EAGER_TASK_RESULTS[task_id],
+            "error": None
+        }
+    try:
+        from utils.celery_app import celery_app
+        res = celery_app.AsyncResult(task_id)
+        
+        response = {
+            "task_id": task_id,
+            "status": res.status,
+            "result": None,
+            "error": None
+        }
+        
+        if res.status == "SUCCESS":
+            response["result"] = res.result
+        elif res.status == "FAILURE":
+            response["error"] = str(res.result)
+            
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch task status: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("src.api.main_api:app", host="0.0.0.0", port=8000, reload=True)
+
 

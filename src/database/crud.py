@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .models import (
     User, ChatMessage, MoodEntry, InterventionCompletion, Streak,
     UserFact, FocusSession, DistractionLog, Achievement, SkillProgress,
-    UserFeedback, SupportTicket,
+    UserFeedback, SupportTicket, RefreshToken,
     SessionLocal, init_db
 )
 
@@ -153,6 +153,46 @@ class DatabaseManager:
         if user:
             user.last_login = datetime.now(timezone.utc)
             self.db.commit()
+
+    # ==================== Refresh Tokens / RTR ====================
+
+    def save_refresh_token(self, token: str, username: str, family_id: str, expires_at: datetime) -> Optional[RefreshToken]:
+        """Save a new refresh token for Refresh Token Rotation (RTR)."""
+        try:
+            rt = RefreshToken(
+                token=token,
+                username=username,
+                family_id=family_id,
+                expires_at=expires_at,
+                is_used=False,
+                is_revoked=False
+            )
+            self.db.add(rt)
+            self.db.commit()
+            self.db.refresh(rt)
+            return rt
+        except Exception as e:
+            logger.warning(f"Failed to save refresh token: {e}")
+            return None
+
+    def get_refresh_token(self, token: str) -> Optional[RefreshToken]:
+        """Retrieve a refresh token from the database."""
+        try:
+            return self.db.query(RefreshToken).filter(RefreshToken.token == token).first()
+        except Exception as e:
+            logger.warning(f"Failed to query refresh token: {e}")
+            return None
+
+    def revoke_token_family(self, family_id: str):
+        """Revoke all tokens in a family (compromise/reuse action)."""
+        try:
+            tokens = self.db.query(RefreshToken).filter(RefreshToken.family_id == family_id).all()
+            for t in tokens:
+                t.is_revoked = True
+            self.db.commit()
+            logger.warning(f"Security: Revoked token family {family_id} due to reuse attempt.")
+        except Exception as e:
+            logger.warning(f"Failed to revoke token family: {e}")
 
     # ==================== Chat History ====================
 

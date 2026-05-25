@@ -59,6 +59,21 @@ def init_db():
                 pass
 
 
+# ==================== Refresh Tokens for RTR ====================
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(500), unique=True, nullable=False, index=True)
+    username = Column(String(100), nullable=False, index=True)
+    family_id = Column(String(100), nullable=False, index=True)
+    is_used = Column(Boolean, default=False)
+    is_revoked = Column(Boolean, default=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 # ==================== User & Auth ====================
 
 class User(Base):

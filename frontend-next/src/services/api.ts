@@ -77,10 +77,10 @@ export const api = {
 
   // ==================== Scores ====================
   getScores: (username: string, userData: Record<string, unknown> = {}) =>
-    fetchApi<ScoreData>("/calculate_scores", {
+    fetchApi<{ scores: ScoreData }>("/calculate_scores", {
       method: "POST",
       body: JSON.stringify({ username, user_data: userData }),
-    }),
+    }).then((res) => res.scores),
 
   // ==================== Analytics ====================
   getAnalytics: (username: string, userData: Record<string, unknown> = {}) =>

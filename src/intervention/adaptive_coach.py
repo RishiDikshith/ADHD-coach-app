@@ -93,6 +93,49 @@ MOOD_STRATEGIES = {
             "Capture this feeling — this is what momentum feels like!",
         ],
     },
+    "calm": {
+        "tone": "gentle_encouraging",
+        "interventions": ["grounding", "plan_ahead"],
+        "task_style": "standard",
+        "productivity_goals": True,
+        "focus_mode": "standard",
+        "messages": [
+            "You are in a peaceful, balanced headspace. Let's sustain this gentle momentum.",
+            "A calm mind is a powerful thing. Let's pick one small thing that feels good to do.",
+        ],
+    },
+    "neutral": {
+        "tone": "structured_steady",
+        "interventions": ["pomodoro", "task_activation"],
+        "task_style": "standard",
+        "productivity_goals": True,
+        "focus_mode": "standard",
+        "messages": [
+            "We're starting from a clean slate today. What is one easy action to get moving?",
+            "No pressure, no high emotion. Let's just do a tiny focus sprint.",
+        ],
+    },
+    "frustrated": {
+        "tone": "shame_free_validation",
+        "interventions": ["venting", "reduce_friction", "rest"],
+        "task_style": "none_or_tiny",
+        "productivity_goals": False,
+        "focus_mode": "recovery",
+        "messages": [
+            "Friction and frustration are incredibly exhausting. It makes total sense you'd feel this way.",
+            "You don't need to force anything right now. Let's clear the path and start super small.",
+        ],
+    },
+}
+
+# Mapping of standard emotional emojis to core coaching strategies
+EMOJI_MOOD_MAP = {
+    "😊": "positive",
+    "😌": "calm",
+    "😐": "neutral",
+    "😟": "avoidant",
+    "😰": "anxious",
+    "😤": "frustrated",
 }
 
 
@@ -185,7 +228,40 @@ class AdaptiveCoach:
 
     def get_mood_strategy(self, mood: str) -> dict:
         """Get coaching strategy for a specific mood."""
-        return MOOD_STRATEGIES.get(mood, {
+        if not mood:
+            return {
+                "tone": "warm",
+                "interventions": ["check_in", "gentle_support"],
+                "task_style": "normal",
+                "productivity_goals": True,
+                "focus_mode": "standard",
+                "messages": ["How are you feeling right now?"],
+            }
+
+        clean_mood = mood.strip()
+        if clean_mood in EMOJI_MOOD_MAP:
+            clean_mood = EMOJI_MOOD_MAP[clean_mood]
+        else:
+            # Fallback check if emoji is contained in the string
+            for emoji, target in EMOJI_MOOD_MAP.items():
+                if emoji in clean_mood:
+                    clean_mood = target
+                    break
+        
+        # Lowercase and fallback mapping
+        clean_mood = clean_mood.lower()
+        if "happy" in clean_mood or "excited" in clean_mood or "joy" in clean_mood:
+            clean_mood = "positive"
+        elif "sad" in clean_mood or "depressed" in clean_mood:
+            clean_mood = "avoidant"
+        elif "stressed" in clean_mood or "angry" in clean_mood:
+            clean_mood = "frustrated"
+        elif "relax" in clean_mood or "peace" in clean_mood:
+            clean_mood = "calm"
+        elif "ok" in clean_mood or "fine" in clean_mood:
+            clean_mood = "neutral"
+
+        return MOOD_STRATEGIES.get(clean_mood, {
             "tone": "warm",
             "interventions": ["check_in", "gentle_support"],
             "task_style": "normal",
@@ -236,13 +312,13 @@ class AdaptiveCoach:
         }
 
         # Add mood-specific strategy if mood is provided
-        if mood and mood in MOOD_STRATEGIES:
-            mood_strat = MOOD_STRATEGIES[mood]
-            plan["coaching_tone"] = mood_strat["tone"]
-            plan["interventions"].extend(mood_strat["interventions"])
-            if mood_strat["messages"]:
+        if mood:
+            mood_strat = self.get_mood_strategy(mood)
+            plan["coaching_tone"] = mood_strat.get("tone", plan["coaching_tone"])
+            plan["interventions"].extend(mood_strat.get("interventions", []))
+            if mood_strat.get("messages"):
                 plan["messages"].append(mood_strat["messages"][0])
-            if not mood_strat["productivity_goals"]:
+            if not mood_strat.get("productivity_goals", True):
                 plan["productivity_safe"] = False
 
         # Add state-specific interventions

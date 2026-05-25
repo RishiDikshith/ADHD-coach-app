@@ -32,3 +32,5 @@ catboost==1.2.2
 SpeechRecognition
 deep-translator
 openai-whisper
+celery==5.3.6
+redis==5.0.1

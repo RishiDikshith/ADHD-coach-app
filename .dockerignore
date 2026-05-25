@@ -1,0 +1,48 @@
+# Git and metadata
+.git
+.github
+*.md
+LICENSE
+
+# Python cache and builds
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Python environments
+venv/
+.venv/
+env/
+
+# Backend generated files
+*.db
+*.sqlite3
+.adhd_memory_db/
+.session_memories/
+.user_profiles/
+catboost_info/
+chrome-dev-profile/
+
+# Logs
+logs/
+*.log
+
+# Frontend cache only
+frontend-next/node_modules
+frontend-next/.next
+frontend-next/out
+
+# Root frontend caches
+node_modules
+.next
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local

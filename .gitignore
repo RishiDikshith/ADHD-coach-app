@@ -1,54 +1,37 @@
 # Python
 __pycache__/
 *.pyc
-
-# Virtual env
 global_env/
 venv/
 
-# Secrets
+# Environment
 .env
 .env.*
-*.backup
 
-# IDE
-.vscode/
-
-# Database
-*.db
-
-# Logs
-*.log
-
-# Secrets
-.env
-.env.*
-*.backup
-
-# Memory/Data
+# AI Memory
 .adhd_memory_db/
 .session_memories/
 .user_profiles/
-data/
 
-# Python
-__pycache__/
-*.pyc
-
-# Virtual env
-global_env/
-venv/
-
-# VS Code
-.vscode/
-
-# ML training artifacts
+# ML Cache
 catboost_info/
 
-# Python cache
-.pytest_cache/
-.coverage
+# Data
+data/raw/
+data/cleaned/
+data/featured/
+data/processed/
+data/reports/
+
+# Next.js
+frontend-next/.next/
+frontend-next/node_modules/
+
+# Logs
+logs/
+*.log
 
 # OS
+.vscode/
 .DS_Store
 Thumbs.db

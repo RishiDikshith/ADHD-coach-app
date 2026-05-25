@@ -1,0 +1,21 @@
+[flake8]
+max-line-length = 100
+select = C,E,F,W,B,B950
+extend-ignore = E203, E501, W503, E722
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    .adhd_memory_db,
+    .session_memories,
+    .user_profiles,
+    catboost_info,
+    chrome-dev-profile,
+    logs,
+    data,
+    models,
+    src/tests/*
+max-complexity = 15

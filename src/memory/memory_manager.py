@@ -210,7 +210,15 @@ class MemoryManager:
         )
 
         # Extract and store structured facts from user message
-        self.extract_and_store_facts(user_message)
+        extracted_facts = self.extract_and_store_facts(user_message)
+        if extracted_facts:
+            for fact in extracted_facts:
+                ftype = fact.get("type")
+                val = fact.get("value")
+                if ftype == "cognitive_style":
+                    self.profile.record_cognitive_style(val)
+                elif ftype == f"interest":
+                    self.profile.record_interest(val)
 
     # ---------- Emotion Recording ----------
 
@@ -448,6 +456,8 @@ class MemoryManager:
         lines.append("[USER PROFILE]")
         lines.append(f"ADHD Type: {u.get('adhd_type', 'unknown')}")
         lines.append(f"Primary Challenges: {', '.join(u.get('primary_challenges', ['unknown']))}")
+        lines.append(f"Cognitive Styles: {', '.join(u.get('cognitive_styles', ['unknown']))}")
+        lines.append(f"Interests: {', '.join(u.get('interests', ['unknown']))}")
         lines.append(f"Coach Tone Preference: {u.get('coach_tone', 'empathetic')}")
         lines.append(f"Focus Area: {u.get('focus_area', 'time_management')}")
         lines.append(f"Best Focus Hours: {', '.join(u.get('best_focus_hours', ['unknown']))}")
