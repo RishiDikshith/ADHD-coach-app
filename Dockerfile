@@ -60,4 +60,4 @@ USER appuser
 COPY --chown=appuser:appuser . .
 
 # Run FastAPI app with production uvicorn configuration
-CMD ["uvicorn", "src.api.main_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--log-level", "info"]
+CMD ["sh", "-c", "uvicorn src.api.main_api:app --host 0.0.0.0 --port $PORT --workers 2 --log-level info"]
