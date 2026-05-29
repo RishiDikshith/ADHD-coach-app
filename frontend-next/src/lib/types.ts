@@ -94,6 +94,10 @@ export interface UserSettings {
   start_tiny_default?: boolean;
   time_blindness_enabled?: boolean;
   celebration_effects?: boolean;
+  voice_autospeak?: boolean;
+  voice_speed?: number;
+  voice_pitch?: number;
+  voice_accent?: string;
 }
 
 // ==================== Interventions ====================

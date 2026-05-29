@@ -318,6 +318,10 @@ class SettingsUpdateRequest(BaseModel):
     start_tiny_default: bool = False
     time_blindness_enabled: bool = True
     celebration_effects: bool = True
+    voice_autospeak: bool = False
+    voice_speed: float = 1.0
+    voice_pitch: float = 1.0
+    voice_accent: str = "auto"
 
 class AgentAnalyzeRequest(BaseModel):
     agent_type: str

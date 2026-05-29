@@ -144,7 +144,7 @@ export default function ChatPage() {
     setHandoffSuggestion,
   } = useChatStore();
 
-  const { username, game, addPoints } = useUserStore();
+  const { username, game, addPoints, settings } = useUserStore();
   const { overwhelmMode, setOverwhelmMode } = useAnalyticsStore();
 
   const [input, setInput] = useState("");
@@ -163,8 +163,8 @@ export default function ChatPage() {
   const [showSupportWidget, setShowSupportWidget] = useState(true);
 
   // Voice Assistant & Language states
-  const [selectedLanguage, setSelectedLanguage] = useState("auto");
-  const [autoSpeak, setAutoSpeak] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(settings.language || "auto");
+  const [autoSpeak, setAutoSpeak] = useState(settings.voice_autospeak ?? false);
   const [isRecording, setIsRecording] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -251,14 +251,28 @@ export default function ChatPage() {
       .trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    // Connect user customization speed & pitch
+    utterance.rate = settings.voice_speed ?? 1.0;
+    utterance.pitch = settings.voice_pitch ?? 1.0;
+
     let speechLang = selectedLanguage;
     if (speechLang === "auto") {
-      speechLang = "en-US";
+      speechLang = settings.language || "en";
     }
     utterance.lang = speechLang;
 
     const voices = window.speechSynthesis.getVoices();
-    const matchedVoice = voices.find(v => v.lang.startsWith(speechLang.split("-")[0]));
+    let matchedVoice = null;
+    
+    if (settings.voice_accent && settings.voice_accent !== "auto") {
+      matchedVoice = voices.find(v => v.lang.startsWith(settings.voice_accent!));
+    }
+    
+    if (!matchedVoice) {
+      matchedVoice = voices.find(v => v.lang.startsWith(speechLang.split("-")[0]));
+    }
+    
     if (matchedVoice) {
       utterance.voice = matchedVoice;
     }
