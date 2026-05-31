@@ -38,3 +38,36 @@ logs/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+
+# Build artifacts
+dist/
+build/
+
+# Models
+*.pkl
+*.joblib
+*.onnx
+*.pt
+*.pth
+*.h5
+
+# Coverage
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+
+# ChromaDB / Vector DB
+chroma_db/
+
+# Temporary files
+tmp/
+temp/
+
+# Jupyter
+.ipynb_checkpoints/

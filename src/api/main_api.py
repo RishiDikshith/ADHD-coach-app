@@ -15,6 +15,19 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(...)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "adhd-coach-app-65-6wm6s33wo-rishi-projects.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load environment variables
 load_dotenv()
