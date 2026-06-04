@@ -9,7 +9,8 @@ import type {
   AnalyticsInsight,
 } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
+const API_BASE = API_URL;
 const API_TIMEOUT = 30000;
 
 export class ApiError extends Error {
@@ -41,11 +42,29 @@ async function fetchApi<T>(
       });
 
       if (!res.ok) {
-        const errorBody = await res.text().catch(() => "Unknown error");
-        throw new ApiError(
-          `API ${res.status}: ${errorBody.slice(0, 200)}`,
-          res.status
-        );
+        const errorBody = await res.text().catch(() => "");
+        let errorMessage = `API Error ${res.status}`;
+        if (errorBody) {
+          try {
+            const parsed = JSON.parse(errorBody);
+            if (parsed && typeof parsed === "object") {
+              if (typeof parsed.detail === "string") {
+                errorMessage = parsed.detail;
+              } else if (Array.isArray(parsed.detail)) {
+                errorMessage = parsed.detail.map((err: any) => err.msg || JSON.stringify(err)).join(", ");
+              } else if (parsed.message) {
+                errorMessage = parsed.message;
+              } else if (parsed.error) {
+                errorMessage = parsed.error;
+              } else {
+                errorMessage = errorBody.slice(0, 200);
+              }
+            }
+          } catch {
+            errorMessage = errorBody.slice(0, 200);
+          }
+        }
+        throw new ApiError(errorMessage, res.status);
       }
 
       return (await res.json()) as T;

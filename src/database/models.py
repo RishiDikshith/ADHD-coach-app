@@ -21,11 +21,21 @@ DATABASE_URL = os.getenv(
     )
 )
 
+# Handle postgres:// vs postgresql:// dialect naming issue for SQLAlchemy
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Handle SQLite vs PostgreSQL engine creation
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20)
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=300,
+        pool_pre_ping=True
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -42,6 +52,15 @@ def get_db():
 
 def init_db():
     """Create all tables. Call on application startup."""
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print("Database startup connection health check passed.")
+    except Exception as e:
+        print(f"DATABASE INITIALIZATION ERROR: Database startup connection check failed: {e}")
+        raise RuntimeError(f"Database connection failed: {e}") from e
+
     Base.metadata.create_all(bind=engine)
     
     # Custom dynamic migration to ensure 'role' column exists in SQLite/PostgreSQL

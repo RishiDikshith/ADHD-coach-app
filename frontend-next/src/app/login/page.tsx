@@ -38,8 +38,9 @@ export default function LoginPage() {
       } else {
         setError("root", { message: res.error || "Login failed. Please check your credentials." });
       }
-    } catch {
-      setError("root", { message: "Connection error. Please try again." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
+      setError("root", { message: msg });
     }
   };
 

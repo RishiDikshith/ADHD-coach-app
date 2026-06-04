@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { ChatMessage, ScoreData, Intervention } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
+const API_BASE = API_URL;
 
 interface ChatState {
   messages: ChatMessage[];

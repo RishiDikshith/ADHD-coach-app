@@ -47,9 +47,10 @@ export default function ForgotPasswordPage() {
         setStatus("error");
         setMessage(res.error || "Reset failed. Please check your credentials.");
       }
-    } catch {
+    } catch (err) {
       setStatus("error");
-      setMessage("Connection error. Please try again.");
+      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
+      setMessage(msg);
     }
   };
 

@@ -9,6 +9,7 @@ import { Celebration } from "@/components/shared/celebration";
 import { useUserStore } from "@/stores/user-store";
 import { useAnalyticsStore } from "@/stores/analytics-store";
 import { useChatStore } from "@/stores/chat-store";
+import { API_URL } from "@/lib/api";
 
 // Clean, curated list of the 8 dedicated chatbots matching the backend registry
 const agentsList = [
@@ -283,8 +284,7 @@ export default function AgentsPage() {
     setVoiceError(null);
     
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${API_BASE}/chat`, {
+      const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,13 +1,15 @@
-/**
- * ADHD Productivity Platform - Real-time Communication Services
- * ============================================================
- * Provides type-safe clients for WebSockets to power:
- * 1. Live co-working focus rooms (synchronized timers + status presence).
- * 2. Collaborative accountability groups (live check-ins + peer dopamine sparks).
- * 3. Streaming AI chat (low-latency conversational updates).
- */
-
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws";
+import { WS_URL } from "@/lib/api";
+// Dynamically switch to wss:// if site is loaded over https://
+const getWsBase = () => {
+  if (typeof window !== "undefined") {
+    const isHttps = window.location.protocol === "https:";
+    if (isHttps && WS_URL.startsWith("ws://")) {
+      return WS_URL.replace("ws://", "wss://");
+    }
+  }
+  return WS_URL;
+};
+const WS_BASE = getWsBase();
 
 export type WebSocketConnectionState = "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
 
@@ -72,6 +74,7 @@ class BaseWebSocketClient {
   protected maxReconnectAttempts = 5;
   protected reconnectDelay = 1000;
   protected pingInterval: any = null;
+  protected reconnectTimeout: any = null;
   protected shouldReconnect = true;
 
   constructor(url: string, onStateChange: (state: WebSocketConnectionState) => void) {
@@ -82,6 +85,21 @@ class BaseWebSocketClient {
   public connect() {
     this.shouldReconnect = true;
     this.stateCallback("CONNECTING");
+
+    // Clean up any existing connection and heartbeat before starting a new one
+    this.stopHeartbeat();
+    if (this.ws) {
+      try {
+        this.ws.onopen = null;
+        this.ws.onmessage = null;
+        this.ws.onerror = null;
+        this.ws.onclose = null;
+        this.ws.close();
+      } catch (e) {
+        console.warn("Error closing old WebSocket:", e);
+      }
+      this.ws = null;
+    }
 
     try {
       this.ws = new WebSocket(this.url);
@@ -123,8 +141,18 @@ class BaseWebSocketClient {
   public disconnect() {
     this.shouldReconnect = false;
     this.stopHeartbeat();
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
     if (this.ws) {
-      this.ws.close();
+      try {
+        this.ws.onopen = null;
+        this.ws.onmessage = null;
+        this.ws.onerror = null;
+        this.ws.onclose = null;
+        this.ws.close();
+      } catch (e) {}
       this.ws = null;
     }
     this.stateCallback("CLOSED");
@@ -159,12 +187,16 @@ class BaseWebSocketClient {
       console.error("WebSocket reached max reconnection attempts");
       return;
     }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-    console.log(`Reconnecting to WebSocket in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+    const delay = Math.min(30000, this.reconnectDelay * Math.pow(2, this.reconnectAttempts)) + Math.random() * 1000;
+    console.log(`Reconnecting to WebSocket in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})...`);
     
-    setTimeout(() => {
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
       if (this.shouldReconnect) {
         this.connect();
       }

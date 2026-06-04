@@ -15,17 +15,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Load environment variables
 load_dotenv()
@@ -82,6 +71,21 @@ EAGER_TASK_RESULTS = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and other resources on startup."""
+    # Validate environment variables
+    env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    is_prod = env in ("production", "prod", "staging")
+    missing_vars = []
+    for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET"]:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    if missing_vars:
+        msg = f"Critical environment variables missing at startup: {', '.join(missing_vars)}"
+        if is_prod:
+            logging.critical(f"FATAL: {msg}")
+            raise RuntimeError(msg)
+        else:
+            logging.warning(f"WARNING: {msg} (Proceeding in development mode)")
+
     global _db_manager, _state_detector, _adaptive_coach, _focus_engine, _gamification, _rag_engine
     logging.info("Initializing database...")
     try:
@@ -119,10 +123,21 @@ app.add_middleware(
         "http://localhost:3000", "http://localhost:3001",
         "http://127.0.0.1:3000", os.getenv("FRONTEND_URL", ""),
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/healthz")
+def healthz(db = Depends(get_db)):
+    from sqlalchemy import text
+    try:
+        # Test DB connection
+        db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {e}")
 
 # Register real-time WebSocket routes for co-working, accountability, and low-latency chat
 from realtime.websocket_handlers import router as websocket_router

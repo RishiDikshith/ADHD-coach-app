@@ -116,8 +116,9 @@ export default function RegisterPage() {
       } else {
         setFormError("root", { message: res.error || "Registration failed." });
       }
-    } catch {
-      setFormError("root", { message: "Connection error. Please try again." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
+      setFormError("root", { message: msg });
     }
   };
 
