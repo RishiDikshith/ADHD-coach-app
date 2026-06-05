@@ -63,7 +63,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
     
-    # Custom dynamic migration to ensure 'role' column exists in SQLite/PostgreSQL
+    # Custom dynamic migration to ensure 'role' and 'security_pin_hash' columns exist in SQLite/PostgreSQL
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
     if "users" in inspector.get_table_names():
@@ -75,6 +75,13 @@ def init_db():
                     conn.commit()
             except Exception as e:
                 # Catch gracefully in case of locking or concurrency
+                pass
+        if "security_pin_hash" not in columns:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN security_pin_hash VARCHAR(255) DEFAULT NULL"))
+                    conn.commit()
+            except Exception as e:
                 pass
 
 
@@ -102,6 +109,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     email = Column(String(255), nullable=True)
     password_hash = Column(String(255), nullable=False)
+    security_pin_hash = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = Column(DateTime, nullable=True)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -88,7 +88,14 @@ const containerVariants = {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { login: loginUser } = useUserStore();
+  const { login: loginUser, isAuthenticated } = useUserStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
+
   const [step, setStep] = useState<"account" | "focus" | "energy" | "style" | "triggers" | "tone" | "complete">("account");
   const [onboarding, setOnboarding] = useState<OnboardingData>({
     focusStyle: "",

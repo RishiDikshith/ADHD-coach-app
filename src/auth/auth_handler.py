@@ -351,6 +351,62 @@ class AuthHandler:
             "role": getattr(user, "role", "user"),
         }
 
+    def login_with_pin(self, username: str, pin: str) -> dict:
+        """Authenticate a user with a security PIN and return JWT tokens."""
+        from src.database.crud import DatabaseManager
+        from src.utils.audit_logger import audit_log
+
+        sanitized_username = sanitize_username(username)
+        if not sanitized_username:
+            return {"success": False, "error": "Invalid username format"}
+
+        if not pin or len(pin) != 4 or not pin.isdigit():
+            return {"success": False, "error": "PIN must be exactly 4 digits"}
+
+        db = self.db or DatabaseManager()
+        user = db.get_user(sanitized_username)
+
+        if not user or not user.security_pin_hash or not verify_password(pin, user.security_pin_hash):
+            audit_log(
+                username=sanitized_username,
+                action="user_pin_login",
+                status="FAILED",
+                details={"reason": "invalid_pin"},
+                severity="WARN"
+            )
+            return {"success": False, "error": "Invalid PIN"}
+
+        # Update last login
+        db.update_last_login(sanitized_username)
+
+        access_token = create_access_token({"sub": sanitized_username})
+        refresh_token = create_refresh_token({"sub": sanitized_username})
+
+        # Save refresh token for RTR
+        payload = verify_token(refresh_token)
+        if payload:
+            fid = payload.get("family_id")
+            exp_ts = payload.get("exp")
+            if fid and exp_ts:
+                exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
+                db.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
+
+        audit_log(
+            username=sanitized_username,
+            action="user_pin_login",
+            status="SUCCESS",
+            details={"role": getattr(user, "role", "user")}
+        )
+
+        return {
+            "success": True,
+            "message": "Login successful",
+            "token": access_token,
+            "refresh_token": refresh_token,
+            "username": sanitized_username,
+            "role": getattr(user, "role", "user"),
+        }
+
     def refresh_token(self, refresh_token_str: str) -> dict:
         """Refresh an access token using a refresh token with RTR protection."""
         from src.utils.audit_logger import audit_log

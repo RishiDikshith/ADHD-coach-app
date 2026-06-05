@@ -146,6 +146,26 @@ export const api = {
       body: JSON.stringify({ username, email, new_password: newPassword }),
     }),
 
+  loginPin: (username: string, pin: string) =>
+    fetchApi<AuthResponse>("/auth/login-pin", {
+      method: "POST",
+      body: JSON.stringify({ username, pin }),
+    }),
+
+  hasPin: (username: string) =>
+    fetchApi<{ has_pin: boolean }>(`/auth/has-pin/${encodeURIComponent(username)}`),
+
+  setPin: (pin: string) =>
+    fetchApi<{ success: boolean; message?: string }>("/auth/set-pin", {
+      method: "POST",
+      body: JSON.stringify({ pin }),
+    }),
+
+  removePin: () =>
+    fetchApi<{ success: boolean; message?: string }>("/auth/remove-pin", {
+      method: "POST",
+    }),
+
   // ==================== Settings ====================
   getSettings: (username: string) =>
     fetchApi<UserSettings>(`/settings/${encodeURIComponent(username)}`),

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useUserStore } from "@/stores/user-store";
 import { useAnalyticsStore } from "@/stores/analytics-store";
+import { api } from "@/lib/api-client";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -46,7 +47,7 @@ const supportedAccents = [
 ];
 
 export default function SettingsPage() {
-  const { settings, updateSettings } = useUserStore();
+  const { settings, updateSettings, username } = useUserStore();
   const { timeBlindnessEnabled, toggleTimeBlindness, startTinyMode, setStartTinyMode } = useAnalyticsStore();
 
   const [coachTone, setCoachTone] = useState(settings.coach_tone || "encouraging");
@@ -58,6 +59,59 @@ export default function SettingsPage() {
   const [voicePitch, setVoicePitch] = useState(settings.voice_pitch ?? 1.0);
   const [voiceAccent, setVoiceAccent] = useState(settings.voice_accent || "auto");
   const [saved, setSaved] = useState(false);
+
+  // Security PIN states
+  const [hasPin, setHasPin] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pinMessage, setPinMessage] = useState("");
+  const [pinError, setPinError] = useState("");
+
+  useEffect(() => {
+    if (username) {
+      api.hasPin(username)
+        .then((res) => setHasPin(res.has_pin))
+        .catch(() => {});
+    }
+  }, [username]);
+
+  const handleSetPin = async () => {
+    if (enteredPin.length !== 4) {
+      setPinError("PIN must be exactly 4 digits");
+      return;
+    }
+    try {
+      const res = await api.setPin(enteredPin);
+      if (res.success) {
+        setHasPin(true);
+        setShowPinSetup(false);
+        setEnteredPin("");
+        setPinMessage("✅ PIN updated successfully!");
+        setPinError("");
+        setTimeout(() => setPinMessage(""), 3000);
+      } else {
+        setPinError(res.message || "Failed to set PIN");
+      }
+    } catch (err: any) {
+      setPinError(err.message || "Error setting PIN");
+    }
+  };
+
+  const handleRemovePin = async () => {
+    try {
+      const res = await api.removePin();
+      if (res.success) {
+        setHasPin(false);
+        setPinMessage("🗑️ PIN removed successfully!");
+        setPinError("");
+        setTimeout(() => setPinMessage(""), 3000);
+      } else {
+        setPinError(res.message || "Failed to remove PIN");
+      }
+    } catch (err: any) {
+      setPinError(err.message || "Error removing PIN");
+    }
+  };
 
   const handleSave = () => {
     updateSettings({
@@ -334,6 +388,170 @@ export default function SettingsPage() {
               <span className="text-xs text-muted">✨ Enabled</span>
             </div>
           </div>
+        </Card>
+      </motion.div>
+
+      {/* Security PIN Settings */}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardTitle>🔒 Security PIN Settings</CardTitle>
+          
+          {showPinSetup ? (
+            <div className="space-y-4 pt-3 mt-4 border-t border-border/40">
+              <p className="text-sm font-medium text-foreground text-center">
+                Enter a 4-Digit Security PIN
+              </p>
+              
+              <div className="flex justify-center gap-3 py-2">
+                {[0, 1, 2, 3].map((index) => (
+                  <div
+                    key={index}
+                    className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+                      enteredPin.length > index
+                        ? "bg-calm-500 border-calm-500 scale-110 shadow-[0_0_8px_rgba(110,231,183,0.5)]"
+                        : "border-border bg-surface"
+                    }`}
+                  />
+                ))}
+              </div>
+              
+              {pinError && (
+                <p className="text-xs text-danger-500 text-center font-medium">
+                  {pinError}
+                </p>
+              )}
+              
+              {/* Keypad */}
+              <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => {
+                      if (enteredPin.length < 4) {
+                        setEnteredPin((prev) => prev + num);
+                        setPinError("");
+                      }
+                    }}
+                    className="w-12 h-12 rounded-full bg-surface border border-border/80 text-foreground font-semibold hover:bg-white/5 active:scale-95 transition-all text-sm mx-auto flex items-center justify-center cursor-pointer"
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnteredPin("");
+                    setPinError("");
+                  }}
+                  className="text-xs text-muted hover:text-foreground font-medium cursor-pointer"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (enteredPin.length < 4) {
+                      setEnteredPin((prev) => prev + "0");
+                      setPinError("");
+                    }
+                  }}
+                  className="w-12 h-12 rounded-full bg-surface border border-border/80 text-foreground font-semibold hover:bg-white/5 active:scale-95 transition-all text-sm mx-auto flex items-center justify-center cursor-pointer"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnteredPin((prev) => prev.slice(0, -1));
+                    setPinError("");
+                  }}
+                  className="text-xs text-muted hover:text-foreground font-medium cursor-pointer"
+                >
+                  Delete
+                </button>
+              </div>
+
+              <div className="flex gap-2 justify-center pt-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowPinSetup(false);
+                    setEnteredPin("");
+                    setPinError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSetPin}
+                  disabled={enteredPin.length !== 4}
+                >
+                  Confirm PIN
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {hasPin ? "🔒 Security PIN Enabled" : "🔓 Security PIN Disabled"}
+                  </p>
+                  <p className="text-xs text-muted mt-1">
+                    {hasPin
+                      ? "You can unlock and log in with your 4-digit PIN on this device."
+                      : "Set a 4-digit PIN to enable quick login without your full password."}
+                  </p>
+                </div>
+              </div>
+
+              {pinMessage && (
+                <p className="text-xs text-calm-400 bg-calm-500/10 rounded-lg p-2 text-center font-medium">
+                  {pinMessage}
+                </p>
+              )}
+              {pinError && (
+                <p className="text-xs text-danger-500 bg-danger-500/10 rounded-lg p-2 text-center font-medium">
+                  {pinError}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                {hasPin ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowPinSetup(true);
+                        setEnteredPin("");
+                        setPinError("");
+                      }}
+                    >
+                      Change PIN
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={handleRemovePin}>
+                      Remove PIN
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setShowPinSetup(true);
+                      setEnteredPin("");
+                      setPinError("");
+                    }}
+                  >
+                    Setup Security PIN
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
       </motion.div>
 

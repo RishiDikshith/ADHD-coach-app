@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useUserStore } from "@/stores/user-store";
 
 const features = [
   { icon: "🤖", title: "7 AI Agents", desc: "Specialized ADHD agents — Productivity Coach, Task Breakdown, Focus Optimization, Mood & Burnout, Habit Builder, Intervention, Accountability" },
@@ -15,6 +18,15 @@ const features = [
 ];
 
 export default function LandingPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useUserStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-[#0a1628] to-background flex flex-col">
       {/* Animated background */}

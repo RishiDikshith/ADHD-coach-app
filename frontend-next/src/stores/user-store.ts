@@ -5,6 +5,7 @@ import { api } from "@/services/api";
 
 interface UserState {
   username: string | null;
+  lastUsername: string | null;
   isAuthenticated: boolean;
   contactInfo: string | null;
   settings: Partial<UserSettings>;
@@ -32,13 +33,14 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       username: null,
+      lastUsername: null,
       isAuthenticated: false,
       contactInfo: null,
       settings: {},
       game: defaultGame,
       role: null,
 
-      login: (username, role) => set({ username, isAuthenticated: true, role: role || "user" }),
+      login: (username, role) => set({ username, lastUsername: username, isAuthenticated: true, role: role || "user" }),
 
       logout: () =>
         set({

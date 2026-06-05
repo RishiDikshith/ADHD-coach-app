@@ -284,6 +284,27 @@ class AuthRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8)
 
+class PinLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    pin: str = Field(..., min_length=4, max_length=4)
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, v):
+        if not v.isdigit() or len(v) != 4:
+            raise ValueError("PIN must be exactly 4 digits")
+        return v
+
+class SetPinRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=4)
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, v):
+        if not v.isdigit() or len(v) != 4:
+            raise ValueError("PIN must be exactly 4 digits")
+        return v
+
     @field_validator("username")
     @classmethod
     def validate_username(cls, v):
@@ -728,7 +749,7 @@ async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     
     # 1. Classify endpoint category and set limits
-    if path in ("/auth/login", "/auth/register"):
+    if path in ("/auth/login", "/auth/login-pin", "/auth/register"):
         max_req = 5
         window = 60
         category = "auth"
@@ -919,6 +940,74 @@ def auth_reset_password(request: ResetPasswordRequest):
     db = _db_manager.db
     db.commit()
     return {"success": True, "message": "Password reset successfully"}
+
+@app.post("/auth/login-pin")
+def auth_login_pin(request: PinLoginRequest, response: Response):
+    sanitized_username = sanitize_username(request.username)
+    if not sanitized_username:
+        return {"success": False, "error": "Invalid username format"}
+
+    if _db_manager:
+        result = auth_handler.login_with_pin(sanitized_username, request.pin)
+        if result.get("success"):
+            _db_manager.update_streak(sanitized_username, "daily")
+
+            # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
+            access_token = result.get("token")
+            refresh_token = result.get("refresh_token")
+
+            if access_token:
+                response.set_cookie(
+                    key="access_token",
+                    value=access_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="strict",
+                    max_age=30 * 60,
+                )
+            if refresh_token:
+                response.set_cookie(
+                    key="refresh_token",
+                    value=refresh_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="strict",
+                    max_age=7 * 24 * 3600,
+                )
+        return result
+    return {"success": False, "error": "Database not initialized"}
+
+@app.get("/auth/has-pin/{username}")
+def auth_has_pin(username: str):
+    sanitized_username = sanitize_username(username)
+    if not sanitized_username:
+        return {"has_pin": False}
+    if _db_manager:
+        user = _db_manager.get_user(sanitized_username)
+        if user and user.security_pin_hash:
+            return {"has_pin": True}
+    return {"has_pin": False}
+
+@app.post("/auth/set-pin")
+def auth_set_pin(request: SetPinRequest, current_user: str = Depends(require_user)):
+    if _db_manager:
+        user = _db_manager.get_user(current_user)
+        if user:
+            from auth.auth_handler import get_password_hash
+            user.security_pin_hash = get_password_hash(request.pin)
+            _db_manager.db.commit()
+            return {"success": True, "message": "Security PIN set successfully"}
+    return {"success": False, "error": "Database not available"}
+
+@app.post("/auth/remove-pin")
+def auth_remove_pin(current_user: str = Depends(require_user)):
+    if _db_manager:
+        user = _db_manager.get_user(current_user)
+        if user:
+            user.security_pin_hash = None
+            _db_manager.db.commit()
+            return {"success": True, "message": "Security PIN removed successfully"}
+    return {"success": False, "error": "Database not available"}
 
 @app.get("/settings/{username}")
 def get_settings(username: str, active_user: Optional[str] = Depends(optional_user)):
