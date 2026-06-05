@@ -284,18 +284,15 @@ class AuthRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8)
 
-class PinLoginRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    pin: str = Field(..., min_length=4, max_length=4)
-
-    @field_validator("pin")
+    @field_validator("username")
     @classmethod
-    def validate_pin(cls, v):
-        if not v.isdigit() or len(v) != 4:
-            raise ValueError("PIN must be exactly 4 digits")
+    def validate_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
         return v
 
-class SetPinRequest(BaseModel):
+class PinLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
     pin: str = Field(..., min_length=4, max_length=4)
 
     @field_validator("pin")
@@ -310,6 +307,16 @@ class SetPinRequest(BaseModel):
     def validate_username(cls, v):
         if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
             raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+        return v
+
+class SetPinRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=4)
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, v):
+        if not v.isdigit() or len(v) != 4:
+            raise ValueError("PIN must be exactly 4 digits")
         return v
 
 class RegisterRequest(BaseModel):
