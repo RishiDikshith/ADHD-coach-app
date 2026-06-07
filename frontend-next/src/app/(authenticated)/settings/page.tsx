@@ -60,18 +60,33 @@ export default function SettingsPage() {
   const [voiceAccent, setVoiceAccent] = useState(settings.voice_accent || "auto");
   const [saved, setSaved] = useState(false);
 
-  // Security PIN states
+  // Security PIN and Trusted Devices states
   const [hasPin, setHasPin] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinMessage, setPinMessage] = useState("");
   const [pinError, setPinError] = useState("");
+  const [devices, setDevices] = useState<any[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+
+  const fetchDevices = async () => {
+    try {
+      setLoadingDevices(true);
+      const res = await api.getDevices();
+      setDevices(res);
+    } catch (err) {
+      console.error("Failed to load trusted devices:", err);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
 
   useEffect(() => {
     if (username) {
       api.hasPin(username)
         .then((res) => setHasPin(res.has_pin))
         .catch(() => {});
+      fetchDevices();
     }
   }, [username]);
 
@@ -81,13 +96,17 @@ export default function SettingsPage() {
       return;
     }
     try {
-      const res = await api.setPin(enteredPin);
+      const devId = useUserStore.getState().getDeviceId();
+      const devName = typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
+      
+      const res = await api.setPin(enteredPin, devId, devName);
       if (res.success) {
         setHasPin(true);
         setShowPinSetup(false);
         setEnteredPin("");
         setPinMessage("✅ PIN updated successfully!");
         setPinError("");
+        fetchDevices();
         setTimeout(() => setPinMessage(""), 3000);
       } else {
         setPinError(res.message || "Failed to set PIN");
@@ -104,12 +123,34 @@ export default function SettingsPage() {
         setHasPin(false);
         setPinMessage("🗑️ PIN removed successfully!");
         setPinError("");
+        fetchDevices();
         setTimeout(() => setPinMessage(""), 3000);
       } else {
         setPinError(res.message || "Failed to remove PIN");
       }
     } catch (err: any) {
       setPinError(err.message || "Error removing PIN");
+    }
+  };
+
+  const handleRemoveDevice = async (deviceIdToRemove: string) => {
+    try {
+      const res = await api.removeDevice(deviceIdToRemove);
+      if (res.success) {
+        setPinMessage("🗑️ Device de-authorized successfully!");
+        fetchDevices();
+        
+        // If they de-authorized their current device, check if they need to clear PIN states locally
+        const currentDevId = useUserStore.getState().getDeviceId();
+        if (deviceIdToRemove === currentDevId) {
+          setHasPin(false);
+        }
+        setTimeout(() => setPinMessage(""), 3000);
+      } else {
+        setPinError(res.message || "Failed to remove device");
+      }
+    } catch (err: any) {
+      setPinError(err.message || "Error removing device");
     }
   };
 
@@ -550,6 +591,35 @@ export default function SettingsPage() {
                   </Button>
                 )}
               </div>
+
+              {/* Trusted Devices List */}
+              {devices.length > 0 && (
+                <div className="pt-4 mt-4 border-t border-border/40 w-full space-y-3">
+                  <h4 className="text-xs font-semibold text-foreground">📱 Trusted Devices</h4>
+                  <div className="space-y-2">
+                    {devices.map((dev) => (
+                      <div
+                        key={dev.device_id}
+                        className="flex justify-between items-center p-3 rounded-xl border border-border/60 bg-surface-secondary/40 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-semibold text-foreground text-xs">{dev.device_name}</p>
+                          <p className="text-[10px] text-muted">
+                            Last Used: {new Date(dev.last_used).toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDevice(dev.device_id)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-danger-500 border border-danger-500/25 hover:bg-danger-500/5 transition-all cursor-pointer"
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </Card>

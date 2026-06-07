@@ -11,6 +11,8 @@ interface UserState {
   settings: Partial<UserSettings>;
   game: GameState;
   role: string | null;
+  deviceId: string | null;
+  getDeviceId: () => string;
   login: (username: string, role?: string) => void;
   logout: () => void;
   updateSettings: (s: Partial<UserSettings>) => void;
@@ -29,6 +31,14 @@ const defaultGame: GameState = {
   tasks_completed: 0, progress: [],
 };
 
+const generateUUID = () => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
@@ -39,6 +49,24 @@ export const useUserStore = create<UserState>()(
       settings: {},
       game: defaultGame,
       role: null,
+      deviceId: null,
+
+      getDeviceId: () => {
+        let id = get().deviceId;
+        if (!id) {
+          if (typeof window !== "undefined") {
+            id = localStorage.getItem("adhd_device_id");
+            if (!id) {
+              id = generateUUID();
+              localStorage.setItem("adhd_device_id", id);
+            }
+          } else {
+            id = generateUUID();
+          }
+          set({ deviceId: id });
+        }
+        return id;
+      },
 
       login: (username, role) => set({ username, lastUsername: username, isAuthenticated: true, role: role || "user" }),
 

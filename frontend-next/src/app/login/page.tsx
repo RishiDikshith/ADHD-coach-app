@@ -29,7 +29,7 @@ const shakeVariants = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login: loginUser, isAuthenticated, lastUsername } = useUserStore();
+  const { login: loginUser, isAuthenticated, lastUsername, getDeviceId } = useUserStore();
   
   const [isCheckingPin, setIsCheckingPin] = useState(true);
   const [hasPin, setHasPin] = useState(false);
@@ -39,6 +39,11 @@ export default function LoginPage() {
   const [isShaking, setIsShaking] = useState(false);
   const [pinSubmitting, setPinSubmitting] = useState(false);
 
+  // Admin login states
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminUsernameError, setAdminUsernameError] = useState("");
+
   const {
     register,
     handleSubmit,
@@ -46,32 +51,38 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
 
-  // Auto-login & PIN presence check
+  // Auto-login & PIN presence check via Trusted Device Recognition
   useEffect(() => {
     if (isAuthenticated) {
       router.push("/dashboard");
       return;
     }
 
-    if (lastUsername) {
-      api.hasPin(lastUsername)
-        .then((res) => {
+    const devId = getDeviceId();
+    
+    // Check if the current device is already trusted
+    api.checkTrustedDevice(devId)
+      .then((res) => {
+        if (res.is_trusted && res.username) {
+          setHasPin(res.has_pin || false);
           if (res.has_pin) {
-            setHasPin(true);
             setUsePin(true);
+            // Pre-populate last username in store for quick login
+            useUserStore.setState({ lastUsername: res.username });
           }
-        })
-        .catch(() => {})
-        .finally(() => setIsCheckingPin(false));
-    } else {
-      setIsCheckingPin(false);
-    }
-  }, [isAuthenticated, lastUsername, router]);
+        }
+      })
+      .catch((err) => console.error("Trusted device validation failed:", err))
+      .finally(() => setIsCheckingPin(false));
+  }, [isAuthenticated, getDeviceId, router]);
 
   // Form submit (username/password)
   const onSubmit = async (data: LoginForm) => {
     try {
-      const res = await api.login(data.username, data.password);
+      const devId = getDeviceId();
+      const devName = typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
+      
+      const res = await api.login(data.username, data.password, devId, devName);
       if (res.success) {
         loginUser(data.username, res.role);
         router.push("/dashboard");
@@ -93,11 +104,26 @@ export default function LoginPage() {
     setPinError("");
 
     if (newPin.length === 4) {
+      if (isAdminLogin && !adminUsername.trim()) {
+        setAdminUsernameError("Admin username is required");
+        setEnteredPin("");
+        return;
+      }
+      setAdminUsernameError("");
       setPinSubmitting(true);
+      
       try {
-        const res = await api.loginPin(lastUsername!, newPin);
+        const devId = getDeviceId();
+        let res;
+        
+        if (isAdminLogin) {
+          res = await api.adminPinLogin(adminUsername.trim(), newPin);
+        } else {
+          res = await api.loginPin(lastUsername!, newPin, devId);
+        }
+
         if (res.success) {
-          loginUser(lastUsername!, res.role);
+          loginUser(isAdminLogin ? adminUsername.trim() : lastUsername!, res.role);
           router.push("/dashboard");
         } else {
           setPinError(res.error || "Incorrect PIN");
@@ -147,9 +173,11 @@ export default function LoginPage() {
             🧠
           </motion.div>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome <span className="gradient-text">Back</span>
+            {isAdminLogin ? "Admin Portal" : "Welcome Back"}
           </h1>
-          <p className="text-sm text-muted mt-1">Sign in to your ADHD Coach</p>
+          <p className="text-sm text-muted mt-1">
+            {isAdminLogin ? "Log in with administrative PIN" : "Sign in to your ADHD Coach"}
+          </p>
         </div>
 
         <Card className="p-6 overflow-hidden">
@@ -158,16 +186,35 @@ export default function LoginPage() {
               <div className="w-10 h-10 border-4 border-calm-500/30 border-t-calm-500 rounded-full animate-spin" />
               <p className="text-xs text-muted">Checking security session...</p>
             </div>
-          ) : usePin && lastUsername ? (
+          ) : usePin && (lastUsername || isAdminLogin) ? (
             /* PIN login interface */
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-6 flex flex-col items-center"
             >
-              <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">Unlock for {lastUsername}</p>
-                <p className="text-xs text-muted mt-1">Enter your 4-digit security PIN</p>
+              <div className="text-center w-full">
+                {isAdminLogin ? (
+                  <div className="mb-4 text-left w-full px-2">
+                    <label className="block text-xs font-semibold text-muted mb-1.5">Admin Username</label>
+                    <Input
+                      id="adminUsername"
+                      value={adminUsername}
+                      placeholder="Enter admin username"
+                      onChange={(e) => {
+                        setAdminUsername(e.target.value);
+                        setAdminUsernameError("");
+                      }}
+                      error={adminUsernameError}
+                      className="text-sm py-1.5"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">Unlock for {lastUsername}</p>
+                    <p className="text-xs text-muted mt-1">Enter your 4-digit security PIN</p>
+                  </>
+                )}
               </div>
 
               {/* PIN circles indicator */}
@@ -235,29 +282,44 @@ export default function LoginPage() {
 
               {/* Option switch links */}
               <div className="flex flex-col gap-2.5 items-center w-full pt-4 border-t border-border/40 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUsePin(false);
-                    setPinError("");
-                    setEnteredPin("");
-                  }}
-                  className="text-calm-400 hover:text-calm-300 font-medium transition-colors cursor-pointer"
-                >
-                  Log in with password instead
-                </button>
+                {!isAdminLogin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUsePin(false);
+                      setPinError("");
+                      setEnteredPin("");
+                    }}
+                    className="text-calm-400 hover:text-calm-300 font-medium transition-colors cursor-pointer"
+                  >
+                    Log in with password instead
+                  </button>
+                )}
+                
                 <button
                   type="button"
                   onClick={() => {
                     setUsePin(false);
                     setHasPin(false);
+                    setIsAdminLogin(!isAdminLogin);
                     setPinError("");
                     setEnteredPin("");
-                    // Allow switching user by resetting store username (only temporarily on this page state)
+                    setAdminUsername("");
+                    if (isAdminLogin) {
+                      // Switch back to normal pin if we had one
+                      api.checkTrustedDevice(getDeviceId()).then(res => {
+                        if (res.is_trusted && res.username && res.has_pin) {
+                          setHasPin(true);
+                          setUsePin(true);
+                        }
+                      });
+                    } else {
+                      setUsePin(true); // admin requires pin keypad
+                    }
                   }}
-                  className="text-muted hover:text-foreground transition-colors cursor-pointer"
+                  className="text-muted hover:text-foreground transition-colors cursor-pointer font-medium"
                 >
-                  Sign in as a different user
+                  {isAdminLogin ? "← Switch to user login" : "🔑 Are you an admin?"}
                 </button>
               </div>
             </motion.div>
@@ -313,6 +375,21 @@ export default function LoginPage() {
               <Button type="submit" loading={isSubmitting} className="w-full">
                 Sign In
               </Button>
+              
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminLogin(true);
+                    setUsePin(true);
+                    setEnteredPin("");
+                    setPinError("");
+                  }}
+                  className="text-xs text-muted hover:text-foreground transition-colors cursor-pointer font-medium"
+                >
+                  🔑 Are you an admin?
+                </button>
+              </div>
             </form>
           )}
         </Card>

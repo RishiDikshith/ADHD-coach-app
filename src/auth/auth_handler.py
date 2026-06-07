@@ -302,10 +302,11 @@ class AuthHandler:
         db = self.db or DatabaseManager()
         user = db.get_user(sanitized_username)
 
+        is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
         if not user or not verify_password(password, user.password_hash):
             audit_log(
                 username=sanitized_username,
-                action="user_login",
+                action="admin_login" if is_admin_attempt else "user_login",
                 status="FAILED",
                 details={"reason": "invalid_credentials"},
                 severity="WARN"
@@ -335,11 +336,12 @@ class AuthHandler:
                 exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
                 db.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
 
+        user_role = getattr(user, "role", "user") or "user"
         audit_log(
             username=sanitized_username,
-            action="user_login",
+            action="admin_login" if user_role == "admin" else "user_login",
             status="SUCCESS",
-            details={"role": getattr(user, "role", "user")}
+            details={"role": user_role}
         )
 
         return {
@@ -366,10 +368,11 @@ class AuthHandler:
         db = self.db or DatabaseManager()
         user = db.get_user(sanitized_username)
 
+        is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
         if not user or not user.security_pin_hash or not verify_password(pin, user.security_pin_hash):
             audit_log(
                 username=sanitized_username,
-                action="user_pin_login",
+                action="admin_pin_login" if is_admin_attempt else "user_pin_login",
                 status="FAILED",
                 details={"reason": "invalid_pin"},
                 severity="WARN"
@@ -391,11 +394,12 @@ class AuthHandler:
                 exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
                 db.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
 
+        user_role = getattr(user, "role", "user") or "user"
         audit_log(
             username=sanitized_username,
-            action="user_pin_login",
+            action="admin_pin_login" if user_role == "admin" else "user_pin_login",
             status="SUCCESS",
-            details={"role": getattr(user, "role", "user")}
+            details={"role": user_role}
         )
 
         return {
@@ -547,10 +551,41 @@ class RoleChecker:
             )
             
         user_role = getattr(user, "role", "user") or "user"
-        if user_role not in self.allowed_roles:
+        is_user_admin = getattr(user, "is_admin", False) or user_role == "admin"
+        effective_role = "admin" if is_user_admin else user_role
+        
+        if effective_role not in self.allowed_roles:
+            from src.utils.audit_logger import audit_log
+            audit_log(
+                username=username,
+                action="permission_denied",
+                status="FAILED",
+                ip_address=request.client.host if request.client else "unknown",
+                details={
+                    "allowed_roles": self.allowed_roles,
+                    "user_role": user_role,
+                    "path": request.url.path
+                },
+                severity="WARN"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied. Required role: {self.allowed_roles}. Actual role: {user_role}"
+            )
+        
+        # Log successful admin permission check
+        if "admin" in self.allowed_roles and effective_role == "admin":
+            from src.utils.audit_logger import audit_log
+            audit_log(
+                username=username,
+                action="admin_permission_granted",
+                status="SUCCESS",
+                ip_address=request.client.host if request.client else "unknown",
+                details={
+                    "path": request.url.path,
+                    "method": request.method
+                },
+                severity="INFO"
             )
             
         return username

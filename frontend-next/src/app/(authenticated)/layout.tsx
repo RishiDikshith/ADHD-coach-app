@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/shared/sidebar";
 import { BottomNav } from "@/components/shared/bottom-nav";
+import { PinSetupModal } from "@/components/shared/PinSetupModal";
 
 export default function AuthenticatedLayout({
   children,
@@ -10,6 +11,9 @@ export default function AuthenticatedLayout({
 }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Global quick PIN setup prompt */}
+      <PinSetupModal />
+
       {/* Desktop sidebar - hidden on mobile */}
       <div className="hidden md:block h-screen shrink-0 overflow-hidden">
         <Sidebar />

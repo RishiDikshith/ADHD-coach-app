@@ -83,6 +83,20 @@ def init_db():
                     conn.commit()
             except Exception as e:
                 pass
+        if "is_admin" not in columns:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE"))
+                    conn.commit()
+            except Exception as e:
+                pass
+        if "has_pin_enabled" not in columns:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN has_pin_enabled BOOLEAN DEFAULT FALSE"))
+                    conn.commit()
+            except Exception as e:
+                pass
 
 
 # ==================== Refresh Tokens for RTR ====================
@@ -100,6 +114,25 @@ class RefreshToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+# ==================== Trusted Devices ====================
+
+class TrustedDevice(Base):
+    __tablename__ = "trusted_devices"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_id = Column(String(255), nullable=False, index=True)
+    device_name = Column(String(255), nullable=False)
+    pin_hash = Column(String(255), nullable=True)
+    failed_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_used = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="trusted_devices")
+
+
 # ==================== User & Auth ====================
 
 class User(Base):
@@ -115,8 +148,11 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     settings = Column(JSON, default=dict)
     role = Column(String(50), default="user", server_default="user")
+    is_admin = Column(Boolean, default=False, server_default="false")
+    has_pin_enabled = Column(Boolean, default=False, server_default="false")
 
     # Relationships
+    trusted_devices = relationship("TrustedDevice", back_populates="user", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
     mood_entries = relationship("MoodEntry", back_populates="user", cascade="all, delete-orphan")
     interventions = relationship("InterventionCompletion", back_populates="user", cascade="all, delete-orphan")

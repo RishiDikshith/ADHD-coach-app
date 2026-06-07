@@ -68,12 +68,140 @@ EAGER_TASK_RESULTS = {}
 # Logging is now configured at the application entry point (frontend/app.py)
 # to ensure it's set up correctly for the cloud environment.
 
+def bootstrap_admin(db_manager):
+    """
+    Bootstrap the default administrator account from environment variables.
+    Performs security audits and password validation on startup.
+    """
+    import os
+    import re
+    import logging
+    from auth.auth_handler import get_password_hash, sanitize_username
+    from utils.audit_logger import audit_log
+
+    admin_user = os.getenv("ADMIN_USERNAME")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
+    
+    env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+
+    if not admin_user or not admin_pass:
+        msg = "ADMIN_USERNAME or ADMIN_PASSWORD not configured in environment variables."
+        if is_prod:
+            logging.critical(f"FATAL: Production admin bootstrapping failed: {msg}")
+            audit_log(
+                username="system",
+                action="admin_bootstrap",
+                status="FAILED",
+                details={"reason": "missing_env_vars", "is_prod": True},
+                severity="CRITICAL"
+            )
+            raise RuntimeError(f"Production admin bootstrapping failed: {msg}")
+        else:
+            logging.warning(f"WARNING: Dev admin bootstrapping skipped: {msg}")
+            return
+
+    # Validate password complexity in production
+    # Minimum 12 characters, must contain uppercase, lowercase, numbers, and special characters
+    if is_prod:
+        is_weak = False
+        reasons = []
+        if len(admin_pass) < 12:
+            is_weak = True
+            reasons.append("Password must be at least 12 characters long")
+        if not re.search(r"[A-Z]", admin_pass):
+            is_weak = True
+            reasons.append("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", admin_pass):
+            is_weak = True
+            reasons.append("Password must contain at least one lowercase letter")
+        if not re.search(r"[0-9]", admin_pass):
+            is_weak = True
+            reasons.append("Password must contain at least one digit")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", admin_pass):
+            is_weak = True
+            reasons.append("Password must contain at least one special character")
+
+        if is_weak:
+            msg = f"Production ADMIN_PASSWORD fails complexity requirements: {'; '.join(reasons)}"
+            logging.critical(f"FATAL: {msg}")
+            audit_log(
+                username="system",
+                action="admin_bootstrap",
+                status="FAILED",
+                details={"reason": "weak_password", "reasons": reasons},
+                severity="CRITICAL"
+            )
+            raise RuntimeError(msg)
+
+    # Clean / Sanitize username
+    sanitized_admin = sanitize_username(admin_user)
+    if not sanitized_admin:
+        msg = f"ADMIN_USERNAME '{admin_user}' is in an invalid format."
+        if is_prod:
+            logging.critical(f"FATAL: {msg}")
+            raise RuntimeError(msg)
+        else:
+            logging.warning(f"WARNING: {msg}")
+            return
+
+    # Check database status
+    if not db_manager:
+        logging.warning("Database manager not initialized. Skipping admin bootstrap.")
+        return
+
+    # Check if admin user exists
+    existing_user = db_manager.get_user(sanitized_admin)
+    if existing_user:
+        # Check if they are already admin, promote if they aren't
+        if getattr(existing_user, "role", "user") != "admin":
+            existing_user.role = "admin"
+            db_manager.db.commit()
+            logging.info(f"Promoted existing user '{sanitized_admin}' to admin role.")
+            audit_log(
+                username=sanitized_admin,
+                action="admin_bootstrap_promotion",
+                status="SUCCESS",
+                details={"message": "Existing user promoted to admin role"}
+            )
+        else:
+            logging.info(f"Admin user '{sanitized_admin}' already exists. Skipping initialization.")
+        return
+
+    # Create administrative user
+    hashed_pass = get_password_hash(admin_pass)
+    from database.models import User
+    try:
+        new_admin = User(
+            username=sanitized_admin,
+            password_hash=hashed_pass,
+            role="admin",
+            settings={
+                "theme": "dark", "language": "en",
+                "notifications_enabled": True, "coach_tone": "encouraging",
+            }
+        )
+        db_manager.db.add(new_admin)
+        db_manager.db.commit()
+        logging.info(f"✅ Admin user '{sanitized_admin}' bootstrapped successfully.")
+        audit_log(
+            username=sanitized_admin,
+            action="admin_bootstrap_creation",
+            status="SUCCESS",
+            details={"message": "Admin user created successfully"}
+        )
+    except Exception as e:
+        logging.error(f"Error bootstrapping admin user: {e}")
+        db_manager.db.rollback()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and other resources on startup."""
     # Validate environment variables
     env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-    is_prod = env in ("production", "prod", "staging")
+    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+    
     missing_vars = []
     for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET"]:
         if not os.getenv(var):
@@ -91,24 +219,42 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         _db_manager = DatabaseManager()
+    except Exception as e:
+        logging.error(f"Database startup failed: {e}")
+        if is_prod:
+            raise RuntimeError(f"Database startup failed: {e}")
+        _db_manager = None
+
+    if _db_manager:
+        try:
+            bootstrap_admin(_db_manager)
+        except Exception as e:
+            if is_prod:
+                logging.critical(f"FATAL: Admin bootstrap failed: {e}")
+                raise
+            else:
+                logging.warning(f"Admin bootstrap skipped: {e}")
 
         # Initialize dependent services AFTER db_manager is ready
-        auth_handler.db = _db_manager
-        _state_detector = ADHDStateDetector(_db_manager)
-        _adaptive_coach = AdaptiveCoach(_db_manager, _state_detector)
-        _focus_engine = FocusEngine(_db_manager)
-        _gamification = GamificationEngine(_db_manager)
-        _rag_engine = RAGEngine(None, _db_manager)
-
-        logging.info("✅ Database and all services initialized successfully")
-    except Exception as e:
-        logging.warning(f"Database initialization skipped: {e}")
-        _db_manager = None
+        try:
+            auth_handler.db = _db_manager
+            _state_detector = ADHDStateDetector(_db_manager)
+            _adaptive_coach = AdaptiveCoach(_db_manager, _state_detector)
+            _focus_engine = FocusEngine(_db_manager)
+            _gamification = GamificationEngine(_db_manager)
+            _rag_engine = RAGEngine(None, _db_manager)
+            logging.info("✅ Database and all services initialized successfully")
+        except Exception as e:
+            logging.error(f"Failed to initialize services: {e}")
+            if is_prod:
+                raise
+    else:
         _state_detector = ADHDStateDetector(None)
         _adaptive_coach = AdaptiveCoach(None, _state_detector)
         _focus_engine = FocusEngine(None)
         _gamification = GamificationEngine(None)
         _rag_engine = RAGEngine(None, None)
+        
     yield
     # Cleanup
     if _db_manager:
@@ -138,6 +284,24 @@ def healthz(db = Depends(get_db)):
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {e}")
+
+@app.get("/admin/health")
+def get_admin_health(current_admin: str = Depends(require_admin)):
+    """Protected health check for admins."""
+    from datetime import datetime, timezone
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=current_admin,
+        action="admin_health_check",
+        status="SUCCESS",
+        details={"message": "Admin health check accessed successfully"}
+    )
+    return {
+        "status": "healthy",
+        "role": "admin",
+        "username": current_admin,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # Register real-time WebSocket routes for co-working, accountability, and low-latency chat
 from realtime.websocket_handlers import router as websocket_router
@@ -283,6 +447,8 @@ import re
 class AuthRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8)
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
 
     @field_validator("username")
     @classmethod
@@ -311,12 +477,47 @@ class PinLoginRequest(BaseModel):
 
 class SetPinRequest(BaseModel):
     pin: str = Field(..., min_length=4, max_length=4)
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
 
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
         if not v.isdigit() or len(v) != 4:
             raise ValueError("PIN must be exactly 4 digits")
+        return v
+
+class RemoveDeviceRequest(BaseModel):
+    device_id: str = Field(...)
+
+class TrustedDevicePinLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    device_id: str = Field(...)
+    pin: str = Field(..., min_length=4, max_length=4)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+        return v
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, v):
+        if not v.isdigit() or len(v) != 4:
+            raise ValueError("PIN must be exactly 4 digits")
+        return v
+
+class AdminPinLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    pin: str = Field(..., min_length=4)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
         return v
 
 class RegisterRequest(BaseModel):
@@ -853,6 +1054,23 @@ def auth_login(request: AuthRequest, response: Response):
         if result.get("success"):
             _db_manager.update_streak(sanitized_username, "daily")
             
+            # Register trusted device if device_id is provided
+            if request.device_id:
+                user = _db_manager.get_user(sanitized_username)
+                if user:
+                    _db_manager.save_trusted_device(
+                        user_id=user.id,
+                        device_id=request.device_id,
+                        device_name=request.device_name or "Unknown Device"
+                    )
+                    from utils.audit_logger import audit_log
+                    audit_log(
+                        username=sanitized_username,
+                        action="trusted_device_registered",
+                        status="SUCCESS",
+                        details={"device_id": request.device_id, "device_name": request.device_name}
+                    )
+            
             # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
             access_token = result.get("token")
             refresh_token = result.get("refresh_token")
@@ -1001,7 +1219,28 @@ def auth_set_pin(request: SetPinRequest, current_user: str = Depends(require_use
         user = _db_manager.get_user(current_user)
         if user:
             from auth.auth_handler import get_password_hash
-            user.security_pin_hash = get_password_hash(request.pin)
+            hashed_pin = get_password_hash(request.pin)
+            
+            # User model update
+            user.security_pin_hash = hashed_pin
+            user.has_pin_enabled = True
+            
+            # Device model update if device_id is provided
+            if request.device_id:
+                _db_manager.save_trusted_device(
+                    user_id=user.id,
+                    device_id=request.device_id,
+                    device_name=request.device_name or "Unknown Device",
+                    pin_hash=hashed_pin
+                )
+                from utils.audit_logger import audit_log
+                audit_log(
+                    username=current_user,
+                    action="trusted_device_pin_set",
+                    status="SUCCESS",
+                    details={"device_id": request.device_id}
+                )
+            
             _db_manager.db.commit()
             return {"success": True, "message": "Security PIN set successfully"}
     return {"success": False, "error": "Database not available"}
@@ -1012,9 +1251,282 @@ def auth_remove_pin(current_user: str = Depends(require_user)):
         user = _db_manager.get_user(current_user)
         if user:
             user.security_pin_hash = None
+            user.has_pin_enabled = False
             _db_manager.db.commit()
             return {"success": True, "message": "Security PIN removed successfully"}
     return {"success": False, "error": "Database not available"}
+
+@app.post("/auth/pin-login")
+def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
+    from datetime import datetime, timezone, timedelta
+    sanitized_username = sanitize_username(request.username)
+    if not sanitized_username:
+        return {"success": False, "error": "Invalid username format"}
+
+    if not _db_manager:
+        return {"success": False, "error": "Database not initialized"}
+
+    user = _db_manager.get_user(sanitized_username)
+    if not user:
+        return {"success": False, "error": "Invalid username or PIN"}
+
+    device = _db_manager.get_trusted_device(user.id, request.device_id)
+    if not device or not device.is_active:
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="trusted_device_pin_login",
+            status="FAILED",
+            details={"reason": "device_not_trusted", "device_id": request.device_id},
+            severity="WARN"
+        )
+        return {"success": False, "error": "Device not trusted"}
+
+    if device.locked_until and device.locked_until > datetime.utcnow():
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="trusted_device_pin_login",
+            status="LOCKED",
+            details={"device_id": request.device_id},
+            severity="WARN"
+        )
+        remaining = int((device.locked_until - datetime.utcnow()).total_seconds())
+        return {
+            "success": False,
+            "error": f"Device temporarily locked. Try again in {remaining // 60 + 1} minutes."
+        }
+
+    pin_hash = device.pin_hash or user.security_pin_hash
+    from auth.auth_handler import verify_password
+    if not pin_hash or not verify_password(request.pin, pin_hash):
+        device.failed_attempts += 1
+        if device.failed_attempts >= 5:
+            device.locked_until = datetime.utcnow() + timedelta(minutes=10)
+            msg = "Incorrect PIN. Device temporarily locked due to too many failed attempts."
+        else:
+            msg = f"Incorrect PIN. {5 - device.failed_attempts} attempts remaining."
+
+        _db_manager.db.commit()
+
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="trusted_device_pin_login",
+            status="FAILED",
+            details={"reason": "incorrect_pin", "device_id": request.device_id, "failed_attempts": device.failed_attempts},
+            severity="WARN"
+        )
+        return {"success": False, "error": msg}
+
+    device.failed_attempts = 0
+    device.locked_until = None
+    device.last_used = datetime.now(timezone.utc)
+    _db_manager.update_last_login(sanitized_username)
+    _db_manager.update_streak(sanitized_username, "daily")
+    _db_manager.db.commit()
+
+    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+    access_token = create_access_token({"sub": sanitized_username})
+    refresh_token = create_refresh_token({"sub": sanitized_username})
+
+    payload = verify_token(refresh_token)
+    if payload:
+        fid = payload.get("family_id")
+        exp_ts = payload.get("exp")
+        if fid and exp_ts:
+            exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
+            _db_manager.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=30 * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+    )
+
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=sanitized_username,
+        action="trusted_device_pin_login",
+        status="SUCCESS",
+        details={"device_id": request.device_id, "role": getattr(user, "role", "user")}
+    )
+
+    return {
+        "success": True,
+        "message": "Login successful",
+        "token": access_token,
+        "refresh_token": refresh_token,
+        "username": sanitized_username,
+        "role": getattr(user, "role", "user"),
+    }
+
+@app.post("/auth/admin-pin-login")
+def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
+    sanitized_username = sanitize_username(request.username)
+    if not sanitized_username:
+        return {"success": False, "error": "Invalid username format"}
+
+    admin_pin = os.getenv("ADMIN_PIN")
+    if not admin_pin:
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="admin_pin_login",
+            status="FAILED",
+            details={"reason": "admin_pin_not_configured"},
+            severity="CRITICAL"
+        )
+        return {"success": False, "error": "Admin login is not configured on the server"}
+
+    if not _db_manager:
+        return {"success": False, "error": "Database not initialized"}
+
+    user = _db_manager.get_user(sanitized_username)
+    if not user:
+        return {"success": False, "error": "Invalid username or admin PIN"}
+
+    is_user_admin = getattr(user, "is_admin", False) or getattr(user, "role", "user") == "admin"
+    if not is_user_admin:
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="admin_pin_login",
+            status="FAILED",
+            details={"reason": "not_an_admin"},
+            severity="WARN"
+        )
+        return {"success": False, "error": "Access denied. Not an admin."}
+
+    if request.pin != admin_pin:
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=sanitized_username,
+            action="admin_pin_login",
+            status="FAILED",
+            details={"reason": "incorrect_pin"},
+            severity="WARN"
+        )
+        return {"success": False, "error": "Invalid username or admin PIN"}
+
+    from datetime import datetime, timezone
+    _db_manager.update_last_login(sanitized_username)
+    _db_manager.update_streak(sanitized_username, "daily")
+
+    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+    access_token = create_access_token({"sub": sanitized_username})
+    refresh_token = create_refresh_token({"sub": sanitized_username})
+
+    payload = verify_token(refresh_token)
+    if payload:
+        fid = payload.get("family_id")
+        exp_ts = payload.get("exp")
+        if fid and exp_ts:
+            exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
+            _db_manager.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=30 * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+    )
+
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=sanitized_username,
+        action="admin_pin_login",
+        status="SUCCESS",
+        details={"message": "Admin logged in successfully with PIN"}
+    )
+
+    return {
+        "success": True,
+        "message": "Admin login successful",
+        "token": access_token,
+        "refresh_token": refresh_token,
+        "username": sanitized_username,
+        "role": "admin",
+    }
+
+@app.get("/auth/trusted-device")
+def auth_get_trusted_device(device_id: str):
+    if not _db_manager:
+        return {"is_trusted": False}
+    
+    device = _db_manager.get_trusted_device_by_id_only(device_id)
+    if device and device.is_active:
+        user = _db_manager.get_user_by_id(device.user_id)
+        if user:
+            return {
+                "is_trusted": True,
+                "username": user.username,
+                "device_name": device.device_name,
+                "has_pin": device.pin_hash is not None or user.security_pin_hash is not None
+            }
+    return {"is_trusted": False}
+
+@app.post("/auth/remove-device")
+def auth_remove_device(request: RemoveDeviceRequest, current_user: str = Depends(require_user)):
+    if not _db_manager:
+        return {"success": False, "error": "Database not available"}
+
+    user = _db_manager.get_user(current_user)
+    if not user:
+        return {"success": False, "error": "User not found"}
+
+    device = _db_manager.get_trusted_device(user.id, request.device_id)
+    if device:
+        device.is_active = False
+        _db_manager.db.commit()
+
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=current_user,
+            action="trusted_device_removed",
+            status="SUCCESS",
+            details={"device_id": request.device_id}
+        )
+        return {"success": True, "message": "Device removed successfully"}
+    
+    return {"success": False, "error": "Device not found"}
+
+@app.get("/auth/devices")
+def auth_get_devices(current_user: str = Depends(require_user)):
+    if not _db_manager:
+        return []
+    
+    devices = _db_manager.get_active_trusted_devices(current_user)
+    return [
+        {
+            "device_id": d.device_id,
+            "device_name": d.device_name,
+            "created_at": d.created_at.isoformat(),
+            "last_used": d.last_used.isoformat()
+        }
+        for d in devices
+    ]
 
 @app.get("/settings/{username}")
 def get_settings(username: str, active_user: Optional[str] = Depends(optional_user)):

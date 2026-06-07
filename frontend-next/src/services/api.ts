@@ -155,13 +155,13 @@ export const api = {
     }),
 
   // ==================== Auth ====================
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, deviceId?: string, deviceName?: string) =>
     fetchApi<AuthResponse>("/auth/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, device_id: deviceId, device_name: deviceName }),
     }),
 
   register: (username: string, password: string) =>
@@ -179,25 +179,47 @@ export const api = {
       body: JSON.stringify({ username, email, new_password: newPassword }),
     }),
 
-  loginPin: (username: string, pin: string) =>
-    fetchApi<AuthResponse>("/auth/login-pin", {
+  loginPin: (username: string, pin: string, deviceId: string) =>
+    fetchApi<AuthResponse>("/auth/pin-login", {
+      method: "POST",
+      body: JSON.stringify({ username, pin, device_id: deviceId }),
+    }),
+
+  adminPinLogin: (username: string, pin: string) =>
+    fetchApi<AuthResponse>("/auth/admin-pin-login", {
       method: "POST",
       body: JSON.stringify({ username, pin }),
     }),
 
+  checkTrustedDevice: (deviceId: string) =>
+    fetchApi<{ is_trusted: boolean; username?: string; device_name?: string; has_pin?: boolean }>(
+      `/auth/trusted-device?device_id=${encodeURIComponent(deviceId)}`
+    ),
+
   hasPin: (username: string) =>
     fetchApi<{ has_pin: boolean }>(`/auth/has-pin/${encodeURIComponent(username)}`),
 
-  setPin: (pin: string) =>
+  setPin: (pin: string, deviceId?: string, deviceName?: string) =>
     fetchApi<{ success: boolean; message?: string }>("/auth/set-pin", {
       method: "POST",
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ pin, device_id: deviceId, device_name: deviceName }),
     }),
 
   removePin: () =>
     fetchApi<{ success: boolean; message?: string }>("/auth/remove-pin", {
       method: "POST",
     }),
+
+  removeDevice: (deviceId: string) =>
+    fetchApi<{ success: boolean; message?: string }>("/auth/remove-device", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId }),
+    }),
+
+  getDevices: () =>
+    fetchApi<Array<{ device_id: string; device_name: string; created_at: string; last_used: string }>>(
+      "/auth/devices"
+    ),
 
   // ==================== Settings ====================
   getSettings: (username: string) =>

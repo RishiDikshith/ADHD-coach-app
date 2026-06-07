@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .models import (
     User, ChatMessage, MoodEntry, InterventionCompletion, Streak,
     UserFact, FocusSession, DistractionLog, Achievement, SkillProgress,
-    UserFeedback, SupportTicket, RefreshToken,
+    UserFeedback, SupportTicket, RefreshToken, TrustedDevice,
     SessionLocal, init_db
 )
 
@@ -193,6 +193,87 @@ class DatabaseManager:
             logger.warning(f"Security: Revoked token family {family_id} due to reuse attempt.")
         except Exception as e:
             logger.warning(f"Failed to revoke token family: {e}")
+
+    # ==================== Trusted Devices ====================
+
+    def get_trusted_device(self, user_id: int, device_id: str) -> Optional[TrustedDevice]:
+        """Retrieve a specific trusted device entry for a user."""
+        try:
+            self._ensure_session()
+            return (
+                self.db.query(TrustedDevice)
+                .filter(
+                    TrustedDevice.user_id == user_id,
+                    TrustedDevice.device_id == device_id,
+                    TrustedDevice.is_active == True
+                )
+                .first()
+            )
+        except Exception as e:
+            logger.warning(f"Failed to query trusted device: {e}")
+            return None
+
+    def get_trusted_device_by_id_only(self, device_id: str) -> Optional[TrustedDevice]:
+        """Retrieve an active trusted device by device ID only."""
+        try:
+            self._ensure_session()
+            return (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.device_id == device_id, TrustedDevice.is_active == True)
+                .first()
+            )
+        except Exception as e:
+            logger.warning(f"Failed to query trusted device by ID: {e}")
+            return None
+
+    def save_trusted_device(
+        self, user_id: int, device_id: str, device_name: str, pin_hash: Optional[str] = None
+    ) -> Optional[TrustedDevice]:
+        """Save or reactivate a trusted device record."""
+        try:
+            self._ensure_session()
+            device = (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.user_id == user_id, TrustedDevice.device_id == device_id)
+                .first()
+            )
+            if device:
+                device.device_name = device_name
+                device.is_active = True
+                if pin_hash:
+                    device.pin_hash = pin_hash
+                device.last_used = datetime.now(timezone.utc)
+            else:
+                device = TrustedDevice(
+                    user_id=user_id,
+                    device_id=device_id,
+                    device_name=device_name,
+                    pin_hash=pin_hash,
+                    is_active=True
+                )
+                self.db.add(device)
+            self.db.commit()
+            self.db.refresh(device)
+            return device
+        except Exception as e:
+            logger.warning(f"Failed to save trusted device: {e}")
+            return None
+
+    def get_active_trusted_devices(self, username: str) -> List[TrustedDevice]:
+        """Retrieve all active trusted devices associated with a username."""
+        try:
+            self._ensure_session()
+            user = self.get_user(username)
+            if not user:
+                return []
+            return (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.user_id == user.id, TrustedDevice.is_active == True)
+                .all()
+            )
+        except Exception as e:
+            logger.warning(f"Failed to query trusted devices list: {e}")
+            return []
 
     # ==================== Chat History ====================
 

@@ -156,6 +156,34 @@ cd frontend-next && npm run build && npm start
 | `/memory/{username}` | GET/POST | Session memory CRUD |
 | `/memory/{username}/search` | POST | Semantic memory search |
 | `/settings/{username}` | GET/PUT | User settings |
+| `/admin/health` | GET | Protected admin health check |
+
+## Administrator Configuration
+
+The system supports automatic administrative account bootstrapping on startup via environment variables.
+
+### Environment Variables
+To enable and configure the admin account, set the following environment variables:
+- `ADMIN_USERNAME`: The username for the administrator account (e.g., `admin`).
+- `ADMIN_PASSWORD`: A secure password for the admin account.
+
+### Production Hardening
+When the environment is running in production (detected via `ENVIRONMENT`, `ENV`, `RENDER`, or `NODE_ENV` settings):
+1. **Fatal Startup**: The backend will fail to start if `ADMIN_USERNAME` or `ADMIN_PASSWORD` is missing.
+2. **Complexity Enforcement**: The `ADMIN_PASSWORD` must meet the following strict complexity requirements, or startup will abort:
+   - Minimum length of **12 characters**.
+   - Contains at least one **uppercase letter** (`A-Z`).
+   - Contains at least one **lowercase letter** (`a-z`).
+   - Contains at least one **digit** (`0-9`).
+   - Contains at least one **special character** (e.g., `!@#$%^&*()`).
+
+In development mode, weak passwords or missing variables will only log a warning and skip bootstrapping to facilitate local testing.
+
+### Administrative Credentials Rotation
+To rotate administrative credentials securely:
+1. Update the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables in your deployment settings (e.g., on Render or in your `.env` file).
+2. Restart/re-deploy the server.
+3. On startup, the system will identify if the user already exists. If the username remains the same but the password changes, the existing user's password hash will **not** be automatically overwritten on database startup to prevent unintentional lockout. To reset/force update the password, you should manually update it via a db client or rotate to a new username, or delete the old admin user row from the `users` table so it gets recreated.
 
 ## Deployment
 
