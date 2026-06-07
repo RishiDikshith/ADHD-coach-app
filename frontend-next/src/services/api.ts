@@ -11,7 +11,7 @@ import type {
 
 import { API_URL } from "@/lib/api";
 const API_BASE = API_URL;
-const API_TIMEOUT = 30000;
+const API_TIMEOUT = 60000; // Increased to 60 seconds to support Render free tier cold starts
 
 export class ApiError extends Error {
   status: number;
@@ -27,12 +27,19 @@ async function fetchApi<T>(
   options: RequestInit = {},
   retries = 2
 ): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+  const url = `${API_BASE}${endpoint}`;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn(`[API REQUEST TIMEOUT] Request to ${url} timed out after ${API_TIMEOUT}ms. Aborting.`);
+      controller.abort();
+    }, API_TIMEOUT);
+
+    console.log(`[API REQUEST START] ${options.method || "GET"} ${url} (Attempt ${attempt + 1}/${retries + 1})`);
+
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      const res = await fetch(url, {
         ...options,
         signal: controller.signal,
         headers: {
@@ -41,8 +48,12 @@ async function fetchApi<T>(
         },
       });
 
+      console.log(`[API REQUEST COMPLETE] ${options.method || "GET"} ${url} - Status: ${res.status}`);
+
       if (!res.ok) {
         const errorBody = await res.text().catch(() => "");
+        console.error(`[API RESPONSE ERROR] ${options.method || "GET"} ${url} - Status: ${res.status}, Body:`, errorBody);
+
         let errorMessage = `API Error ${res.status}`;
         if (errorBody) {
           try {
@@ -67,8 +78,22 @@ async function fetchApi<T>(
         throw new ApiError(errorMessage, res.status);
       }
 
-      return (await res.json()) as T;
-    } catch (err) {
+      const responseText = await res.text();
+      console.log(`[API RESPONSE SUCCESS] ${options.method || "GET"} ${url} - Body:`, responseText);
+
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (parseErr) {
+        console.error(`[API PARSE ERROR] Failed to parse JSON response from ${url}:`, parseErr);
+        throw new ApiError("Failed to parse JSON response", res.status);
+      }
+    } catch (err: any) {
+      console.error(`[API FETCH FAILURE] ${options.method || "GET"} ${url} - Error:`, err);
+
+      if (err.name === "AbortError" || controller.signal.aborted) {
+        console.warn(`[API REQUEST TIMEOUT/ABORTED] Request to ${url} was aborted/timed out.`);
+      }
+
       if (attempt === retries || err instanceof ApiError) {
         if (err instanceof ApiError) throw err;
         throw new ApiError(
@@ -76,10 +101,12 @@ async function fetchApi<T>(
           0
         );
       }
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      
+      const retryDelay = 1000 * (attempt + 1);
+      console.log(`[API RETRY] Retrying request to ${url} in ${retryDelay}ms...`);
+      await new Promise((r) => setTimeout(r, retryDelay));
     } finally {
-      // Only clear timeout on last attempt or success
-      if (attempt === retries) clearTimeout(timeout);
+      clearTimeout(timeoutId);
     }
   }
 
@@ -131,13 +158,19 @@ export const api = {
   login: (username: string, password: string) =>
     fetchApi<AuthResponse>("/auth/login", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ username, password }),
     }),
 
-  register: (username: string, password: string, email?: string) =>
+  register: (username: string, password: string) =>
     fetchApi<AuthResponse>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, password, email }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
     }),
 
   resetPassword: (username: string, email: string, newPassword: string) =>
