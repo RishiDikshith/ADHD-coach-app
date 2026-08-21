@@ -1,19 +1,24 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserSettings, GameState } from "@/lib/types";
-import { api } from "@/services/api";
+import { api, setAccessToken } from "@/services/api";
+
+type AuthStatus = "initializing" | "authenticated" | "unauthenticated";
 
 interface UserState {
   username: string | null;
   lastUsername: string | null;
   isAuthenticated: boolean;
+  authStatus: AuthStatus;
+  accessToken: string | null;
   contactInfo: string | null;
   settings: Partial<UserSettings>;
   game: GameState;
   role: string | null;
   deviceId: string | null;
   getDeviceId: () => string;
-  login: (username: string, role?: string) => void;
+  login: (username: string, token: string, role?: string) => void;
+  initializeAuth: () => Promise<void>;
   logout: () => void;
   updateSettings: (s: Partial<UserSettings>) => void;
   updateGame: (g: Partial<GameState>) => void;
@@ -45,6 +50,8 @@ export const useUserStore = create<UserState>()(
       username: null,
       lastUsername: null,
       isAuthenticated: false,
+      authStatus: "initializing",
+      accessToken: null,
       contactInfo: null,
       settings: {},
       game: defaultGame,
@@ -68,13 +75,32 @@ export const useUserStore = create<UserState>()(
         return id;
       },
 
-      login: (username, role) => set({ username, lastUsername: username, isAuthenticated: true, role: role || "user" }),
+      login: (username, token, role) => {
+        setAccessToken(token);
+        set({ username, lastUsername: username, accessToken: token, isAuthenticated: true, authStatus: "authenticated", role: role || "user" });
+      },
+
+      initializeAuth: async () => {
+        const token = get().accessToken;
+        if (!token) {
+          set({ authStatus: "unauthenticated", isAuthenticated: false, username: null });
+          return;
+        }
+        setAccessToken(token);
+        try {
+          const user = await api.me();
+          set({ username: user.username, lastUsername: user.username, role: user.role, isAuthenticated: true, authStatus: "authenticated" });
+        } catch {
+          setAccessToken(null);
+          set({ username: null, accessToken: null, isAuthenticated: false, authStatus: "unauthenticated", role: null });
+        }
+      },
 
       logout: () =>
-        set({
+        (setAccessToken(null), set({
           username: null, isAuthenticated: false, contactInfo: null,
-          settings: {}, game: defaultGame, role: null,
-        }),
+          settings: {}, game: defaultGame, role: null, accessToken: null, authStatus: "unauthenticated",
+        })),
 
       updateSettings: (settings) =>
         set((s) => ({ settings: { ...s.settings, ...settings } })),
@@ -138,6 +164,12 @@ export const useUserStore = create<UserState>()(
         }
       },
     }),
-    { name: "adhd-coach-user" }
+    {
+      name: "adhd-coach-user",
+      partialize: (state) => ({ ...state, authStatus: "initializing" }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.accessToken) setAccessToken(state.accessToken);
+      },
+    }
   )
 );

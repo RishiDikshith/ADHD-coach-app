@@ -83,7 +83,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (username) {
-      api.hasPin(username)
+      api.hasPin()
         .then((res) => setHasPin(res.has_pin))
         .catch(() => {});
       fetchDevices();

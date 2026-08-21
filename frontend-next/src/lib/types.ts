@@ -249,6 +249,8 @@ export interface FocusSession {
 export interface AuthResponse {
   success: boolean;
   token?: string;
+  refresh_token?: string;
+  username?: string;
   message?: string;
   error?: string;
   role?: string;

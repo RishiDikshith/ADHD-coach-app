@@ -19,13 +19,13 @@ const features = [
 
 export default function LandingPage() {
   const router = useRouter();
-  const { isAuthenticated } = useUserStore();
+  const { isAuthenticated, authStatus } = useUserStore();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (authStatus === "authenticated" && isAuthenticated) {
       router.push("/dashboard");
     }
-  }, [isAuthenticated, router]);
+  }, [authStatus, isAuthenticated, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-[#0a1628] to-background flex flex-col">

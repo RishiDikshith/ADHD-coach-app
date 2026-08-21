@@ -88,13 +88,13 @@ const containerVariants = {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { login: loginUser, isAuthenticated } = useUserStore();
+  const { login: loginUser, isAuthenticated, authStatus } = useUserStore();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (authStatus === "authenticated" && isAuthenticated) {
       router.push("/dashboard");
     }
-  }, [isAuthenticated, router]);
+  }, [authStatus, isAuthenticated, router]);
 
   const [step, setStep] = useState<"account" | "focus" | "energy" | "style" | "triggers" | "tone" | "complete">("account");
   const [onboarding, setOnboarding] = useState<OnboardingData>({
@@ -118,7 +118,8 @@ export default function RegisterPage() {
     try {
       const res = await api.register(data.username, data.password);
       if (res.success) {
-        loginUser(data.username, res.role);
+        if (!res.token) throw new Error("Registration response did not include an access token.");
+        loginUser(res.username || data.username, res.token, res.role);
         setStep("focus");
       } else {
         setFormError("root", { message: res.error || "Registration failed." });

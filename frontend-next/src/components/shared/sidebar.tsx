@@ -11,6 +11,7 @@ import { useTimerStore } from "@/stores/timer-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardValue, CardLabel } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { api } from "@/services/api";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -317,6 +318,7 @@ export function Sidebar() {
           size="sm"
           className="w-full text-muted"
           onClick={() => {
+            void api.logout().catch(() => {});
             logout();
             router.push("/login");
           }}

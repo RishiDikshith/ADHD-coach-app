@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
@@ -261,6 +262,11 @@ async def lifespan(app: FastAPI):
         _db_manager.close()
 
 app = FastAPI(title="ADHD Productivity API", lifespan=lifespan)
+
+@app.get("/health")
+def health():
+    """Cheap liveness probe; intentionally does not touch the database or ML models."""
+    return {"status": "ok"}
 
 # CORS middleware — required for frontend (localhost:3000) to access backend
 app.add_middleware(
@@ -953,6 +959,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    started_at = time.perf_counter()
     client_ip = request.client.host if request.client else "unknown"
     path = request.url.path
     
@@ -993,6 +1000,10 @@ async def rate_limit_middleware(request: Request, call_next):
         
     # Call the next handler
     response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    if elapsed_ms >= 1000:
+        # Safe production timing diagnostic: no credentials, request bodies, or tokens.
+        logging.warning("[API] %s %s completed in %.0fms", request.method, path, elapsed_ms)
     
     # Inject RateLimit headers into response for transparency
     response.headers["X-RateLimit-Limit"] = str(max_req)
@@ -1146,6 +1157,14 @@ def auth_logout(response: Response):
     response.delete_cookie(key="refresh_token")
     return {"success": True, "message": "Successfully logged out"}
 
+@app.get("/auth/me")
+def auth_me(current_user: str = Depends(require_user)):
+    """Validate a restored access token and return the authoritative user identity."""
+    user = _db_manager.get_user(current_user) if _db_manager else None
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return {"username": user.username, "role": getattr(user, "role", "user") or "user"}
+
 @app.post("/auth/reset-password")
 def auth_reset_password(request: ResetPasswordRequest):
     sanitized_username = sanitize_username(request.username)
@@ -1202,16 +1221,21 @@ def auth_login_pin(request: PinLoginRequest, response: Response):
         return result
     return {"success": False, "error": "Database not initialized"}
 
-@app.get("/auth/has-pin/{username}")
-def auth_has_pin(username: str):
-    sanitized_username = sanitize_username(username)
-    if not sanitized_username:
-        return {"has_pin": False}
+@app.get("/auth/has-pin")
+def auth_has_pin(current_user: str = Depends(require_user)):
+    """Return PIN state for the JWT subject, never for an arbitrary path username."""
     if _db_manager:
-        user = _db_manager.get_user(sanitized_username)
+        user = _db_manager.get_user(current_user)
         if user and user.security_pin_hash:
             return {"has_pin": True}
     return {"has_pin": False}
+
+@app.get("/auth/has-pin/{username}", deprecated=True)
+def auth_has_pin_legacy(username: str, current_user: str = Depends(require_user)):
+    # Keep older clients working without allowing account-state enumeration.
+    if sanitize_username(username) != current_user:
+        raise HTTPException(status_code=403, detail="Cannot access another user's PIN status")
+    return auth_has_pin(current_user)
 
 @app.post("/auth/set-pin")
 def auth_set_pin(request: SetPinRequest, current_user: str = Depends(require_user)):

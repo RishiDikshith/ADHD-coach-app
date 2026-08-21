@@ -29,7 +29,7 @@ const shakeVariants = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login: loginUser, isAuthenticated, lastUsername, getDeviceId } = useUserStore();
+  const { login: loginUser, isAuthenticated, authStatus, lastUsername, getDeviceId } = useUserStore();
   
   const [isCheckingPin, setIsCheckingPin] = useState(true);
   const [hasPin, setHasPin] = useState(false);
@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   // Auto-login & PIN presence check via Trusted Device Recognition
   useEffect(() => {
-    if (isAuthenticated) {
+    if (authStatus === "authenticated" && isAuthenticated) {
       router.push("/dashboard");
       return;
     }
@@ -74,7 +74,7 @@ export default function LoginPage() {
       })
       .catch((err) => console.error("Trusted device validation failed:", err))
       .finally(() => setIsCheckingPin(false));
-  }, [isAuthenticated, getDeviceId, router]);
+  }, [authStatus, isAuthenticated, getDeviceId, router]);
 
   // Form submit (username/password)
   const onSubmit = async (data: LoginForm) => {
@@ -84,7 +84,8 @@ export default function LoginPage() {
       
       const res = await api.login(data.username, data.password, devId, devName);
       if (res.success) {
-        loginUser(data.username, res.role);
+        if (!res.token) throw new Error("Login response did not include an access token.");
+        loginUser(res.username || data.username, res.token, res.role);
         router.push("/dashboard");
       } else {
         setError("root", { message: res.error || "Login failed. Please check your credentials." });
@@ -123,7 +124,8 @@ export default function LoginPage() {
         }
 
         if (res.success) {
-          loginUser(isAdminLogin ? adminUsername.trim() : lastUsername!, res.role);
+          if (!res.token) throw new Error("PIN login response did not include an access token.");
+          loginUser(res.username || (isAdminLogin ? adminUsername.trim() : lastUsername!), res.token, res.role);
           router.push("/dashboard");
         } else {
           setPinError(res.error || "Incorrect PIN");

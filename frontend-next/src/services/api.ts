@@ -11,7 +11,16 @@ import type {
 
 import { API_URL } from "@/lib/api";
 const API_BASE = API_URL;
-const API_TIMEOUT = 60000; // Increased to 60 seconds to support Render free tier cold starts
+const API_TIMEOUT = 15000;
+
+// The API is hosted on a different origin in production, so its HttpOnly cookies
+// are not a reliable transport for browser API calls. Keep the short-lived JWT in
+// the auth store and attach it explicitly from one central client.
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -25,18 +34,21 @@ export class ApiError extends Error {
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
-  retries = 2
+  retries?: number
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const method = (options.method || "GET").toUpperCase();
+  // Retrying writes can create duplicate accounts, PINs, or analytics records.
+  const retryCount = retries ?? (method === "GET" ? 1 : 0);
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.warn(`[API REQUEST TIMEOUT] Request to ${url} timed out after ${API_TIMEOUT}ms. Aborting.`);
       controller.abort();
     }, API_TIMEOUT);
 
-    console.log(`[API REQUEST START] ${options.method || "GET"} ${url} (Attempt ${attempt + 1}/${retries + 1})`);
+    console.info(`[API] ${method} ${endpoint} attempt ${attempt + 1}/${retryCount + 1}`);
 
     try {
       const res = await fetch(url, {
@@ -44,11 +56,12 @@ async function fetchApi<T>(
         signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           ...options.headers,
         },
       });
 
-      console.log(`[API REQUEST COMPLETE] ${options.method || "GET"} ${url} - Status: ${res.status}`);
+      console.info(`[API] ${method} ${endpoint} completed (${res.status})`);
 
       if (!res.ok) {
         const errorBody = await res.text().catch(() => "");
@@ -79,7 +92,6 @@ async function fetchApi<T>(
       }
 
       const responseText = await res.text();
-      console.log(`[API RESPONSE SUCCESS] ${options.method || "GET"} ${url} - Body:`, responseText);
 
       try {
         return JSON.parse(responseText) as T;
@@ -88,7 +100,7 @@ async function fetchApi<T>(
         throw new ApiError("Failed to parse JSON response", res.status);
       }
     } catch (err: any) {
-      console.error(`[API FETCH FAILURE] ${options.method || "GET"} ${url} - Error:`, err);
+      console.error(`[API] ${method} ${endpoint} failed`, err instanceof Error ? err.message : err);
 
       if (err.name === "AbortError" || controller.signal.aborted) {
         console.warn(`[API REQUEST TIMEOUT/ABORTED] Request to ${url} was aborted/timed out.`);
@@ -102,7 +114,7 @@ async function fetchApi<T>(
         );
       }
       
-      const retryDelay = 1000 * (attempt + 1);
+      const retryDelay = 500 * (attempt + 1);
       console.log(`[API RETRY] Retrying request to ${url} in ${retryDelay}ms...`);
       await new Promise((r) => setTimeout(r, retryDelay));
     } finally {
@@ -191,13 +203,16 @@ export const api = {
       body: JSON.stringify({ username, pin }),
     }),
 
+  me: () => fetchApi<{ username: string; role: string }>("/auth/me", {}, 0),
+
+  logout: () => fetchApi<{ success: boolean }>("/auth/logout", { method: "POST" }, 0),
+
   checkTrustedDevice: (deviceId: string) =>
     fetchApi<{ is_trusted: boolean; username?: string; device_name?: string; has_pin?: boolean }>(
       `/auth/trusted-device?device_id=${encodeURIComponent(deviceId)}`
     ),
 
-  hasPin: (username: string) =>
-    fetchApi<{ has_pin: boolean }>(`/auth/has-pin/${encodeURIComponent(username)}`),
+  hasPin: () => fetchApi<{ has_pin: boolean }>("/auth/has-pin", {}, 0),
 
   setPin: (pin: string, deviceId?: string, deviceName?: string) =>
     fetchApi<{ success: boolean; message?: string }>("/auth/set-pin", {

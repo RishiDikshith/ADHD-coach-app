@@ -14,7 +14,7 @@ const shakeVariants = {
 };
 
 export function PinSetupModal() {
-  const { username, getDeviceId } = useUserStore();
+  const { username, getDeviceId, authStatus } = useUserStore();
   const [showModal, setShowModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [isShaking, setIsShaking] = useState(false);
@@ -22,10 +22,10 @@ export function PinSetupModal() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!username) return;
+    if (authStatus !== "authenticated" || !username) return;
 
     // Check if user already has a PIN
-    api.hasPin(username)
+    api.hasPin()
       .then((res) => {
         // If they don't have a PIN, and haven't skipped it in this browser session
         const skipped = sessionStorage.getItem("adhd_pin_setup_skipped");
@@ -34,7 +34,7 @@ export function PinSetupModal() {
         }
       })
       .catch((err) => console.error("Error checking PIN status:", err));
-  }, [username]);
+  }, [authStatus, username]);
 
   const handleDigit = (digit: string) => {
     if (enteredPin.length >= 4 || loading) return;

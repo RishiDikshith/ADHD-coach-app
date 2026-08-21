@@ -1,14 +1,30 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/shared/sidebar";
 import { BottomNav } from "@/components/shared/bottom-nav";
 import { PinSetupModal } from "@/components/shared/PinSetupModal";
+import { useUserStore } from "@/stores/user-store";
 
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const authStatus = useUserStore((state) => state.authStatus);
+
+  useEffect(() => {
+    if (authStatus === "unauthenticated") router.replace("/login");
+  }, [authStatus, router]);
+
+  if (authStatus === "initializing") {
+    return <div className="flex h-screen items-center justify-center text-muted">Checking your session…</div>;
+  }
+
+  if (authStatus !== "authenticated") return null;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Global quick PIN setup prompt */}
