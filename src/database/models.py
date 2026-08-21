@@ -8,7 +8,7 @@ Supports SQLite (development) and PostgreSQL (production).
 import os
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey, create_engine
+    Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey, create_engine, inspect, text
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -50,9 +50,65 @@ def get_db():
         db.close()
 
 
+USER_SCHEMA_COLUMNS = {
+    "email": "VARCHAR(255)",
+    "security_pin_hash": "VARCHAR(255)",
+    "is_active": "BOOLEAN NOT NULL DEFAULT TRUE",
+    "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    "last_login": "TIMESTAMP",
+    "settings": "JSON DEFAULT '{}'",
+    "role": "VARCHAR(50) NOT NULL DEFAULT 'user'",
+    "is_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "has_pin_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+}
+
+
+def migrate_users_schema():
+    """Add missing non-destructive auth columns to an existing ``users`` table.
+
+    This project has no Alembic environment despite including Alembic as a
+    dependency.  The migration is deliberately additive, transactionally
+    applied, and inspector-driven, so it is safe on repeated Render deploys and
+    preserves every existing user, password hash, and relationship.
+    """
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    missing_columns = [name for name in USER_SCHEMA_COLUMNS if name not in existing_columns]
+    if not missing_columns:
+        return
+
+    try:
+        with engine.begin() as conn:
+            for column_name in missing_columns:
+                column_type = USER_SCHEMA_COLUMNS[column_name]
+                # PostgreSQL's IF NOT EXISTS also makes simultaneous web-worker
+                # startups harmless; SQLite is protected by the inspector check.
+                if engine.dialect.name == "postgresql":
+                    statement = f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"
+                else:
+                    statement = f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"
+                conn.execute(text(statement))
+    except Exception as exc:
+        # Failing loudly is essential: continuing would let SQLAlchemy issue
+        # queries for columns that are not present in production.
+        raise RuntimeError(
+            f"Non-destructive users schema migration failed for columns: {', '.join(missing_columns)}"
+        ) from exc
+
+    # Re-inspect after committing, so startup cannot continue with a partial schema.
+    actual_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    still_missing = set(USER_SCHEMA_COLUMNS) - actual_columns
+    if still_missing:
+        raise RuntimeError(f"Users schema is still missing columns: {', '.join(sorted(still_missing))}")
+
+    print(f"Applied non-destructive users schema migration: {', '.join(missing_columns)}")
+
+
 def init_db():
-    """Create all tables. Call on application startup."""
-    from sqlalchemy import text
+    """Verify connectivity, create new tables, and migrate existing auth schema."""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -62,41 +118,7 @@ def init_db():
         raise RuntimeError(f"Database connection failed: {e}") from e
 
     Base.metadata.create_all(bind=engine)
-    
-    # Custom dynamic migration to ensure 'role' and 'security_pin_hash' columns exist in SQLite/PostgreSQL
-    from sqlalchemy import inspect, text
-    inspector = inspect(engine)
-    if "users" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("users")]
-        if "role" not in columns:
-            try:
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user'"))
-                    conn.commit()
-            except Exception as e:
-                # Catch gracefully in case of locking or concurrency
-                pass
-        if "security_pin_hash" not in columns:
-            try:
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN security_pin_hash VARCHAR(255) DEFAULT NULL"))
-                    conn.commit()
-            except Exception as e:
-                pass
-        if "is_admin" not in columns:
-            try:
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE"))
-                    conn.commit()
-            except Exception as e:
-                pass
-        if "has_pin_enabled" not in columns:
-            try:
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN has_pin_enabled BOOLEAN DEFAULT FALSE"))
-                    conn.commit()
-            except Exception as e:
-                pass
+    migrate_users_schema()
 
 
 # ==================== Refresh Tokens for RTR ====================

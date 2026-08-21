@@ -10,6 +10,8 @@ Uses python-jose for JWT and passlib with bcrypt for password hashing.
 import os
 import re
 import logging
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -40,8 +42,20 @@ def get_password_hash(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain text password against a bcrypt hash."""
+    """Verify bcrypt hashes, with read-only support for the retired SHA-256 format.
+
+    The SHA-256 branch exists solely to migrate users created by the legacy
+    database module. Successful legacy logins are rehashed with bcrypt in
+    ``login_user``; new passwords are never stored using SHA-256.
+    """
+    if is_legacy_sha256_hash(hashed_password):
+        candidate = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(candidate, hashed_password)
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def is_legacy_sha256_hash(value: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-f]{64}", value or "", re.IGNORECASE))
 
 
 # ==================== JWT Tokens ====================
@@ -329,6 +343,18 @@ class AuthHandler:
                 severity="WARN"
             )
             return {"success": False, "error": "Invalid username or password", "status_code": 401}
+
+        # Upgrade accounts created by the retired SHA-256 helper after their
+        # first successful password login. No plaintext password is persisted.
+        if is_legacy_sha256_hash(user.password_hash):
+            try:
+                user.password_hash = get_password_hash(password)
+                db.db.commit()
+                logger.info("[AUTH LOGIN] username=%s password_hash_upgraded=bcrypt", sanitized_username)
+            except Exception:
+                db.db.rollback()
+                logger.exception("[AUTH LOGIN] username=%s password_hash_upgrade_failed", sanitized_username)
+                return {"success": False, "error": "Unable to complete login. Please try again.", "status_code": 500}
 
         # Auto-promote "admin" user to admin role if they somehow don't have it
         if sanitized_username.lower() == "admin" and getattr(user, "role", "user") != "admin":
