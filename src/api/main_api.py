@@ -205,7 +205,7 @@ async def lifespan(app: FastAPI):
     
     missing_vars = []
     for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET_KEY"]:
-        if not os.getenv(var):
+        if not os.getenv(var, "").strip():
             missing_vars.append(var)
     if missing_vars:
         msg = f"Critical environment variables missing at startup: {', '.join(missing_vars)}"

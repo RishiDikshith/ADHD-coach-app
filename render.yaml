@@ -5,8 +5,15 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn src.api.main_api:app --host 0.0.0.0 --port $PORT
     envVars:
+      # Set these in the Render dashboard. Values are intentionally never stored in Git.
+      - key: DATABASE_URL
+        sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://adhd-coach-app-65.vercel.app
       - key: MAX_CONCURRENT_AI_REQUESTS
         value: "4"
       - key: PYTHON_VERSION
