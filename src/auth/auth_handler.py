@@ -146,7 +146,8 @@ def sanitize_username(username: str) -> Optional[str]:
     if not re.match(r"^[a-zA-Z0-9_.-]+$", username):
         return None
 
-    return username
+    # Usernames are intentionally case-insensitive across registration and login.
+    return username.lower()
 
 
 def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
@@ -182,7 +183,7 @@ def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
 
     if detected:
         # Import audit logger dynamically to avoid circular dependencies
-        from src.utils.audit_logger import audit_log
+        from utils.audit_logger import audit_log
         audit_log(
             username=username,
             action="prompt_injection_attempt",
@@ -244,8 +245,8 @@ class AuthHandler:
 
     def register_user(self, username: str, password: str, email: str = "") -> dict:
         """Register a new user with hashed password."""
-        from src.database.crud import DatabaseManager
-        from src.utils.audit_logger import audit_log
+        from database.crud import DatabaseManager
+        from utils.audit_logger import audit_log
 
         sanitized_username = sanitize_username(username)
         if not sanitized_username:
@@ -257,10 +258,18 @@ class AuthHandler:
         db = self.db or DatabaseManager()
         existing = db.get_user(sanitized_username)
         if existing:
-            return {"success": False, "error": "Username already exists"}
+            return {"success": False, "error": "Username already exists", "status_code": 409}
 
-        password_hash = get_password_hash(password)
-        user = db.get_or_create_user(sanitized_username, password_hash, email)
+        try:
+            password_hash = get_password_hash(password)
+            user = db.create_user(sanitized_username, password_hash, email)
+        except ValueError:
+            return {"success": False, "error": "Username already exists", "status_code": 409}
+        except Exception:
+            logger.exception("[AUTH REGISTER] username=%s user_created=false transaction_committed=false", sanitized_username)
+            return {"success": False, "error": "Unable to create account. Please try again.", "status_code": 500}
+
+        logger.info("[AUTH REGISTER] username=%s user_created=true transaction_committed=true", sanitized_username)
 
         access_token = create_access_token({"sub": sanitized_username})
         refresh_token = create_refresh_token({"sub": sanitized_username})
@@ -292,8 +301,8 @@ class AuthHandler:
 
     def login_user(self, username: str, password: str) -> dict:
         """Authenticate a user and return JWT tokens."""
-        from src.database.crud import DatabaseManager
-        from src.utils.audit_logger import audit_log
+        from database.crud import DatabaseManager
+        from utils.audit_logger import audit_log
 
         sanitized_username = sanitize_username(username)
         if not sanitized_username:
@@ -303,7 +312,15 @@ class AuthHandler:
         user = db.get_user(sanitized_username)
 
         is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
-        if not user or not verify_password(password, user.password_hash):
+        password_valid = False
+        if user:
+            try:
+                password_valid = verify_password(password, user.password_hash)
+            except Exception:
+                logger.warning("[AUTH LOGIN] username=%s user_found=true password_valid=false", sanitized_username)
+
+        logger.info("[AUTH LOGIN] username=%s user_found=%s password_valid=%s", sanitized_username, bool(user), password_valid)
+        if not user or not password_valid:
             audit_log(
                 username=sanitized_username,
                 action="admin_login" if is_admin_attempt else "user_login",
@@ -311,7 +328,7 @@ class AuthHandler:
                 details={"reason": "invalid_credentials"},
                 severity="WARN"
             )
-            return {"success": False, "error": "Invalid username or password"}
+            return {"success": False, "error": "Invalid username or password", "status_code": 401}
 
         # Auto-promote "admin" user to admin role if they somehow don't have it
         if sanitized_username.lower() == "admin" and getattr(user, "role", "user") != "admin":
@@ -355,8 +372,8 @@ class AuthHandler:
 
     def login_with_pin(self, username: str, pin: str) -> dict:
         """Authenticate a user with a security PIN and return JWT tokens."""
-        from src.database.crud import DatabaseManager
-        from src.utils.audit_logger import audit_log
+        from database.crud import DatabaseManager
+        from utils.audit_logger import audit_log
 
         sanitized_username = sanitize_username(username)
         if not sanitized_username:
@@ -413,7 +430,7 @@ class AuthHandler:
 
     def refresh_token(self, refresh_token_str: str) -> dict:
         """Refresh an access token using a refresh token with RTR protection."""
-        from src.utils.audit_logger import audit_log
+        from utils.audit_logger import audit_log
         
         payload = verify_token(refresh_token_str)
         if not payload or payload.get("type") != "refresh":
@@ -425,7 +442,7 @@ class AuthHandler:
         if not username or not family_id:
             return {"success": False, "error": "Invalid token payload"}
         
-        from src.database.crud import DatabaseManager
+        from database.crud import DatabaseManager
         db = self.db or DatabaseManager()
         
         # Check database for RTR
@@ -533,7 +550,7 @@ class RoleChecker:
             )
             
         # 3. Fetch user and verify role
-        from src.database.crud import DatabaseManager
+        from database.crud import DatabaseManager
         db = DatabaseManager()
         user = db.get_user(username)
         db.close()
@@ -555,7 +572,7 @@ class RoleChecker:
         effective_role = "admin" if is_user_admin else user_role
         
         if effective_role not in self.allowed_roles:
-            from src.utils.audit_logger import audit_log
+            from utils.audit_logger import audit_log
             audit_log(
                 username=username,
                 action="permission_denied",
@@ -575,7 +592,7 @@ class RoleChecker:
         
         # Log successful admin permission check
         if "admin" in self.allowed_roles and effective_role == "admin":
-            from src.utils.audit_logger import audit_log
+            from utils.audit_logger import audit_log
             audit_log(
                 username=username,
                 action="admin_permission_granted",

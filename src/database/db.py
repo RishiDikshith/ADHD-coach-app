@@ -11,7 +11,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ✅ DEBUG LINE (add here)
-print("DATABASE_URL:", DATABASE_URL)
+# Never print DATABASE_URL: it may contain production credentials.
 
 def _append_feedback_to_csv(username, rating, text):
     csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "feedback.csv")

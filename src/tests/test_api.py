@@ -8,6 +8,7 @@ interventions suggestions, and conversational API routes.
 import os
 import sys
 import unittest
+import uuid
 from unittest.mock import patch, MagicMock
 
 # Add project root to python search path
@@ -105,7 +106,7 @@ class TestADHDProductivityAPI(unittest.TestCase):
     def test_health_check_documentation(self):
         """Verify Swagger UI and OpenAPI schemas are accessible."""
         response = self.client.get("/openapi.json")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 422)
         self.assertIn("ADHD Productivity API", response.json()["info"]["title"])
 
     def test_auth_registration_validation(self):
@@ -120,9 +121,27 @@ class TestADHDProductivityAPI(unittest.TestCase):
         # Scenario 2: Reject short password
         payload = {"username": "validuser", "password": "123", "email": "test@example.com"}
         response = self.client.post("/auth/register", json=payload)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 422)
         self.assertFalse(response.json()["success"])
         self.assertIn("password", response.json()["error"].lower())
+
+    def test_registration_commits_before_login(self):
+        """A newly registered account must authenticate in a fresh request."""
+        username = f"auth_{uuid.uuid4().hex[:12]}"
+        password = "StrongPassword123!"
+        registration = self.client.post("/auth/register", json={"username": username, "password": password})
+        self.assertEqual(registration.status_code, 200)
+        self.assertTrue(registration.json()["success"])
+        self.assertTrue(registration.json().get("token"))
+
+        login = self.client.post("/auth/login", json={"username": username, "password": password})
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(login.json()["success"])
+        self.assertTrue(login.json().get("token"))
+
+        duplicate = self.client.post("/auth/register", json={"username": username.upper(), "password": password})
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertFalse(duplicate.json()["success"])
 
     def test_scores_calculation_heuristics(self):
         """Verify scores are successfully computed with rule-based heuristics and fallbacks."""

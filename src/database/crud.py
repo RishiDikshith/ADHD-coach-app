@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, desc, and_, text
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .models import (
     User, ChatMessage, MoodEntry, InterventionCompletion, Streak,
@@ -132,8 +132,43 @@ class DatabaseManager:
             logger.info(f"Created user: {username} with role: {role}")
         return user
 
+    def create_user(self, username: str, password_hash: str, email: str = "") -> User:
+        """Create one user and return only after its transaction is committed."""
+        self._ensure_session()
+        existing = self.db.query(User).filter(func.lower(User.username) == username.lower()).first()
+        if existing:
+            raise ValueError("username already exists")
+
+        user = User(
+            username=username,
+            password_hash=password_hash,
+            email=email,
+            role="admin" if username == "admin" else "user",
+            settings={
+                "theme": "dark", "language": "en",
+                "notifications_enabled": True, "coach_tone": "encouraging",
+            },
+        )
+        try:
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+            return user
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ValueError("username already exists") from exc
+        except Exception:
+            self.db.rollback()
+            raise
+
     def get_user(self, username: str) -> Optional[User]:
-        return self._safe_get_user(username)
+        try:
+            self._ensure_session()
+            return self.db.query(User).filter(func.lower(User.username) == username.lower()).first()
+        except Exception as e:
+            logger.warning("User lookup failed, resetting session: %s", e)
+            self.reset_session()
+            return self.db.query(User).filter(func.lower(User.username) == username.lower()).first()
 
     def get_user_by_id(self, user_id: int) -> Optional[User]:
         return self.db.query(User).filter(User.id == user_id).first()

@@ -50,7 +50,7 @@ from analytics.pattern_analyzer import PatternAnalyzer
 from analytics.recommendation_engine import RecommendationEngine
 
 # === NEW SYSTEM IMPORTS ===
-from database.models import init_db, get_db
+from database.models import engine, init_db, get_db
 from database.crud import DatabaseManager
 from auth.auth_handler import AuthHandler, get_password_hash, sanitize_input, sanitize_prompt, rate_limiter, sanitize_username, require_user, require_coach, require_admin, optional_user
 from task_paralysis.state_detector import ADHDStateDetector
@@ -204,7 +204,7 @@ async def lifespan(app: FastAPI):
     is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
     
     missing_vars = []
-    for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET"]:
+    for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET_KEY"]:
         if not os.getenv(var):
             missing_vars.append(var)
     if missing_vars:
@@ -215,11 +215,15 @@ async def lifespan(app: FastAPI):
         else:
             logging.warning(f"WARNING: {msg} (Proceeding in development mode)")
 
+    if is_prod and not os.getenv("DATABASE_URL", "").startswith(("postgresql://", "postgres://")):
+        raise RuntimeError("Production requires DATABASE_URL to reference PostgreSQL; refusing SQLite fallback.")
+
     global _db_manager, _state_detector, _adaptive_coach, _focus_engine, _gamification, _rag_engine
     logging.info("Initializing database...")
     try:
         init_db()
         _db_manager = DatabaseManager()
+        logging.info("[AUTH] database_backend=%s", engine.url.get_backend_name())
     except Exception as e:
         logging.error(f"Database startup failed: {e}")
         if is_prod:
@@ -983,7 +987,7 @@ async def rate_limit_middleware(request: Request, call_next):
     allowed, remaining = rate_limiter.check(rate_key, max_requests=max_req, window_seconds=window)
     if not allowed:
         # Structured log of rate limit blocking
-        from src.utils.audit_logger import audit_log
+        from utils.audit_logger import audit_log
         audit_log(
             username="anonymous",
             action="rate_limit_blocked",
@@ -1017,17 +1021,13 @@ async def rate_limit_middleware(request: Request, call_next):
 def auth_register(request: RegisterRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
-        return {"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."}
+        return JSONResponse(status_code=422, content={"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."})
     if len(request.password) < 8:
-        return {"success": False, "error": "Password must be at least 8 characters"}
+        return JSONResponse(status_code=422, content={"success": False, "error": "Password must be at least 8 characters"})
     
     result = auth_handler.register_user(sanitized_username, request.password, request.email)
     if not result.get("success"):
-        return result
-        
-    # Initialize DB user
-    if _db_manager:
-        _db_manager.get_or_create_user(sanitized_username, get_password_hash(request.password), request.email)
+        return JSONResponse(status_code=result.pop("status_code", 400), content=result)
         
     # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
     access_token = result.get("token")
@@ -1058,7 +1058,7 @@ def auth_register(request: RegisterRequest, response: Response):
 def auth_login(request: AuthRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
-        return {"success": False, "error": "Invalid username format"}
+        return JSONResponse(status_code=422, content={"success": False, "error": "Invalid username format"})
         
     if _db_manager:
         result = auth_handler.login_user(sanitized_username, request.password)
@@ -1104,8 +1104,10 @@ def auth_login(request: AuthRequest, response: Response):
                     samesite="strict",
                     max_age=7 * 24 * 3600,
                 )
+        if not result.get("success"):
+            return JSONResponse(status_code=result.pop("status_code", 401), content=result)
         return result
-    return {"success": False, "error": "Database not initialized"}
+    return JSONResponse(status_code=503, content={"success": False, "error": "Database not initialized"})
 
 @app.post("/auth/refresh")
 async def auth_refresh(request: Request, response: Response, payload: Optional[dict] = None):
@@ -1587,7 +1589,7 @@ def update_settings(username: str, settings: SettingsUpdateRequest, current_user
         return {"success": False, "error": "User not found"}
         
     # Transaction Audit Log
-    from src.utils.audit_logger import audit_log
+    from utils.audit_logger import audit_log
     audit_log(
         username=username,
         action="update_settings",
@@ -2685,7 +2687,7 @@ def get_user_tickets(username: str):
 def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    from src.database.models import UserFeedback, User
+    from database.models import UserFeedback, User
     db = _db_manager.db
     results = db.query(UserFeedback, User.username).join(User, UserFeedback.user_id == User.id).order_by(UserFeedback.created_at.desc()).all()
     feedbacks = []
@@ -2700,7 +2702,7 @@ def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
         })
         
     # Security Audit Log
-    from src.utils.audit_logger import audit_log
+    from utils.audit_logger import audit_log
     audit_log(
         username=current_admin,
         action="view_admin_feedbacks",
@@ -2714,7 +2716,7 @@ def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
 def get_admin_tickets(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    from src.database.models import SupportTicket, User
+    from database.models import SupportTicket, User
     db = _db_manager.db
     results = db.query(SupportTicket, User.username).join(User, SupportTicket.user_id == User.id).order_by(SupportTicket.created_at.desc()).all()
     tickets = []
@@ -2730,7 +2732,7 @@ def get_admin_tickets(current_admin: str = Depends(require_admin)):
         })
         
     # Security Audit Log
-    from src.utils.audit_logger import audit_log
+    from utils.audit_logger import audit_log
     audit_log(
         username=current_admin,
         action="view_admin_tickets",
@@ -2744,7 +2746,7 @@ def get_admin_tickets(current_admin: str = Depends(require_admin)):
 def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest, current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    from src.database.models import SupportTicket
+    from database.models import SupportTicket
     db = _db_manager.db
     ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
     if not ticket:
@@ -2755,7 +2757,7 @@ def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest, cur
     db.commit()
     
     # Transaction Audit Log
-    from src.utils.audit_logger import audit_log
+    from utils.audit_logger import audit_log
     audit_log(
         username=current_admin,
         action="update_ticket_status",

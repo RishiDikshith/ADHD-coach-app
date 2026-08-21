@@ -106,7 +106,7 @@ async function fetchApi<T>(
         console.warn(`[API REQUEST TIMEOUT/ABORTED] Request to ${url} was aborted/timed out.`);
       }
 
-      if (attempt === retries || err instanceof ApiError) {
+      if (attempt === retryCount || err instanceof ApiError) {
         if (err instanceof ApiError) throw err;
         throw new ApiError(
           err instanceof Error ? err.message : "Network error",
