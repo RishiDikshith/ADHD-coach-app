@@ -71,3 +71,4 @@ temp/
 
 # Jupyter
 .ipynb_checkpoints/
+.venv/
