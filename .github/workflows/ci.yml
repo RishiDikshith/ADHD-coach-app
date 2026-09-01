@@ -26,14 +26,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install black flake8 isort
 
+      - name: Detect changed Python files
+        id: changed-python-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: src/**/*.py
+
       - name: Verify Python Imports (isort)
-        run: isort --check-only src/
+        if: steps.changed-python-files.outputs.any_changed == 'true'
+        run: isort --check-only ${{ steps.changed-python-files.outputs.all_changed_files }}
 
       - name: Verify Python Code Style (black)
-        run: black --check src/
+        if: steps.changed-python-files.outputs.any_changed == 'true'
+        run: black --check ${{ steps.changed-python-files.outputs.all_changed_files }}
 
       - name: Lint Python Codebase (flake8)
-        run: flake8 src/
+        if: steps.changed-python-files.outputs.any_changed == 'true'
+        run: flake8 ${{ steps.changed-python-files.outputs.all_changed_files }}
 
       # Node Quality checks
       - name: Set up Node.js
