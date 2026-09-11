@@ -92,27 +92,31 @@ class InsightEngine:
 
         # Peak hours
         if focus_data["best_hours"]:
-            insights.append({
-                "type": "focus",
-                "category": "peak_focus_window",
-                "message": f"Your focus is strongest around {', '.join(focus_data['best_hours'][:2])}. "
-                          f"Try scheduling your most important work during these times.",
-                "confidence": "high",
-                "actionable": True,
-                "suggested_action": f"Block out time around {focus_data['best_hours'][0]} for deep work.",
-            })
+            insights.append(
+                {
+                    "type": "focus",
+                    "category": "peak_focus_window",
+                    "message": f"Your focus is strongest around {', '.join(focus_data['best_hours'][:2])}. "
+                    f"Try scheduling your most important work during these times.",
+                    "confidence": "high",
+                    "actionable": True,
+                    "suggested_action": f"Block out time around {focus_data['best_hours'][0]} for deep work.",
+                }
+            )
 
         # Optimal session length
         if focus_data["optimal_length"]:
-            insights.append({
-                "type": "focus",
-                "category": "optimal_session_length",
-                "message": f"Your optimal focus session is about {focus_data['optimal_length']} minutes. "
-                          f"Taking breaks after this duration can help maintain quality.",
-                "confidence": "medium",
-                "actionable": True,
-                "suggested_action": f"Set your focus timer to {focus_data['optimal_length']} minutes.",
-            })
+            insights.append(
+                {
+                    "type": "focus",
+                    "category": "optimal_session_length",
+                    "message": f"Your optimal focus session is about {focus_data['optimal_length']} minutes. "
+                    f"Taking breaks after this duration can help maintain quality.",
+                    "confidence": "medium",
+                    "actionable": True,
+                    "suggested_action": f"Set your focus timer to {focus_data['optimal_length']} minutes.",
+                }
+            )
 
         # Productivity insights
         task_patterns = user_profile.get("task_patterns", {})
@@ -120,24 +124,28 @@ class InsightEngine:
         if completion_rate > 0:
             rate_pct = round(completion_rate * 100)
             if rate_pct < 40:
-                insights.append({
-                    "type": "productivity",
-                    "category": "task_completion",
-                    "message": f"Your task completion rate is {rate_pct}%. "
-                              f"Tasks might be too big — try breaking them into 5-minute chunks.",
-                    "confidence": "high",
-                    "actionable": True,
-                    "suggested_action": "Use the '2-minute rule' for your next task.",
-                })
+                insights.append(
+                    {
+                        "type": "productivity",
+                        "category": "task_completion",
+                        "message": f"Your task completion rate is {rate_pct}%. "
+                        f"Tasks might be too big — try breaking them into 5-minute chunks.",
+                        "confidence": "high",
+                        "actionable": True,
+                        "suggested_action": "Use the '2-minute rule' for your next task.",
+                    }
+                )
             elif rate_pct > 75:
-                insights.append({
-                    "type": "productivity",
-                    "category": "task_completion",
-                    "message": f"Excellent task completion at {rate_pct}%! "
-                              f"You're building strong consistency.",
-                    "confidence": "high",
-                    "actionable": False,
-                })
+                insights.append(
+                    {
+                        "type": "productivity",
+                        "category": "task_completion",
+                        "message": f"Excellent task completion at {rate_pct}%! "
+                        f"You're building strong consistency.",
+                        "confidence": "high",
+                        "actionable": False,
+                    }
+                )
 
         # Emotional insights
         emotional = user_profile.get("emotional_patterns", {})
@@ -146,39 +154,45 @@ class InsightEngine:
             recent_moods = mood_trend[-3:]
             avg_stress = sum(m.get("stress", 5) for m in recent_moods) / len(recent_moods)
             if avg_stress >= 7:
-                insights.append({
-                    "type": "stress",
-                    "category": "elevated_stress",
-                    "message": f"Your stress has been consistently high (avg {avg_stress:.0f}/10). "
-                              f"Consider a recovery day with minimal demands.",
-                    "confidence": "high",
-                    "actionable": True,
-                    "suggested_action": "Schedule a 'low-demand' day to reset.",
-                })
+                insights.append(
+                    {
+                        "type": "stress",
+                        "category": "elevated_stress",
+                        "message": f"Your stress has been consistently high (avg {avg_stress:.0f}/10). "
+                        f"Consider a recovery day with minimal demands.",
+                        "confidence": "high",
+                        "actionable": True,
+                        "suggested_action": "Schedule a 'low-demand' day to reset.",
+                    }
+                )
 
         # Session summary insights
         summary = user_profile.get("session_summary", {})
         total_sessions = summary.get("total_sessions", 0)
         if total_sessions > 5:
-            insights.append({
-                "type": "engagement",
-                "category": "consistent_engagement",
-                "message": f"You've had {total_sessions} coaching sessions. "
-                          f"Consistent engagement is one of the strongest predictors of improvement.",
-                "confidence": "medium",
-                "actionable": False,
-            })
+            insights.append(
+                {
+                    "type": "engagement",
+                    "category": "consistent_engagement",
+                    "message": f"You've had {total_sessions} coaching sessions. "
+                    f"Consistent engagement is one of the strongest predictors of improvement.",
+                    "confidence": "medium",
+                    "actionable": False,
+                }
+            )
 
         # Check for stored insights already in profile
         existing_insights = user_profile.get("insights", [])
         for existing in existing_insights:
-            insights.append({
-                "type": "stored",
-                "category": "previous_insight",
-                "message": existing,
-                "confidence": "medium",
-                "actionable": True,
-            })
+            insights.append(
+                {
+                    "type": "stored",
+                    "category": "previous_insight",
+                    "message": existing,
+                    "confidence": "medium",
+                    "actionable": True,
+                }
+            )
 
         # Deduplicate by message
         seen_messages = set()

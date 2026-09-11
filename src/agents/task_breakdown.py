@@ -39,12 +39,26 @@ class TaskBreakdownAgent:
     def detect_task_paralysis(self, user_message: str) -> bool:
         """Detect if user is showing signs of task paralysis."""
         triggers = [
-            "too much", "can't start", "don't know where to start",
-            "overwhelming", "so much to do", "can't even",
-            "stuck", "paralyzed", "frozen", "can't move",
-            "too big", "too hard", "too many", "don't know how",
-            "procrastinating", "avoiding", "putting off",
-            "can't focus", "can't do it", "too difficult",
+            "too much",
+            "can't start",
+            "don't know where to start",
+            "overwhelming",
+            "so much to do",
+            "can't even",
+            "stuck",
+            "paralyzed",
+            "frozen",
+            "can't move",
+            "too big",
+            "too hard",
+            "too many",
+            "don't know how",
+            "procrastinating",
+            "avoiding",
+            "putting off",
+            "can't focus",
+            "can't do it",
+            "too difficult",
         ]
         msg_lower = user_message.lower()
         return any(t in msg_lower for t in triggers)

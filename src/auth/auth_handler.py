@@ -26,20 +26,27 @@ if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = types.SimpleNamespace(__version__=getattr(bcrypt, "__version__", "5.0.0"))
 
 if hasattr(bcrypt, "_bcrypt") and not hasattr(bcrypt._bcrypt, "__about__"):
-    bcrypt._bcrypt.__about__ = types.SimpleNamespace(__version__=getattr(bcrypt, "__version__", "5.0.0"))
+    bcrypt._bcrypt.__about__ = types.SimpleNamespace(
+        __version__=getattr(bcrypt, "__version__", "5.0.0")
+    )
 
 # Passlib wrap bug probe passes 255 bytes, but bcrypt 4.1+/5.0+ raises ValueError on >72 bytes.
 # Intercept bcrypt.hashpw to truncate >72 bytes safely so passlib never fails initialization or hashing.
 _orig_bcrypt_hashpw = bcrypt.hashpw
+
+
 def _safe_bcrypt_hashpw(password, salt):
     if isinstance(password, str):
         password = password.encode("utf-8")
     if len(password) > 72:
         password = password[:72]
     return _orig_bcrypt_hashpw(password, salt)
+
+
 bcrypt.hashpw = _safe_bcrypt_hashpw
 
 import passlib.handlers.bcrypt as _pb_bcrypt  # noqa: I001
+
 _pb_bcrypt._bcrypt = bcrypt
 
 from jose import JWTError, jwt
@@ -67,6 +74,7 @@ RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX", "30"))
 
 # ==================== Password Hashing ====================
 
+
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt."""
     return pwd_context.hash(password[:72] if password else "")
@@ -91,10 +99,13 @@ def is_legacy_sha256_hash(value: str) -> bool:
 
 # ==================== JWT Tokens ====================
 
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -102,16 +113,12 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 def create_refresh_token(data: dict, family_id: str | None = None, jti: str | None = None) -> str:
     """Create a JWT refresh token with longer expiry, including unique identifiers for RTR."""
     import uuid
+
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     fid = family_id or str(uuid.uuid4())
     token_jti = jti or str(uuid.uuid4())
-    to_encode.update({
-        "exp": expire,
-        "type": "refresh",
-        "family_id": fid,
-        "jti": token_jti
-    })
+    to_encode.update({"exp": expire, "type": "refresh", "family_id": fid, "jti": token_jti})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -146,7 +153,7 @@ def refresh_access_token(refresh_token: str) -> tuple[str, str] | None:
 # SQL injection patterns
 SQL_INJECTION_PATTERN = re.compile(
     r"(\b(ALTER|CREATE|DELETE|DROP|EXEC|INSERT|MERGE|SELECT|TRUNCATE|UPDATE|UNION)\b)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # Script injection patterns
@@ -214,6 +221,7 @@ def generate_unique_username(base_name: str, db=None) -> str:
     clean = clean[:25].lower()
 
     from database.crud import DatabaseManager
+
     active_db = db or DatabaseManager()
     candidate = clean
     counter = 1
@@ -232,7 +240,7 @@ def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
     prompt = prompt[:4000]
 
     # Clean zero-width space characters and other obfuscation techniques
-    prompt = re.sub(r'[\u200b-\u200d\uFEFF]', '', prompt)
+    prompt = re.sub(r"[\u200b-\u200d\uFEFF]", "", prompt)
 
     # Detect common prompt injection / jailbreak patterns
     injection_patterns = [
@@ -244,7 +252,7 @@ def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
         r"(?i)(pretend\s+to\s+be)",
         r"(?i)(bypass\s+restrictions)",
         r"(?i)(acting\s+as\s+a)",
-        r"(?i)(forget\s+what\s+we\s+talked\s+about)"
+        r"(?i)(forget\s+what\s+we\s+talked\s+about)",
     ]
 
     detected = False
@@ -252,23 +260,27 @@ def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
     for pattern in injection_patterns:
         if re.search(pattern, prompt):
             detected = True
-            sanitized_prompt_str = re.sub(pattern, "[REDACTED SECURITY BYPASS]", sanitized_prompt_str)
+            sanitized_prompt_str = re.sub(
+                pattern, "[REDACTED SECURITY BYPASS]", sanitized_prompt_str
+            )
 
     if detected:
         # Import audit logger dynamically to avoid circular dependencies
         from utils.audit_logger import audit_log
+
         audit_log(
             username=username,
             action="prompt_injection_attempt",
             status="detected_and_redacted",
             details={"original_prompt_snippet": prompt[:100]},
-            severity="WARN"
+            severity="WARN",
         )
 
     return sanitized_prompt_str
 
 
 # ==================== Rate Limiting (Simple In-Memory) ====================
+
 
 class RateLimiter:
     """Simple in-memory rate limiter using sliding window with thread-safe operations."""
@@ -277,8 +289,12 @@ class RateLimiter:
         self._requests = {}  # key -> list of timestamps
         self._lock = threading.Lock()
 
-    def check(self, key: str, max_requests: int = RATE_LIMIT_MAX_REQUESTS,
-              window_seconds: int = RATE_LIMIT_WINDOW_SECONDS) -> tuple[bool, int]:
+    def check(
+        self,
+        key: str,
+        max_requests: int = RATE_LIMIT_MAX_REQUESTS,
+        window_seconds: int = RATE_LIMIT_WINDOW_SECONDS,
+    ) -> tuple[bool, int]:
         """
         Check if a request is allowed.
         Returns (allowed, remaining_requests).
@@ -323,6 +339,7 @@ rate_limiter = RateLimiter()
 
 # ==================== Auth Handler Class ====================
 
+
 class AuthHandler:
     """High-level authentication handler integrating JWT, bcrypt, and rate limiting."""
 
@@ -352,10 +369,20 @@ class AuthHandler:
         except ValueError:
             return {"success": False, "error": "Username already exists", "status_code": 409}
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError):
-            logger.exception("[AUTH REGISTER] username=%s user_created=false transaction_committed=false", sanitized_username)
-            return {"success": False, "error": "Unable to create account. Please try again.", "status_code": 500}
+            logger.exception(
+                "[AUTH REGISTER] username=%s user_created=false transaction_committed=false",
+                sanitized_username,
+            )
+            return {
+                "success": False,
+                "error": "Unable to create account. Please try again.",
+                "status_code": 500,
+            }
 
-        logger.info("[AUTH REGISTER] username=%s user_created=true transaction_committed=true", sanitized_username)
+        logger.info(
+            "[AUTH REGISTER] username=%s user_created=true transaction_committed=true",
+            sanitized_username,
+        )
 
         access_token = create_access_token({"sub": sanitized_username})
         refresh_token = create_refresh_token({"sub": sanitized_username})
@@ -373,7 +400,7 @@ class AuthHandler:
             username=sanitized_username,
             action="user_registration",
             status="SUCCESS",
-            details={"email": email, "role": getattr(user, "role", "user")}
+            details={"email": email, "role": getattr(user, "role", "user")},
         )
 
         return {
@@ -397,23 +424,33 @@ class AuthHandler:
         db = self.db or DatabaseManager()
         user = db.get_user(sanitized_username)
 
-        is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
+        is_admin_attempt = sanitized_username.lower() == "admin" or (
+            user and getattr(user, "role", "user") == "admin"
+        )
         password_valid = False
         if user:
             sanitized_username = user.username
             try:
                 password_valid = verify_password(password, user.password_hash)
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
-                logger.warning("[AUTH LOGIN] username=%s user_found=true password_valid=false", sanitized_username)
+                logger.warning(
+                    "[AUTH LOGIN] username=%s user_found=true password_valid=false",
+                    sanitized_username,
+                )
 
-        logger.info("[AUTH LOGIN] username=%s user_found=%s password_valid=%s", sanitized_username, bool(user), password_valid)
+        logger.info(
+            "[AUTH LOGIN] username=%s user_found=%s password_valid=%s",
+            sanitized_username,
+            bool(user),
+            password_valid,
+        )
         if not user or not password_valid:
             audit_log(
                 username=sanitized_username,
                 action="admin_login" if is_admin_attempt else "user_login",
                 status="FAILED",
                 details={"reason": "invalid_credentials"},
-                severity="WARN"
+                severity="WARN",
             )
             return {"success": False, "error": "Invalid username or password", "status_code": 401}
 
@@ -423,7 +460,7 @@ class AuthHandler:
                 action="admin_login" if is_admin_attempt else "user_login",
                 status="BLOCKED",
                 details={"reason": "account_inactive"},
-                severity="WARN"
+                severity="WARN",
             )
             return {"success": False, "error": "User account is inactive", "status_code": 403}
 
@@ -433,11 +470,19 @@ class AuthHandler:
             try:
                 user.password_hash = get_password_hash(password)
                 db.db.commit()
-                logger.info("[AUTH LOGIN] username=%s password_hash_upgraded=bcrypt", sanitized_username)
+                logger.info(
+                    "[AUTH LOGIN] username=%s password_hash_upgraded=bcrypt", sanitized_username
+                )
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 db.db.rollback()
-                logger.exception("[AUTH LOGIN] username=%s password_hash_upgrade_failed", sanitized_username)
-                return {"success": False, "error": "Unable to complete login. Please try again.", "status_code": 500}
+                logger.exception(
+                    "[AUTH LOGIN] username=%s password_hash_upgrade_failed", sanitized_username
+                )
+                return {
+                    "success": False,
+                    "error": "Unable to complete login. Please try again.",
+                    "status_code": 500,
+                }
 
         # Auto-promote "admin" user to admin role if they somehow don't have it
         if sanitized_username.lower() == "admin" and getattr(user, "role", "user") != "admin":
@@ -467,7 +512,7 @@ class AuthHandler:
             username=sanitized_username,
             action="admin_login" if user_role == "admin" else "user_login",
             status="SUCCESS",
-            details={"role": user_role}
+            details={"role": user_role},
         )
 
         return {
@@ -494,14 +539,20 @@ class AuthHandler:
         db = self.db or DatabaseManager()
         user = db.get_user(sanitized_username)
 
-        is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
-        if not user or not user.security_pin_hash or not verify_password(pin, user.security_pin_hash):
+        is_admin_attempt = sanitized_username.lower() == "admin" or (
+            user and getattr(user, "role", "user") == "admin"
+        )
+        if (
+            not user
+            or not user.security_pin_hash
+            or not verify_password(pin, user.security_pin_hash)
+        ):
             audit_log(
                 username=sanitized_username,
                 action="admin_pin_login" if is_admin_attempt else "user_pin_login",
                 status="FAILED",
                 details={"reason": "invalid_pin"},
-                severity="WARN"
+                severity="WARN",
             )
             return {"success": False, "error": "Invalid PIN"}
 
@@ -511,7 +562,7 @@ class AuthHandler:
                 action="admin_pin_login" if is_admin_attempt else "user_pin_login",
                 status="BLOCKED",
                 details={"reason": "account_inactive"},
-                severity="WARN"
+                severity="WARN",
             )
             return {"success": False, "error": "User account is inactive", "status_code": 403}
 
@@ -535,7 +586,7 @@ class AuthHandler:
             username=sanitized_username,
             action="admin_pin_login" if user_role == "admin" else "user_pin_login",
             status="SUCCESS",
-            details={"role": user_role}
+            details={"role": user_role},
         )
 
         return {
@@ -550,20 +601,21 @@ class AuthHandler:
     def refresh_token(self, refresh_token_str: str) -> dict:
         """Refresh an access token using a refresh token with RTR protection."""
         from utils.audit_logger import audit_log
-        
+
         payload = verify_token(refresh_token_str)
         if not payload or payload.get("type") != "refresh":
             return {"success": False, "error": "Invalid or expired refresh token"}
-        
+
         username = payload.get("sub")
         family_id = payload.get("family_id")
-        
+
         if not username or not family_id:
             return {"success": False, "error": "Invalid token payload"}
-        
+
         from database.crud import DatabaseManager
+
         db = self.db or DatabaseManager()
-        
+
         # Check database for RTR
         db_token = db.get_refresh_token(refresh_token_str)
         if db_token:
@@ -573,33 +625,36 @@ class AuthHandler:
                     action="refresh_token_revoked_use",
                     status="BLOCKED",
                     details={"family_id": family_id},
-                    severity="WARN"
+                    severity="WARN",
                 )
                 return {"success": False, "error": "Refresh token has been revoked"}
-            
+
             if db_token.is_used:
                 # REUSE ATTACK DETECTED!
                 # Revoke all tokens in family
                 db.revoke_token_family(family_id)
-                
+
                 # Log audit event
                 audit_log(
                     username=username,
                     action="refresh_token_reuse_detected",
                     status="REVOKED_FAMILY",
                     details={"family_id": family_id},
-                    severity="CRITICAL"
+                    severity="CRITICAL",
                 )
-                return {"success": False, "error": "Session compromise detected. Please log in again."}
-            
+                return {
+                    "success": False,
+                    "error": "Session compromise detected. Please log in again.",
+                }
+
             # Mark the token as used
             db_token.is_used = True
             db.db.commit()
-            
+
         # Create new pair
         new_access = create_access_token({"sub": username})
         new_refresh = create_refresh_token({"sub": username}, family_id=family_id)
-        
+
         # Save the new refresh token in the family
         new_payload = verify_token(new_refresh)
         if new_payload:
@@ -607,14 +662,14 @@ class AuthHandler:
             if exp_ts:
                 exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
                 db.save_refresh_token(new_refresh, username, family_id, exp_dt)
-                
+
         audit_log(
             username=username,
             action="refresh_token_rotation",
             status="SUCCESS",
-            details={"family_id": family_id}
+            details={"family_id": family_id},
         )
-        
+
         return {
             "success": True,
             "token": new_access,
@@ -647,52 +702,46 @@ class RoleChecker:
             token = auth_header.split(" ")[1]
         else:
             token = request.cookies.get("access_token")
-            
+
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated. Access token missing."
+                detail="Not authenticated. Access token missing.",
             )
-            
+
         # 2. Verify token
         payload = verify_token(token)
         if not payload or payload.get("type") != "access":
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired access token"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token"
             )
-            
+
         username = payload.get("sub")
         if not username:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Subject invalid"
-            )
-            
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Subject invalid")
+
         # 3. Fetch user and verify role
         from database.crud import DatabaseManager
+
         db = DatabaseManager()
         user = db.get_user(username)
         db.close()
-        
+
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
-            
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
         if not user.is_active:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive"
+                status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
             )
-            
+
         user_role = getattr(user, "role", "user") or "user"
         is_user_admin = getattr(user, "is_admin", False) or user_role == "admin"
         effective_role = "admin" if is_user_admin else user_role
-        
+
         if effective_role not in self.allowed_roles:
             from utils.audit_logger import audit_log
+
             audit_log(
                 username=username,
                 action="permission_denied",
@@ -701,30 +750,28 @@ class RoleChecker:
                 details={
                     "allowed_roles": self.allowed_roles,
                     "user_role": user_role,
-                    "path": request.url.path
+                    "path": request.url.path,
                 },
-                severity="WARN"
+                severity="WARN",
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied. Required role: {self.allowed_roles}. Actual role: {user_role}"
+                detail=f"Permission denied. Required role: {self.allowed_roles}. Actual role: {user_role}",
             )
-        
+
         # Log successful admin permission check
         if "admin" in self.allowed_roles and effective_role == "admin":
             from utils.audit_logger import audit_log
+
             audit_log(
                 username=username,
                 action="admin_permission_granted",
                 status="SUCCESS",
                 ip_address=request.client.host if request.client else "unknown",
-                details={
-                    "path": request.url.path,
-                    "method": request.method
-                },
-                severity="INFO"
+                details={"path": request.url.path, "method": request.method},
+                severity="INFO",
             )
-            
+
         return username
 
 
@@ -743,19 +790,20 @@ def optional_user(request: Request) -> str | None:
             token = auth_header.split(" ")[1]
         else:
             token = request.cookies.get("access_token")
-            
+
         if not token:
             return None
-            
+
         payload = verify_token(token)
         if not payload or payload.get("type") != "access":
             return None
-            
+
         username = payload.get("sub")
         if not username:
             return None
 
         from database.crud import DatabaseManager
+
         db = DatabaseManager()
         user = db.get_user(username)
         db.close()

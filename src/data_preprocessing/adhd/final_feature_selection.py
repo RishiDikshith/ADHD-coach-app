@@ -5,20 +5,10 @@ df = pd.read_csv("data/cleaned/adhd_cleaned.csv")
 target = "asrs_total"
 
 # Encode sex column
-df["sex"] = df["sex"].map({
-    "male": 0,
-    "female": 1,
-    "Male": 0,
-    "Female": 1
-})
+df["sex"] = df["sex"].map({"male": 0, "female": 1, "Male": 0, "Female": 1})
 
 # Convert nbt_completed to numeric
-df["nbt_completed"] = df["nbt_completed"].map({
-    "Yes": 1,
-    "No": 0,
-    "yes": 1,
-    "no": 0
-})
+df["nbt_completed"] = df["nbt_completed"].map({"Yes": 1, "No": 0, "yes": 1, "no": 0})
 
 keep_columns = [
     "age",
@@ -29,7 +19,7 @@ keep_columns = [
     "matric_mark",
     "nbt_year",
     "nbt_completed",
-    target
+    target,
 ]
 
 df = df[keep_columns]

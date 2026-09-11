@@ -14,9 +14,9 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-print("="*70)
+print("=" * 70)
 print("FINAL ADHD MODEL (FULLY FIXED)")
-print("="*70)
+print("=" * 70)
 
 # =========================
 # LOAD DATA
@@ -134,7 +134,7 @@ features = [
     "nbt_ave",
     "nbt_math",
     "nbt_al",
-    "matric_mark"
+    "matric_mark",
 ]
 
 features = [f for f in features if f in df.columns]
@@ -149,21 +149,16 @@ X = df[features]
 num_cols = X.select_dtypes(include=["int64", "float64"]).columns
 cat_cols = X.select_dtypes(include=["object"]).columns
 
-preprocessor = ColumnTransformer([
-    ("num", StandardScaler(), num_cols),
-    ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
-])
+preprocessor = ColumnTransformer(
+    [("num", StandardScaler(), num_cols), ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)]
+)
 
 # =========================
 # MODEL
 # =========================
-model = Pipeline([
-    ("pre", preprocessor),
-    ("clf", LogisticRegression(
-        max_iter=500,
-        class_weight="balanced"
-    ))
-])
+model = Pipeline(
+    [("pre", preprocessor), ("clf", LogisticRegression(max_iter=500, class_weight="balanced"))]
+)
 
 # =========================
 # TRAIN TEST SPLIT
@@ -194,7 +189,7 @@ print("AUC:", roc_auc_score(y_test, y_prob))
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 cv_scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc")
 
-print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std()*2)
+print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std() * 2)
 
 # =========================
 # SAVE MODEL
@@ -202,4 +197,4 @@ print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std()*2)
 joblib.dump(model, "models/adhd_risk_model_final.pkl")
 
 print("\n✓ FINAL MODEL SAVED")
-print("="*70)
+print("=" * 70)

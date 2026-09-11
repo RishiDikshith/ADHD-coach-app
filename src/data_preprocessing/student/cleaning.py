@@ -19,8 +19,7 @@ for col in numeric_cols:
     Q1 = df[col].quantile(0.25)
     Q3 = df[col].quantile(0.75)
     IQR = Q3 - Q1
-    df = df[(df[col] >= Q1 - 1.5 * IQR) &
-            (df[col] <= Q3 + 1.5 * IQR)]
+    df = df[(df[col] >= Q1 - 1.5 * IQR) & (df[col] <= Q3 + 1.5 * IQR)]
 
 print("Shape after cleaning:", df.shape)
 

@@ -16,8 +16,10 @@ logger.setLevel(logging.INFO)
 # 1. LIVE CO-WORKING FOCUS ROOM MANAGER
 # ==========================================
 
+
 class FocusTimer:
     """Manages the countdown timer state for a focus room."""
+
     def __init__(self, duration_minutes: int = 25):
         self.duration_minutes = duration_minutes
         self.remaining_seconds = duration_minutes * 60
@@ -30,11 +32,13 @@ class FocusTimer:
             "duration_minutes": self.duration_minutes,
             "remaining_seconds": self.remaining_seconds,
             "is_active": self.is_active,
-            "is_break": self.is_break
+            "is_break": self.is_break,
         }
+
 
 class FocusRoom:
     """Represents a live co-working room containing timers and active members."""
+
     def __init__(self, room_id: str):
         self.room_id = room_id
         self.timer = FocusTimer()
@@ -62,16 +66,17 @@ class FocusRoom:
         self.connections[username] = websocket
         # Generate a premium visual HSL color for the user's avatar
         import random
+
         hue = random.randint(0, 360)
         # HSL with high saturation and friendly lightness for dark/light themes
         avatar_hsl = f"hsl({hue}, 75%, 60%)"
-        
+
         self.members[username] = {
             "username": username,
             "status": "idle",
             "distractions": 0,
             "avatar_hsl": avatar_hsl,
-            "joined_at": datetime.now(timezone.utc).isoformat()
+            "joined_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def remove_member(self, username: str):
@@ -84,11 +89,13 @@ class FocusRoom:
         return {
             "room_id": self.room_id,
             "timer": self.timer.to_dict(),
-            "members": list(self.members.values())
+            "members": list(self.members.values()),
         }
+
 
 class FocusRoomManager:
     """Manages active co-working focus rooms and their background ticking loops."""
+
     def __init__(self):
         self.rooms: dict[str, FocusRoom] = {}
         self._lock = asyncio.Lock()
@@ -119,21 +126,22 @@ class FocusRoomManager:
                 while room.timer.is_active and room.timer.remaining_seconds > 0:
                     await asyncio.sleep(1.0)
                     room.timer.remaining_seconds -= 1
-                    
+
                     # Broadcast tick with premium state information
-                    await room.broadcast({
-                        "type": "timer_tick",
-                        "remaining_seconds": room.timer.remaining_seconds,
-                        "is_active": room.timer.is_active,
-                        "is_break": room.timer.is_break
-                    })
+                    await room.broadcast(
+                        {
+                            "type": "timer_tick",
+                            "remaining_seconds": room.timer.remaining_seconds,
+                            "is_active": room.timer.is_active,
+                            "is_break": room.timer.is_break,
+                        }
+                    )
 
                 if room.timer.remaining_seconds <= 0:
                     room.timer.is_active = False
-                    await room.broadcast({
-                        "type": "timer_completed",
-                        "is_break": room.timer.is_break
-                    })
+                    await room.broadcast(
+                        {"type": "timer_completed", "is_break": room.timer.is_break}
+                    )
                     # Reset timer automatically
                     room.timer.remaining_seconds = room.timer.duration_minutes * 60
             except asyncio.CancelledError:
@@ -146,6 +154,7 @@ class FocusRoomManager:
         room.timer.is_active = True
         room.timer.task = asyncio.create_task(tick_loop())
 
+
 # Global instance
 focus_manager = FocusRoomManager()
 
@@ -154,8 +163,10 @@ focus_manager = FocusRoomManager()
 # 2. COLLABORATIVE ACCOUNTABILITY GROUPS
 # ==========================================
 
+
 class AccountabilityGroup:
     """Manages real-time presence and check-ins for a group."""
+
     def __init__(self, group_id: str):
         self.group_id = group_id
         # username -> WebSocket
@@ -180,14 +191,17 @@ class AccountabilityGroup:
         self.connections[username] = websocket
         # Premium visual identity HSL
         import random
-        hue = random.randint(180, 360) # Different palette for accountability (teal, blues, purples)
+
+        hue = random.randint(
+            180, 360
+        )  # Different palette for accountability (teal, blues, purples)
         self.members[username] = {
             "username": username,
             "status": "Joined group!",
             "stress": 5,
             "energy": 5,
             "dopamine_points": 0,
-            "avatar_hsl": f"hsl({hue}, 70%, 55%)"
+            "avatar_hsl": f"hsl({hue}, 70%, 55%)",
         }
 
     def remove_member(self, username: str):
@@ -197,13 +211,12 @@ class AccountabilityGroup:
             del self.members[username]
 
     def get_state(self) -> dict[str, Any]:
-        return {
-            "group_id": self.group_id,
-            "members": list(self.members.values())
-        }
+        return {"group_id": self.group_id, "members": list(self.members.values())}
+
 
 class AccountabilityManager:
     """Manages active accountability groups."""
+
     def __init__(self):
         self.groups: dict[str, AccountabilityGroup] = {}
         self._lock = asyncio.Lock()
@@ -221,6 +234,7 @@ class AccountabilityManager:
                 del self.groups[g_id]
                 logger.info(f"Cleaned up empty accountability group: {g_id}")
 
+
 # Global instance
 accountability_manager = AccountabilityManager()
 
@@ -231,33 +245,39 @@ accountability_manager = AccountabilityManager()
 
 router = APIRouter(prefix="/ws", tags=["realtime"])
 
+
 # Helper imports from main_api avoiding import time circular dependency
 def get_main_api_globals():
     try:
         from src.api import main_api
+
         return main_api
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Failed to import main_api globals: {e}")
         return None
 
+
 # ==========================================
 # WS ROUTE: LIVE CO-WORKING FOCUS SESSIONS
 # ==========================================
+
 
 @router.websocket("/focus/{room_id}")
 async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Query("Guest")):
     await websocket.accept()
     room = await focus_manager.get_or_create_room(room_id)
     room.add_member(username, websocket)
-    
+
     # Broadcast member join
-    await room.broadcast({
-        "type": "member_joined",
-        "username": username,
-        "avatar_hsl": room.members[username]["avatar_hsl"],
-        "members": list(room.members.values()),
-        "timer": room.timer.to_dict()
-    })
+    await room.broadcast(
+        {
+            "type": "member_joined",
+            "username": username,
+            "avatar_hsl": room.members[username]["avatar_hsl"],
+            "members": list(room.members.values()),
+            "timer": room.timer.to_dict(),
+        }
+    )
 
     logger.info(f"User '{username}' connected to Focus Room '{room_id}'")
 
@@ -273,29 +293,36 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
                     status = msg.get("status", "idle")
                     if username in room.members:
                         room.members[username]["status"] = status
-                        await room.broadcast({
-                            "type": "status_changed",
-                            "username": username,
-                            "status": status
-                        })
+                        await room.broadcast(
+                            {"type": "status_changed", "username": username, "status": status}
+                        )
 
                 elif msg_type == "log_distraction":
                     # Keep count of distraction points
                     category = msg.get("category", "other")
                     if username in room.members:
                         room.members[username]["distractions"] += 1
-                        await room.broadcast({
-                            "type": "distraction_logged",
-                            "username": username,
-                            "category": category,
-                            "total_distractions": room.members[username]["distractions"]
-                        })
+                        await room.broadcast(
+                            {
+                                "type": "distraction_logged",
+                                "username": username,
+                                "category": category,
+                                "total_distractions": room.members[username]["distractions"],
+                            }
+                        )
                         # Optional: persist distraction to database using main_api globals
                         api = get_main_api_globals()
                         if api and api._db_manager:
                             try:
                                 api._db_manager.log_distraction(username, room_id, category)
-                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
+                            except (
+                                AttributeError,
+                                KeyError,
+                                OSError,
+                                RuntimeError,
+                                TypeError,
+                                ValueError,
+                            ) as db_err:
                                 logger.warning(f"Failed to log distraction to DB: {db_err}")
 
                 elif msg_type == "start_timer":
@@ -304,38 +331,30 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
                     room.timer.remaining_seconds = duration * 60
                     room.timer.is_break = bool(msg.get("is_break", False))
                     focus_manager.start_room_timer(room)
-                    await room.broadcast({
-                        "type": "timer_started",
-                        "timer": room.timer.to_dict()
-                    })
+                    await room.broadcast({"type": "timer_started", "timer": room.timer.to_dict()})
 
                 elif msg_type == "pause_timer":
                     if room.timer.is_active:
                         room.timer.is_active = False
                         if room.timer.task:
                             room.timer.task.cancel()
-                        await room.broadcast({
-                            "type": "timer_paused",
-                            "timer": room.timer.to_dict()
-                        })
+                        await room.broadcast(
+                            {"type": "timer_paused", "timer": room.timer.to_dict()}
+                        )
 
                 elif msg_type == "resume_timer":
                     if not room.timer.is_active:
                         focus_manager.start_room_timer(room)
-                        await room.broadcast({
-                            "type": "timer_resumed",
-                            "timer": room.timer.to_dict()
-                        })
+                        await room.broadcast(
+                            {"type": "timer_resumed", "timer": room.timer.to_dict()}
+                        )
 
                 elif msg_type == "reset_timer":
                     room.timer.is_active = False
                     if room.timer.task:
                         room.timer.task.cancel()
                     room.timer.remaining_seconds = room.timer.duration_minutes * 60
-                    await room.broadcast({
-                        "type": "timer_reset",
-                        "timer": room.timer.to_dict()
-                    })
+                    await room.broadcast({"type": "timer_reset", "timer": room.timer.to_dict()})
 
                 elif msg_type == "ping":
                     await websocket.send_text(json.dumps({"type": "pong"}))
@@ -349,11 +368,9 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
         logger.info(f"User '{username}' disconnected from Focus Room '{room_id}'")
     finally:
         room.remove_member(username)
-        await room.broadcast({
-            "type": "member_left",
-            "username": username,
-            "members": list(room.members.values())
-        })
+        await room.broadcast(
+            {"type": "member_left", "username": username, "members": list(room.members.values())}
+        )
         await focus_manager.remove_empty_rooms()
 
 
@@ -361,20 +378,25 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
 # WS ROUTE: COLLABORATIVE ACCOUNTABILITY GROUPS
 # ==========================================
 
+
 @router.websocket("/accountability/{group_id}")
-async def websocket_accountability(websocket: WebSocket, group_id: str, username: str = Query("Guest")):
+async def websocket_accountability(
+    websocket: WebSocket, group_id: str, username: str = Query("Guest")
+):
     await websocket.accept()
     group = await accountability_manager.get_or_create_group(group_id)
     group.add_member(username, websocket)
 
     # Broadcast arrival
-    await group.broadcast({
-        "type": "presence_update",
-        "action": "joined",
-        "username": username,
-        "avatar_hsl": group.members[username]["avatar_hsl"],
-        "members": list(group.members.values())
-    })
+    await group.broadcast(
+        {
+            "type": "presence_update",
+            "action": "joined",
+            "username": username,
+            "avatar_hsl": group.members[username]["avatar_hsl"],
+            "members": list(group.members.values()),
+        }
+    )
 
     try:
         while True:
@@ -394,64 +416,93 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
                         group.members[username]["stress"] = stress
                         group.members[username]["energy"] = energy
 
-                        await group.broadcast({
-                            "type": "member_check_in",
-                            "username": username,
-                            "status": status,
-                            "stress": stress,
-                            "energy": energy,
-                            "timestamp": datetime.now(timezone.utc).isoformat()
-                        })
+                        await group.broadcast(
+                            {
+                                "type": "member_check_in",
+                                "username": username,
+                                "status": status,
+                                "stress": stress,
+                                "energy": energy,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }
+                        )
 
                         # Award XP for accountability checking in using main_api
                         api = get_main_api_globals()
                         if api and api._db_manager and api._gamification:
                             try:
                                 api._gamification.award_xp(username, "mood_checkin")
-                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
+                            except (
+                                AttributeError,
+                                KeyError,
+                                OSError,
+                                RuntimeError,
+                                TypeError,
+                                ValueError,
+                            ) as xp_err:
                                 logger.warning(f"Failed to award check-in XP: {xp_err}")
 
                 elif msg_type == "micro_win":
                     # Complete a microtask and announce
                     task = msg.get("task", "Completed a step!")
-                    await group.broadcast({
-                        "type": "member_micro_win",
-                        "username": username,
-                        "task": task,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    })
+                    await group.broadcast(
+                        {
+                            "type": "member_micro_win",
+                            "username": username,
+                            "task": task,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
 
                     # Award XP for intervention completion
                     api = get_main_api_globals()
                     if api and api._db_manager and api._gamification:
                         try:
                             api._gamification.award_xp(username, "intervention_completed")
-                        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
+                        except (
+                            AttributeError,
+                            KeyError,
+                            OSError,
+                            RuntimeError,
+                            TypeError,
+                            ValueError,
+                        ) as xp_err:
                             logger.warning(f"Failed to award micro-win XP: {xp_err}")
 
                 elif msg_type == "send_dopamine":
                     # A peer rewards another with Dopamine Points / visual sparks!
                     target = msg.get("target_username")
                     emoji = msg.get("emoji", "🎉")
-                    
+
                     if target and target in group.members:
                         group.members[target]["dopamine_points"] += 10
-                        
-                        await group.broadcast({
-                            "type": "dopamine_received",
-                            "from_username": username,
-                            "to_username": target,
-                            "emoji": emoji,
-                            "points": 10,
-                            "target_total_points": group.members[target]["dopamine_points"]
-                        })
+
+                        await group.broadcast(
+                            {
+                                "type": "dopamine_received",
+                                "from_username": username,
+                                "to_username": target,
+                                "emoji": emoji,
+                                "points": 10,
+                                "target_total_points": group.members[target]["dopamine_points"],
+                            }
+                        )
 
                         # Award actual minor XP to the recipient!
                         api = get_main_api_globals()
                         if api and api._db_manager and api._gamification:
                             try:
-                                api._gamification.award_xp(target, "mood_checkin") # Custom dopamine gift XP
-                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
+                                api._gamification.award_xp(
+                                    target, "mood_checkin"
+                                )  # Custom dopamine gift XP
+                            except (
+                                AttributeError,
+                                KeyError,
+                                OSError,
+                                RuntimeError,
+                                TypeError,
+                                ValueError,
+                            ) as xp_err:
                                 logger.warning(f"Failed to award gift XP to {target}: {xp_err}")
 
                 elif msg_type == "ping":
@@ -466,12 +517,14 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
         logger.info(f"User '{username}' disconnected from Accountability Group '{group_id}'")
     finally:
         group.remove_member(username)
-        await group.broadcast({
-            "type": "presence_update",
-            "action": "left",
-            "username": username,
-            "members": list(group.members.values())
-        })
+        await group.broadcast(
+            {
+                "type": "presence_update",
+                "action": "left",
+                "username": username,
+                "members": list(group.members.values()),
+            }
+        )
         await accountability_manager.cleanup_empty_groups()
 
 
@@ -479,14 +532,21 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
 # WS ROUTE: STREAMING AI CHAT RESPONSES
 # ==========================================
 
+
 @router.websocket("/chat")
-async def websocket_chat(websocket: WebSocket, username: str = Query("default"), agent_id: str = Query("productivity-coach")):
+async def websocket_chat(
+    websocket: WebSocket,
+    username: str = Query("default"),
+    agent_id: str = Query("productivity-coach"),
+):
     await websocket.accept()
     logger.info(f"User '{username}' started realtime AI session with agent '{agent_id}'")
 
     api = get_main_api_globals()
     if not api:
-        await websocket.send_text(json.dumps({"type": "error", "message": "Backend engine is not initialized"}))
+        await websocket.send_text(
+            json.dumps({"type": "error", "message": "Backend engine is not initialized"})
+        )
         await websocket.close()
         return
 
@@ -496,7 +556,7 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
             try:
                 msg = json.loads(data)
                 text = msg.get("text", "")
-                
+
                 if not text or len(text.strip()) == 0:
                     continue
 
@@ -510,6 +570,7 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                 if len(text.strip()) > 1:
                     try:
                         import langdetect
+
                         detected = langdetect.detect(text)
                         if detected and len(detected) == 2:
                             language = detected
@@ -529,7 +590,7 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                     memory.set_db_manager(api._db_manager)
                     api._rag_engine.memory = memory
 
-                current_streak = session_data.get('current_streak', 0) if session_data else 0
+                current_streak = session_data.get("current_streak", 0) if session_data else 0
 
                 # 1. RAG Context Retrieval
                 rag_context = api._rag_engine.retrieve_context(
@@ -538,7 +599,7 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                     user_data=user_data,
                     session_data=session_data,
                 )
-                
+
                 # 2. Intent Classification
                 intent = api._llm_router.classify_intent(text)
                 route_instruction = api._llm_router.format_response_instruction(intent)
@@ -548,11 +609,14 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                 agent_insights = agent_context.get("agent_insights", "")
 
                 # 4. ADHD State & Overwhelm Detection
-                state_result = api._state_detector.analyze(text, {
-                    "current_stress": user_data.get("stress_level", 5),
-                    "current_energy": user_data.get("energy_level", 5),
-                    "text": text,
-                })
+                state_result = api._state_detector.analyze(
+                    text,
+                    {
+                        "current_stress": user_data.get("stress_level", 5),
+                        "current_energy": user_data.get("energy_level", 5),
+                        "text": text,
+                    },
+                )
                 state_prompt_ext = api._state_detector.get_system_prompt_extension(text)
 
                 # 5. Adaptive coaching overrides
@@ -578,19 +642,34 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                     paralysis_prompt_ext = ""
 
                 # Combine context
-                all_context_parts = [rag_context, agent_insights, state_prompt_ext, coach_extension, paralysis_prompt_ext, route_instruction]
+                all_context_parts = [
+                    rag_context,
+                    agent_insights,
+                    state_prompt_ext,
+                    coach_extension,
+                    paralysis_prompt_ext,
+                    route_instruction,
+                ]
                 all_context = "\n\n".join([p for p in all_context_parts if p])
 
                 english_text = api.translate_to_english(text)
                 analysis_result = api.analyze(english_text)
-                scores = api.build_user_scores(user_data, text=english_text, analysis=analysis_result) if user_data else {}
+                scores = (
+                    api.build_user_scores(user_data, text=english_text, analysis=analysis_result)
+                    if user_data
+                    else {}
+                )
 
                 # Build final agent prompt
                 agent_system_prompt = orchestrator.build_agent_specific_prompt(
                     agent_id, text, agent_context, current_streak
                 )
 
-                instruction = "Start by warmly welcoming the user and responding directly to their input." if not history else f"Respond to the user as the supportive {agent_id} companion."
+                instruction = (
+                    "Start by warmly welcoming the user and responding directly to their input."
+                    if not history
+                    else f"Respond to the user as the supportive {agent_id} companion."
+                )
                 if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
                     instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
 
@@ -633,13 +712,14 @@ TASKS:
                     # Stream in larger chunks for fluid animation
                     chunk_size = 5
                     for i in range(0, len(offline_reply), chunk_size):
-                        chunk = offline_reply[i:i+chunk_size]
+                        chunk = offline_reply[i : i + chunk_size]
                         full_raw_response += chunk
                         await websocket.send_text(json.dumps({"type": "token", "token": chunk}))
                         await asyncio.sleep(0.02)
                 else:
                     try:
                         from groq import AsyncGroq
+
                         client = AsyncGroq(api_key=groq_api_key)
                         model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                         completion_stream = await client.chat.completions.create(
@@ -653,12 +733,14 @@ TASKS:
                             token = chunk.choices[0].delta.content
                             if token:
                                 full_raw_response += token
-                                await websocket.send_text(json.dumps({"type": "token", "token": token}))
+                                await websocket.send_text(
+                                    json.dumps({"type": "token", "token": token})
+                                )
                     except Exception as e:  # noqa: BLE001
                         logger.error(f"Error in Groq streaming WebSocket: {e}")
                         offline_reply = api.generate_offline_reply(prompt)
                         for i in range(0, len(offline_reply), 5):
-                            chunk = offline_reply[i:i+5]
+                            chunk = offline_reply[i : i + 5]
                             full_raw_response += chunk
                             await websocket.send_text(json.dumps({"type": "token", "token": chunk}))
                             await asyncio.sleep(0.02)
@@ -670,24 +752,26 @@ TASKS:
                 raw = full_raw_response
                 reply_part = raw
                 dynamic_tasks = []
-                
-                if re.search(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE):
-                    parts = re.split(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE)
-                    reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', parts[0], flags=re.IGNORECASE).strip()
+
+                if re.search(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE):
+                    parts = re.split(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE)
+                    reply_part = re.sub(
+                        r"^REPLY\s*[\-:]*\s*", "", parts[0], flags=re.IGNORECASE
+                    ).strip()
                     tasks_part = parts[1].strip()
-                    for line in tasks_part.split('\n'):
+                    for line in tasks_part.split("\n"):
                         line = line.strip()
                         if line.startswith(("-", "*", "☐")):
-                            clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
+                            clean_task = re.sub(r"^[\-\*☐]\s*", "", line).strip()
                             if clean_task:
                                 dynamic_tasks.append(clean_task)
                         else:
-                            clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                            clean_line = re.sub(r"^\d+[\.\)]\s*", "", line).strip()
                             if clean_line and len(clean_line) > 2:
                                 dynamic_tasks.append(clean_line)
                     reply_part = f"{reply_part}\n\n**Tasks:**\n{tasks_part}"
                 else:
-                    reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', raw, flags=re.IGNORECASE).strip()
+                    reply_part = re.sub(r"^REPLY\s*[\-:]*\s*", "", raw, flags=re.IGNORECASE).strip()
 
                 reply = api.format_reply(api.translate_reply_if_needed(reply_part, language))
                 handoff_suggestion = orchestrator.detect_handoff_suggestion(text, agent_id)
@@ -697,7 +781,7 @@ TASKS:
                     user_message=text,
                     assistant_message=reply[:500],
                     interaction_type="chat",
-                    metadata={"language": language, "agent_id": agent_id}
+                    metadata={"language": language, "agent_id": agent_id},
                 )
                 memory.record_emotion(
                     emotion=analysis_result.get("emotion", "neutral"),
@@ -707,10 +791,19 @@ TASKS:
                 # Persist to database
                 if api._db_manager:
                     try:
-                        api._db_manager.save_chat_message(username, "user", text, analysis_result.get("emotion"))
+                        api._db_manager.save_chat_message(
+                            username, "user", text, analysis_result.get("emotion")
+                        )
                         api._db_manager.save_chat_message(username, "assistant", reply[:1000])
                         api._gamification.award_xp(username, "mood_checkin")
-                    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
+                    except (
+                        AttributeError,
+                        KeyError,
+                        OSError,
+                        RuntimeError,
+                        TypeError,
+                        ValueError,
+                    ) as db_err:
                         logger.warning(f"WS DB Error: {db_err}")
 
                 # Build interventions list
@@ -718,20 +811,36 @@ TASKS:
                 if dynamic_tasks:
                     for task in dynamic_tasks[:3]:
                         emoji = "✓"
-                        if "breath" in task.lower(): emoji = "🧘"
-                        elif "water" in task.lower(): emoji = "💧"
-                        elif "timer" in task.lower(): emoji = "⏱️"
-                        elif "desk" in task.lower(): emoji = "🧹"
-                        elif "priority" in task.lower(): emoji = "📋"
-                        elif "goal" in task.lower(): emoji = "🎯"
-                        interventions.append({"priority": "high", "category": "task", "title": task, "action": task, "emoji": emoji})
+                        if "breath" in task.lower():
+                            emoji = "🧘"
+                        elif "water" in task.lower():
+                            emoji = "💧"
+                        elif "timer" in task.lower():
+                            emoji = "⏱️"
+                        elif "desk" in task.lower():
+                            emoji = "🧹"
+                        elif "priority" in task.lower():
+                            emoji = "📋"
+                        elif "goal" in task.lower():
+                            emoji = "🎯"
+                        interventions.append(
+                            {
+                                "priority": "high",
+                                "category": "task",
+                                "title": task,
+                                "action": task,
+                                "emoji": emoji,
+                            }
+                        )
 
-                rule_based_interventions = api.generate_interventions(user_data, scores) if user_data else []
+                rule_based_interventions = (
+                    api.generate_interventions(user_data, scores) if user_data else []
+                )
                 interventions.extend(rule_based_interventions)
                 interventions = interventions[:5]
 
                 for inv in interventions:
-                    memory.record_intervention(inv.get('title', ''))
+                    memory.record_intervention(inv.get("title", ""))
 
                 if api._db_manager and interventions:
                     try:
@@ -754,22 +863,18 @@ TASKS:
                         "coaching_tone": state_result.get("coaching_tone"),
                         "focus_mode": state_result.get("focus_mode"),
                         "task_size": state_result.get("task_size"),
-                    }
+                    },
                 }
 
-                await websocket.send_text(json.dumps({
-                    "type": "metadata",
-                    "metadata": metadata
-                }))
+                await websocket.send_text(json.dumps({"type": "metadata", "metadata": metadata}))
 
             except json.JSONDecodeError:
                 logger.warning(f"WS Chat received invalid JSON: {data}")
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Error handling WS Chat message: {e}")
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"Processing failed: {e!s}"
-                }))
+                await websocket.send_text(
+                    json.dumps({"type": "error", "message": f"Processing failed: {e!s}"})
+                )
 
     except WebSocketDisconnect:
         logger.info(f"User '{username}' disconnected from real-time AI Chat session")

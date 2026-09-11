@@ -1,20 +1,14 @@
 def calculate_adhd_score(answers):
     """
     Calculate ADHD score from questionnaire answers.
-    
+
     Args:
         answers: list of str - Answers like ["Never", "Often", "Very Often", ...]
-        
+
     Returns:
         tuple: (total_score, level)
     """
-    score_map = {
-        "Never": 0,
-        "Rarely": 1,
-        "Sometimes": 2,
-        "Often": 3,
-        "Very Often": 4
-    }
+    score_map = {"Never": 0, "Rarely": 1, "Sometimes": 2, "Often": 3, "Very Often": 4}
 
     total_score = 0
 
@@ -32,7 +26,6 @@ def calculate_adhd_score(answers):
 
 
 def combined_adhd_score(questionnaire_score, ml_risk):
-
     # Normalize questionnaire (0–36 → 0–1)
     q_score = questionnaire_score / 36
 

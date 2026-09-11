@@ -18,28 +18,66 @@ class TaskParalysisDetector:
     """
 
     # High-confidence paralysis signals
-    PARALYSIS_KEYWORDS_HIGH: ClassVar[frozenset[str]] = frozenset({
-        "can't start", "can't even", "stuck", "frozen", "paralyzed",
-        "can't move", "too overwhelmed to", "don't know where to start",
-        "can't do anything", "staring at", "blank screen", "just sitting",
-        "can't bring myself", "too much to do", "don't know how to start",
-    })
+    PARALYSIS_KEYWORDS_HIGH: ClassVar[frozenset[str]] = frozenset(
+        {
+            "can't start",
+            "can't even",
+            "stuck",
+            "frozen",
+            "paralyzed",
+            "can't move",
+            "too overwhelmed to",
+            "don't know where to start",
+            "can't do anything",
+            "staring at",
+            "blank screen",
+            "just sitting",
+            "can't bring myself",
+            "too much to do",
+            "don't know how to start",
+        }
+    )
 
     # Medium-confidence signals
-    PARALYSIS_KEYWORDS_MEDIUM: ClassVar[frozenset[str]] = frozenset({
-        "overwhelmed", "too much", "too hard", "too big", "too many",
-        "procrastinating", "avoiding", "putting off", "can't focus",
-        "distracted", "can't decide", "don't know what to do",
-        "spinning", "going in circles", "can't think straight",
-        "brain fog", "mental block", "dreading",
-    })
+    PARALYSIS_KEYWORDS_MEDIUM: ClassVar[frozenset[str]] = frozenset(
+        {
+            "overwhelmed",
+            "too much",
+            "too hard",
+            "too big",
+            "too many",
+            "procrastinating",
+            "avoiding",
+            "putting off",
+            "can't focus",
+            "distracted",
+            "can't decide",
+            "don't know what to do",
+            "spinning",
+            "going in circles",
+            "can't think straight",
+            "brain fog",
+            "mental block",
+            "dreading",
+        }
+    )
 
     # Avoidance behavior signals
-    AVOIDANCE_KEYWORDS: ClassVar[frozenset[str]] = frozenset({
-        "scrolling", "watching videos", "cleaning instead", "organizing",
-        "checking email", "social media", "phone", "anyone else",
-        "doing anything but", "busy work", "avoiding",
-    })
+    AVOIDANCE_KEYWORDS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "scrolling",
+            "watching videos",
+            "cleaning instead",
+            "organizing",
+            "checking email",
+            "social media",
+            "phone",
+            "anyone else",
+            "doing anything but",
+            "busy work",
+            "avoiding",
+        }
+    )
 
     def __init__(self):
         self.detection_count = 0

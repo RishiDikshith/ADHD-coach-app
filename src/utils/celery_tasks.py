@@ -24,12 +24,8 @@ def _should_use_offline_ai() -> bool:
 # ==================== LAZY ML MODEL LOADERS ====================
 # We lazy-load these heavy models only when a task actually runs,
 # keeping Celery worker startup light and fast.
-_models = {
-    "adhd": None,
-    "productivity": None,
-    "student": None,
-    "mental_health": None
-}
+_models = {"adhd": None, "productivity": None, "student": None, "mental_health": None}
+
 
 def get_ml_models():
     """Lazy-load and cache the machine learning models."""
@@ -81,8 +77,15 @@ def get_ml_models():
 
 # ==================== 1. ML INFERENCE TASK ====================
 
+
 @celery_app.task(name="tasks.calculate_ml_scores", bind=True, max_retries=3)
-def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers: list | None = None, username: str = "default"):
+def calculate_ml_scores_task(
+    self,
+    user_data: dict,
+    text: str = "",
+    adhd_answers: list | None = None,
+    username: str = "default",
+):
     """
     Offloads heavy ML model inference (productivity, ADHD risk, depression scoring)
     to a Celery worker. Retries with exponential backoff on transient errors.
@@ -97,10 +100,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
         from scoring.adhd_questionnaire_score import calculate_adhd_score
         from scoring.adhd_scoring import combined_adhd_score
         from scoring.final_score import final_score
-        from scoring.mental_health_scoring import (
-            analyze_stress_text,
-            mental_health_score,
-        )
+        from scoring.mental_health_scoring import analyze_stress_text, mental_health_score
         from scoring.productivity_scoring import productivity_score
 
         models = get_ml_models()
@@ -113,7 +113,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
         user_snapshot = dict(user_data)
         stress_level = user_snapshot.get("stress_level", 5)
         user_snapshot["stress_level"] = stress_level
-        
+
         # Build features dataframe
         engineered_df = build_features(pd.DataFrame([user_snapshot]))
 
@@ -152,10 +152,18 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
             try:
                 predicted_label = student_inf.predict(engineered_df)[0]
                 from scoring.student_scoring import depression_score
+
                 depression_pct = float(depression_score(predicted_label))
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Student model prediction failed: {e}")
-                estimated_risk = min(1.0, max(0.0, (stress_level / 10) * 0.7 + max(0, 7 - user_snapshot.get("sleep_hours", 7)) * 0.08))
+                estimated_risk = min(
+                    1.0,
+                    max(
+                        0.0,
+                        (stress_level / 10) * 0.7
+                        + max(0, 7 - user_snapshot.get("sleep_hours", 7)) * 0.08,
+                    ),
+                )
                 depression_pct = float(max(20, min(85, (1 - estimated_risk) * 100)))
 
         # 5. Mental Health NLP Score
@@ -176,7 +184,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                     ml_probability = 1.0 if prediction in {"1", "stress"} else 0.0
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Mental Health pipeline execution failed: {e}")
-        
+
         # Combine NLP ML probability with heuristic text analysis
         stress_probability = analyze_stress_text(text) if text else 0.0
         if ml_probability is not None:
@@ -193,7 +201,13 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
             productivity_pct, float(adhd_health_pct), mental_health_pct, depression_pct
         )
 
-        focus_risk = "high" if final_adhd_risk >= 0.7 or stress_level >= 8 else "low" if final_adhd_risk < 0.3 and stress_level <= 4 else "medium"
+        focus_risk = (
+            "high"
+            if final_adhd_risk >= 0.7 or stress_level >= 8
+            else "low"
+            if final_adhd_risk < 0.3 and stress_level <= 4
+            else "medium"
+        )
 
         scores_payload = {
             "productivity_score": float(round(productivity_pct, 1)),
@@ -213,8 +227,10 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                 "stress_level": stress_level,
                 "phone_distractions": user_snapshot.get("phone_distractions", 0),
                 "study_hours": user_snapshot.get("study_hours_per_day", 0),
-                "total_screen_time": float(engineered_df.get("total_screen_time", pd.Series([0])).iloc[0])
-            }
+                "total_screen_time": float(
+                    engineered_df.get("total_screen_time", pd.Series([0])).iloc[0]
+                ),
+            },
         }
 
         # 7. Generate Interventions
@@ -232,9 +248,11 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                     key="latest_ml_scores",
                     value=json.dumps(scores_payload),
                     confidence=1.0,
-                    source="celery_inference"
+                    source="celery_inference",
                 )
-                logger.info(f"Celery: Saved ML scores payload in SQLite database for user '{username}'")
+                logger.info(
+                    f"Celery: Saved ML scores payload in SQLite database for user '{username}'"
+                )
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
             logger.warning(f"Celery: Database recording failed: {db_err}")
         finally:
@@ -247,13 +265,14 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
         logger.error(f"Celery: ML inference error: {exc}")
         # Retry with exponential backoff on failures
         try:
-            raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+            raise self.retry(exc=exc, countdown=2**self.request.retries)
         except MaxRetriesExceededError:
             logger.error("Celery: Maximum retries exceeded for ML inference.")
             return {"error": "Maximum retries exceeded", "details": str(exc)}
 
 
 # ==================== 2. PERIODIC ANALYTICS GENERATION ====================
+
 
 @celery_app.task(name="tasks.generate_analytics", bind=True)
 def generate_analytics_task(self, username: str, user_data: dict | None = None):
@@ -271,7 +290,7 @@ def generate_analytics_task(self, username: str, user_data: dict | None = None):
 
         user_data = user_data or {}
         memory = MemoryManager(user_id=username)
-        user_profile = memory.profile.data if hasattr(memory, 'profile') else {}
+        user_profile = memory.profile.data if hasattr(memory, "profile") else {}
 
         # 1. Instantiate analytics engines
         insight_engine = InsightEngine(memory)
@@ -282,7 +301,7 @@ def generate_analytics_task(self, username: str, user_data: dict | None = None):
         insights = insight_engine.generate_insights(user_profile)
         focus_data = user_profile.get("focus_patterns", {}).get("focus_quality_trend", [])
         mood_data = user_profile.get("emotional_patterns", {}).get("mood_trend", [])
-        
+
         focus_patterns = pattern_analyzer.analyze_focus_patterns(focus_data)
         mood_patterns = pattern_analyzer.analyze_mood_patterns(mood_data)
         correlations = pattern_analyzer.analyze_productivity_correlations(user_data)
@@ -293,8 +312,8 @@ def generate_analytics_task(self, username: str, user_data: dict | None = None):
             "session": {
                 "current_stress": user_data.get("stress_level", 5),
                 "current_energy": user_data.get("energy_level", 5),
-                "current_mood": user_data.get("mood", "neutral")
-            }
+                "current_mood": user_data.get("mood", "neutral"),
+            },
         }
         recommendations = rec_engine.generate_recommendations(context, user_profile)
         priority_recs = rec_engine.get_priority_recommendations(context, user_profile)
@@ -317,7 +336,7 @@ def generate_analytics_task(self, username: str, user_data: dict | None = None):
             "formatted_recommendations": formatted_recs,
             "weekly_report": db_weekly,
             "peak_focus_hours": db_focus_hours,
-            "compiled_at": datetime.now(timezone.utc).isoformat()
+            "compiled_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # 4. Cache compiled payload in database for lightning-fast reads
@@ -327,7 +346,7 @@ def generate_analytics_task(self, username: str, user_data: dict | None = None):
             key="precompiled_analytics",
             value=json.dumps(analytics_payload),
             confidence=1.0,
-            source="celery_analytics"
+            source="celery_analytics",
         )
 
         logger.info(f"Celery: Saved pre-compiled analytics cache in SQLite for user '{username}'")
@@ -350,15 +369,16 @@ def periodic_weekly_analytics_beat():
     db_mgr = DatabaseManager()
     try:
         from database.models import User
+
         # Retrieve active users
         active_users = db_mgr.db.query(User).filter(User.is_active == True).all()
         logger.info(f"Celery Beat: Found {len(active_users)} active users to process.")
-        
+
         for user in active_users:
             # Trigger analytics task asynchronously for each user
             generate_analytics_task.delay(username=user.username)
             logger.info(f"Celery Beat: Queued analytics pre-compilation task for '{user.username}'")
-            
+
         return {"users_queued": len(active_users)}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Celery Beat: Periodic weekly analytics failed: {e}")
@@ -369,6 +389,7 @@ def periodic_weekly_analytics_beat():
 
 # ==================== 3. LONG-RUNNING MULTI-AGENT WORKFLOWS ====================
 
+
 @celery_app.task(name="tasks.synthesize_personality", bind=True)
 def synthesize_personality_task(self, username: str):
     """
@@ -378,7 +399,6 @@ def synthesize_personality_task(self, username: str):
     logger.info(f"Celery: Running multi-agent personality synthesis for user '{username}'...")
     db_mgr = DatabaseManager()
     try:
-        
         # Pull history aggregates
         recent_chats = db_mgr.get_chat_history(username, limit=30)
         mood_history = db_mgr.get_mood_history(username, days=14)
@@ -386,8 +406,12 @@ def synthesize_personality_task(self, username: str):
         user_facts = db_mgr.get_facts_as_dict(username)
 
         # Assemble summary texts for AI synthesis
-        chat_transcript = "\n".join([f"{c.role}: {c.content[:200]}" for c in reversed(recent_chats)])
-        mood_trend = ", ".join([f"{m.mood} (Energy:{m.energy}, Focus:{m.focus})" for m in mood_history])
+        chat_transcript = "\n".join(
+            [f"{c.role}: {c.content[:200]}" for c in reversed(recent_chats)]
+        )
+        mood_trend = ", ".join(
+            [f"{m.mood} (Energy:{m.energy}, Focus:{m.focus})" for m in mood_history]
+        )
         facts_summary = json.dumps(user_facts, indent=2)
 
         prompt = f"""
@@ -415,21 +439,26 @@ Respond with a complete, structured JSON containing:
 
 Do not include markdown or explanations. Respond with ONLY valid JSON code.
 """
-        
+
         # Get AI completion
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key or _should_use_offline_ai():
             # Emulated synthesis fallback
             result_json = {
                 "adhd_archetype": "Intuitive Sprinting Creator",
-                "primary_triggers": ["massive writing tasks", "repetitive routines", "isolation without timers"],
+                "primary_triggers": [
+                    "massive writing tasks",
+                    "repetitive routines",
+                    "isolation without timers",
+                ],
                 "coaching_response_strategy": "Warm, body-based grounding prompts, celebrate tiny micro-steps",
                 "dopamine_hooks": ["visual timers", "points level ups", "water chimes"],
-                "energy_rhythm_summary": "High energy mornings, heavy afternoon fatigue around 3 PM"
+                "energy_rhythm_summary": "High energy mornings, heavy afternoon fatigue around 3 PM",
             }
         else:
             try:
                 from groq import Groq
+
                 client = Groq(api_key=groq_api_key)
                 model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 chat_completion = client.chat.completions.create(
@@ -437,7 +466,7 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
                     model=model,
                     temperature=0.6,
                     max_tokens=1024,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
                 )
                 result_json = json.loads(chat_completion.choices[0].message.content)
             except Exception as e:  # noqa: BLE001
@@ -447,7 +476,7 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
                     "primary_triggers": ["large unstructured plans", "time blind spots"],
                     "coaching_response_strategy": "Hyper-supportive, shame-free validation",
                     "dopamine_hooks": ["confetti celebrations", "2-minute starting bridges"],
-                    "energy_rhythm_summary": "Highly scattered attention throughout the day"
+                    "energy_rhythm_summary": "Highly scattered attention throughout the day",
                 }
 
         # Save synthesized profile in database
@@ -457,7 +486,7 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
             key="personality_synthesis",
             value=json.dumps(result_json),
             confidence=0.9,
-            source="multi_agent_synthesis"
+            source="multi_agent_synthesis",
         )
 
         logger.info(f"Celery: Completed multi-agent personality synthesis for '{username}'")
@@ -483,10 +512,12 @@ def compile_context_task(self, username: str):
 
         memory = MemoryManager(user_id=username)
         raw_context = memory.get_context_for_prompt_text()
-        
+
         # Compile recent facts
         facts = db_mgr.get_facts_as_dict(username)
-        facts_summary = ", ".join([f"{k}: {v['value']}" for cat in facts.values() for k, v in cat.items()])
+        facts_summary = ", ".join(
+            [f"{k}: {v['value']}" for cat in facts.values() for k, v in cat.items()]
+        )
 
         prompt = f"""
 Compress the following user context block and behavioral facts list into a concise, high-value summary of:
@@ -509,18 +540,21 @@ Keep it strictly under 300 words. Be empathetic and supportive.
         else:
             try:
                 from groq import Groq
+
                 client = Groq(api_key=groq_api_key)
                 model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
                     model=model,
                     temperature=0.5,
-                    max_tokens=500
+                    max_tokens=500,
                 )
                 summary = chat_completion.choices[0].message.content
             except Exception as e:  # noqa: BLE001
                 logger.error(f"AI Context compiler failed: {e}")
-                summary = "Failed to synthesize. Active preference for small, visual task breakdowns."
+                summary = (
+                    "Failed to synthesize. Active preference for small, visual task breakdowns."
+                )
 
         # Cache compiled context
         db_mgr.save_fact(
@@ -529,7 +563,7 @@ Keep it strictly under 300 words. Be empathetic and supportive.
             key="compiled_context",
             value=summary,
             confidence=0.95,
-            source="context_compiler_workflow"
+            source="context_compiler_workflow",
         )
 
         logger.info(f"Celery: Context compiled and cached successfully for user '{username}'")

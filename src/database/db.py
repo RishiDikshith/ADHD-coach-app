@@ -14,28 +14,34 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # ✅ DEBUG LINE (add here)
 # Never print DATABASE_URL: it may contain production credentials.
 
+
 def _append_feedback_to_csv(username, rating, text):
-    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "feedback.csv")
+    csv_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "feedback.csv"
+    )
     file_exists = os.path.isfile(csv_path)
-    with open(csv_path, mode='a', newline='', encoding='utf-8') as f:
+    with open(csv_path, mode="a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["username", "rating", "feedback_text", "created_at"])
         created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         writer.writerow([username, rating, text, created_at])
 
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 # ==========================================
 # CLOUD DATABASE (POSTGRESQL)
 # ==========================================
 if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
     import psycopg2
-    
+
     @contextmanager
     def get_connection():
         import time
+
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -55,7 +61,8 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
     def init_db():
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                 CREATE TABLE IF NOT EXISTS results (
                     id SERIAL PRIMARY KEY,
                     final_score REAL,
@@ -63,8 +70,10 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
                     username TEXT DEFAULT 'anonymous',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-                """)
-                cur.execute("""
+                """
+                )
+                cur.execute(
+                    """
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     username TEXT UNIQUE NOT NULL,
@@ -74,8 +83,10 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
                     otp_code TEXT,
                     otp_expires_at TIMESTAMP
                 )
-                """)
-                cur.execute("""
+                """
+                )
+                cur.execute(
+                    """
                 CREATE TABLE IF NOT EXISTS feedback (
                     id SERIAL PRIMARY KEY,
                     username TEXT,
@@ -83,15 +94,20 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
                     feedback_text TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-                """)
+                """
+                )
             conn.commit()
 
             try:
                 with conn.cursor() as cur:
                     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_info TEXT")
-                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE")
+                    cur.execute(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE"
+                    )
                     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code TEXT")
-                    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP")
+                    cur.execute(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP"
+                    )
                 conn.commit()
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 conn.rollback()
@@ -102,7 +118,7 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
                 with conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO users (username, password_hash, contact_info, is_verified) VALUES (%s, %s, %s, TRUE)",
-                        (username, hash_password(password), contact_info)
+                        (username, hash_password(password), contact_info),
                     )
                 conn.commit()
             return True, ""
@@ -119,24 +135,32 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
     def update_user_contact(username, contact_info):
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
-                "UPDATE users SET contact_info = %s WHERE username = %s",
-                (contact_info, username)
+                "UPDATE users SET contact_info = %s WHERE username = %s", (contact_info, username)
             )
             conn.commit()
 
     def get_user_by_username(username):
         with get_connection() as conn, conn.cursor() as cur:
-            cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
+            cur.execute(
+                "SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s",
+                (username,),
+            )
             row = cur.fetchone()
             if row:
-                return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
+                return {
+                    "username": row[0],
+                    "contact_info": row[1],
+                    "otp_code": row[2],
+                    "otp_expires_at": row[3],
+                    "is_verified": row[4],
+                }
         return None
 
     def set_user_otp(username, otp, expires_at):
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
                 "UPDATE users SET otp_code = %s, otp_expires_at = %s WHERE username = %s",
-                (otp, expires_at, username)
+                (otp, expires_at, username),
             )
             conn.commit()
 
@@ -144,7 +168,7 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
                 "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = %s",
-                (username,)
+                (username,),
             )
             conn.commit()
 
@@ -152,7 +176,10 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT id FROM users WHERE username = %s", (username,))
             if cur.fetchone():
-                cur.execute("UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s", (hash_password(new_password), username))
+                cur.execute(
+                    "UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s",
+                    (hash_password(new_password), username),
+                )
                 conn.commit()
                 return True
         return False
@@ -161,7 +188,7 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO results (final_score, level, username) VALUES (%s, %s, %s)",
-                (score, level, username)
+                (score, level, username),
             )
             conn.commit()
 
@@ -172,19 +199,22 @@ if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
                 with conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO feedback (username, rating, feedback_text) VALUES (%s, %s, %s)",
-                        (username, rating, text)
+                        (username, rating, text),
                     )
                 conn.commit()
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Warning: Failed to save feedback to cloud DB: {e}")
+
 
 # ==========================================
 # LOCAL DATABASE (SQLITE)
 # ==========================================
 else:
     import sqlite3
-    
-    db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "database")
+
+    db_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "database"
+    )
     os.makedirs(db_dir, exist_ok=True)
     db_path = os.path.join(db_dir, "data.db")
 
@@ -198,24 +228,29 @@ else:
 
     def init_db():
         with get_connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
             CREATE TABLE IF NOT EXISTS results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 final_score REAL,
                 level TEXT
             )
-            """)
+            """
+            )
             try:
                 conn.execute("ALTER TABLE results ADD COLUMN username TEXT DEFAULT 'anonymous'")
             except sqlite3.OperationalError:
                 pass
             try:
                 conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP")
-                conn.execute("UPDATE results SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+                conn.execute(
+                    "UPDATE results SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+                )
             except sqlite3.OperationalError:
                 pass
 
-            conn.execute("""
+            conn.execute(
+                """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
@@ -225,15 +260,22 @@ else:
                 otp_code TEXT,
                 otp_expires_at TIMESTAMP
             )
-            """)
-            
-            for col in ["contact_info TEXT", "is_verified BOOLEAN DEFAULT 0", "otp_code TEXT", "otp_expires_at TIMESTAMP"]:
+            """
+            )
+
+            for col in [
+                "contact_info TEXT",
+                "is_verified BOOLEAN DEFAULT 0",
+                "otp_code TEXT",
+                "otp_expires_at TIMESTAMP",
+            ]:
                 try:
                     conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
                 except sqlite3.OperationalError:
                     pass
 
-            conn.execute("""
+            conn.execute(
+                """
             CREATE TABLE IF NOT EXISTS feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT,
@@ -241,7 +283,8 @@ else:
                 feedback_text TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """)
+            """
+            )
             conn.commit()
 
     def create_user(username, password, contact_info=None):
@@ -249,7 +292,7 @@ else:
             with get_connection() as conn:
                 conn.execute(
                     "INSERT INTO users (username, password_hash, contact_info, is_verified) VALUES (?, ?, ?, TRUE)",
-                    (username, hash_password(password), contact_info)
+                    (username, hash_password(password), contact_info),
                 )
                 conn.commit()
             return True, ""
@@ -266,24 +309,32 @@ else:
     def update_user_contact(username, contact_info):
         with get_connection() as conn:
             conn.execute(
-                "UPDATE users SET contact_info = ? WHERE username = ?",
-                (contact_info, username)
+                "UPDATE users SET contact_info = ? WHERE username = ?", (contact_info, username)
             )
             conn.commit()
 
     def get_user_by_username(username):
         with get_connection() as conn:
-            cursor = conn.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ?", (username,))
+            cursor = conn.execute(
+                "SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = ?",
+                (username,),
+            )
             row = cursor.fetchone()
             if row:
-                return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
+                return {
+                    "username": row[0],
+                    "contact_info": row[1],
+                    "otp_code": row[2],
+                    "otp_expires_at": row[3],
+                    "is_verified": row[4],
+                }
         return None
 
     def set_user_otp(username, otp, expires_at):
         with get_connection() as conn:
             conn.execute(
                 "UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE username = ?",
-                (otp, expires_at, username)
+                (otp, expires_at, username),
             )
             conn.commit()
 
@@ -291,7 +342,7 @@ else:
         with get_connection() as conn:
             conn.execute(
                 "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = ?",
-                (username,)
+                (username,),
             )
             conn.commit()
 
@@ -299,7 +350,10 @@ else:
         with get_connection() as conn:
             cursor = conn.execute("SELECT id FROM users WHERE username = ?", (username,))
             if cursor.fetchone():
-                conn.execute("UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE username = ?", (hash_password(new_password), username))
+                conn.execute(
+                    "UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE username = ?",
+                    (hash_password(new_password), username),
+                )
                 conn.commit()
                 return True
         return False
@@ -308,7 +362,7 @@ else:
         with get_connection() as conn:
             conn.execute(
                 "INSERT INTO results (final_score, level, username) VALUES (?, ?, ?)",
-                (score, level, username)
+                (score, level, username),
             )
             conn.commit()
 
@@ -318,11 +372,12 @@ else:
             with get_connection() as conn:
                 conn.execute(
                     "INSERT INTO feedback (username, rating, feedback_text) VALUES (?, ?, ?)",
-                    (username, rating, text)
+                    (username, rating, text),
                 )
                 conn.commit()
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Warning: Failed to save feedback to local DB: {e}")
+
 
 try:
     init_db()

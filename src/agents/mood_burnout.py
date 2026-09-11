@@ -53,7 +53,10 @@ class MoodBurnoutAgent:
             "guilty": "Guilt is so common for ADHD brains — all those 'should haves.' But you didn't 'fail.' Your brain works differently, and you're doing your best with what you have.",
             "ashamed": "Shame whispers 'there's something wrong with me.' But there isn't. You have a brain that works uniquely. Shame keeps us stuck. Let's move toward self-compassion instead.",
         }
-        return validations.get(emotion, "That feeling is real and valid. You don't need to justify it or fix it right now. Just let it be here with us.")
+        return validations.get(
+            emotion,
+            "That feeling is real and valid. You don't need to justify it or fix it right now. Just let it be here with us.",
+        )
 
     def detect_burnout_risk(self, context: dict) -> dict | None:
         user = context.get("user", {})
@@ -150,13 +153,19 @@ class MoodBurnoutAgent:
                 "🌟 Take 5 minutes to do something that's 'just for you' today",
                 "💧 Check your basic needs: water, food, movement, rest",
             ]
-        
+
         # Personalize based on current mood
         if current_mood in ["overwhelmed", "anxious"]:
-            strategies.insert(1, "🧠 Name 3 things you can physically feel right now — chair, feet on floor, air on skin")
+            strategies.insert(
+                1,
+                "🧠 Name 3 things you can physically feel right now — chair, feet on floor, air on skin",
+            )
         elif current_mood in ["sad", "hopeless"]:
-            strategies.insert(1, "☀️ If you can, let sunlight hit your face for 30 seconds. Small sensory shifts help.")
-        
+            strategies.insert(
+                1,
+                "☀️ If you can, let sunlight hit your face for 30 seconds. Small sensory shifts help.",
+            )
+
         return strategies
 
     def get_emotion_regulation_tip(self, emotion: str) -> str:
@@ -170,21 +179,24 @@ class MoodBurnoutAgent:
             "rejection": "Rejection sensitivity is real. Ask yourself: 'Is this rejection, or is my RSD (Rejection Sensitivity Dysphoria) speaking?' Give it 20 minutes before reacting.",
             "scattered": "Brain dump time: write down EVERYTHING in your head for 2 minutes. No filtering, no organizing. Just get it out.",
         }
-        return tips.get(emotion, "Take 5 slow deep breaths. You're safe and this feeling will pass. Feelings are visitors — let them come and go.")
+        return tips.get(
+            emotion,
+            "Take 5 slow deep breaths. You're safe and this feeling will pass. Feelings are visitors — let them come and go.",
+        )
 
     def get_mood_trend_summary(self, context: dict) -> str:
         """Generate a human-readable summary of recent mood trends."""
         user = context.get("user", {})
         session = context.get("session", {})
-        
+
         mood_trend = user.get("mood_trend", [])
         avg_stress = user.get("avg_stress", 5)
         current_stress = session.get("current_stress", 5)
         session.get("current_mood", "neutral")
-        
+
         if not mood_trend:
             return ""
-        
+
         # Determine trend
         if current_stress > avg_stress + 2:
             return "I notice your stress is higher than usual. That's important data — not a problem to solve. Let's just acknowledge that."
@@ -196,7 +208,7 @@ class MoodBurnoutAgent:
     def get_system_prompt_extension(self, context: dict) -> str:
         burnout = self.detect_burnout_risk(context)
         trend_summary = self.get_mood_trend_summary(context)
-        
+
         parts = []
         if burnout:
             parts.append(
@@ -207,5 +219,5 @@ class MoodBurnoutAgent:
             )
         if trend_summary:
             parts.append(f"[Mood Trend] {trend_summary}")
-        
+
         return "\\n\\n".join(parts)

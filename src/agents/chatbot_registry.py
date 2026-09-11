@@ -22,7 +22,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "⚡",
         "specialty": "Executive function, planning, & motivation",
         "description": "Helps you break down your day, set priorities, and find natural momentum without the shame.",
-        "color": "#10b981", # Emerald
+        "color": "#10b981",  # Emerald
         "gradient": "from-emerald-500/20 to-teal-500/20",
         "text_gradient": "from-emerald-400 to-teal-400",
         "border_color": "border-emerald-500/30",
@@ -32,7 +32,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "📋 Smart Plan my day",
             "🎯 Pick top 3 wins",
             "⚡ Give me motivation",
-            "🌱 Keep it simple today"
+            "🌱 Keep it simple today",
         ],
         "default_greeting": "Hey there! Ready to make today work for your brain? Let's keep things light and focus on finding a realistic, shame-free rhythm together. ⚡",
     },
@@ -43,7 +43,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🔨",
         "specialty": "Microtask generation & overwhelm rescue",
         "description": "Transforms huge, intimidating projects into tiny, bite-sized 2-minute steps to beat paralysis.",
-        "color": "#6366f1", # Indigo
+        "color": "#6366f1",  # Indigo
         "gradient": "from-indigo-500/20 to-violet-500/20",
         "text_gradient": "from-indigo-400 to-violet-400",
         "border_color": "border-indigo-500/30",
@@ -53,7 +53,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "🔨 Break down a task",
             "🚀 Give me a 2-minute starter",
             "🚨 Overwhelm rescue!",
-            "⚙️ Simplify a complex goal"
+            "⚙️ Simplify a complex goal",
         ],
         "default_greeting": "Hey! Big tasks can feel like a heavy wall. Let's knock down that wall piece by piece. Tell me what task feels too big, and we will find your 2-minute starter. 🔨",
     },
@@ -64,7 +64,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🎯",
         "specialty": "Pomodoro, timers, & distraction recovery",
         "description": "Guides you through deep-work blocks, monitors distractions, and helps you recover after losing focus.",
-        "color": "#f59e0b", # Amber
+        "color": "#f59e0b",  # Amber
         "gradient": "from-amber-500/20 to-orange-500/20",
         "text_gradient": "from-amber-400 to-orange-400",
         "border_color": "border-amber-500/30",
@@ -74,7 +74,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "⏱️ Start a Pomodoro timer",
             "🚨 Help! I got distracted",
             "🌊 Get into flow state",
-            "📊 Review focus peaks"
+            "📊 Review focus peaks",
         ],
         "default_greeting": "Ready to dive in? Let's shield your focus and build a quiet, distraction-free bubble. What small block of time are we committing to right now? 🎯",
     },
@@ -85,7 +85,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🌿",
         "specialty": "Emotional recovery & stress reduction",
         "description": "Provides a safe, shame-free space when you're exhausted, stressed, or feeling guilty for resting.",
-        "color": "#ec4899", # Pink/Rose
+        "color": "#ec4899",  # Pink/Rose
         "gradient": "from-rose-500/20 to-lavender-500/20",
         "text_gradient": "from-rose-400 to-pink-400",
         "border_color": "border-rose-500/30",
@@ -95,7 +95,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "🌬️ Quick breathing grounding",
             "❤️ Relieve resting guilt",
             "🛑 Help me slow down",
-            "🌿 Make a recovery plan"
+            "🌿 Make a recovery plan",
         ],
         "default_greeting": "Take a deep breath and let your shoulders drop. There is absolutely no pressure here. You don't have to accomplish anything right now. I'm just here to support you. 🌿",
     },
@@ -106,7 +106,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🤝",
         "specialty": "Gentle checks & momentum building",
         "description": "Your friendly, zero-judgment accountability partner to keep you moving consistently.",
-        "color": "#a855f7", # Purple
+        "color": "#a855f7",  # Purple
         "gradient": "from-purple-500/20 to-fuchsia-500/20",
         "text_gradient": "from-purple-400 to-fuchsia-400",
         "border_color": "border-purple-500/30",
@@ -116,7 +116,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "📈 5-minute progress check",
             "🤝 Set an accountability goal",
             "🔥 Review my consistency",
-            "⚡ Celebrate a small win"
+            "⚡ Celebrate a small win",
         ],
         "default_greeting": "Hey! Just checking in to see how you're doing. Remember: there's zero judgment here, whether you finished everything or got completely sidetracked. Let's see where you're at. 🤝",
     },
@@ -127,7 +127,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "😌",
         "specialty": "Emotional journaling & stress processing",
         "description": "Helps you check in with your emotions, reflect on stress levels, and understand your mood patterns.",
-        "color": "#0ea5e9", # Sky
+        "color": "#0ea5e9",  # Sky
         "gradient": "from-sky-500/20 to-cyan-500/20",
         "text_gradient": "from-sky-400 to-cyan-400",
         "border_color": "border-sky-500/30",
@@ -137,7 +137,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "📝 Guided emotional journal",
             "📊 Check my mood trends",
             "🌬️ Process high stress",
-            "💡 Journaling prompt"
+            "💡 Journaling prompt",
         ],
         "default_greeting": "How is your head space feeling right now? Let's take a minute to just pause and reflect without any analysis. What's on your mind? 😌",
     },
@@ -148,7 +148,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🔄",
         "specialty": "Routine building & streak support",
         "description": "Designs low-friction routines and rewards consistency with ADHD-friendly dopamine loops.",
-        "color": "#e9d5ff", # Light violet
+        "color": "#e9d5ff",  # Light violet
         "gradient": "from-violet-500/20 to-pink-500/20",
         "text_gradient": "from-violet-400 to-pink-400",
         "border_color": "border-violet-500/30",
@@ -158,7 +158,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "🔄 Optimize my morning routine",
             "🔥 Set a routine habit trigger",
             "🎁 Celebrate streak milestones",
-            "🧠 ADHD routine hacks"
+            "🧠 ADHD routine hacks",
         ],
         "default_greeting": "Let's build routines that actually stick! ADHD brains need excitement and low-friction triggers, not boring checksheets. What routine shall we design today? 🔄",
     },
@@ -169,7 +169,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🎓",
         "specialty": "Academic productivity & revision splits",
         "description": "Helps you schedule study sessions, break down heavy subjects, and prepare for exams calmly.",
-        "color": "#06b6d4", # Cyan/Teal
+        "color": "#06b6d4",  # Cyan/Teal
         "gradient": "from-cyan-500/20 to-emerald-500/20",
         "text_gradient": "from-cyan-400 to-emerald-400",
         "border_color": "border-cyan-500/30",
@@ -179,7 +179,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "🎓 Break down a study topic",
             "📅 Schedule study blocks",
             "💡 Spaced repetition triggers",
-            "🧩 Feynman technique checklist"
+            "🧩 Feynman technique checklist",
         ],
         "default_greeting": "Hey there! Ready to tackle that academic stack without the burnout? Let's take those massive textbook topics and break them into gamified active-study chunks. What are we revising? 🎓",
     },
@@ -190,7 +190,7 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
         "avatar_emoji": "🆘",
         "specialty": "Technical support, bug reporting, & ADHD coping FAQs",
         "description": "Guides you through technical support shame-free, answers ADHD lifestyle FAQs, and lists or helps file support tickets.",
-        "color": "#ec4899", # Rose
+        "color": "#ec4899",  # Rose
         "gradient": "from-pink-500/20 to-rose-500/20",
         "text_gradient": "from-pink-400 to-rose-400",
         "border_color": "border-pink-500/30",
@@ -200,10 +200,10 @@ AGENT_CONFIGS: dict[str, dict[str, Any]] = {
             "🐞 Report a glitch",
             "🎫 Check my tickets",
             "❓ View ADHD FAQs",
-            "📣 Log app suggestion"
+            "📣 Log app suggestion",
         ],
         "default_greeting": "Welcome to Support! I am your AI Support Companion. Whether you're experiencing a glitch, have a feature suggestion, or need shame-free answers to ADHD FAQs, I've got your back. How can I assist you today? 🆘",
-    }
+    },
 }
 
 
@@ -213,7 +213,7 @@ def get_chatbot_system_prompt(agent_id: str) -> str:
     name = config["name"]
     specialty = config["specialty"]
     tone = config["tone"]
-    
+
     # 1. AI Support Agent prompt
     if agent_id == "support-agent":
         return f"""You are the dedicated {name} in our platform.
@@ -440,7 +440,7 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
             for m in recent_focus:
                 lines.append(f"- Focus pattern: {m['content']}")
             for m in recent_behavior:
-                if "distract" in m['content'].lower():
+                if "distract" in m["content"].lower():
                     lines.append(f"- Distraction log: {m['content']}")
             return "\n".join(lines) if len(lines) > 1 else ""
 
@@ -451,7 +451,7 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
             for m in recent_tasks:
                 lines.append(f"- Task log: {m['content']}")
             for m in recent_behaviors:
-                if "paralysis" in m['content'].lower() or "trigger" in m['content'].lower():
+                if "paralysis" in m["content"].lower() or "trigger" in m["content"].lower():
                     lines.append(f"- Avoidance pattern: {m['content']}")
             return "\n".join(lines) if len(lines) > 1 else ""
 
@@ -493,7 +493,9 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
             recent_tasks = memory.store.get_recent("task", limit=5)
             lines = ["Specialized Study Logs:"]
             for m in recent_tasks:
-                if any(k in m['content'].lower() for k in ["read", "study", "exam", "paper", "write"]):
+                if any(
+                    k in m["content"].lower() for k in ["read", "study", "exam", "paper", "write"]
+                ):
                     lines.append(f"- Academic task completed: {m['content']}")
             return "\n".join(lines) if len(lines) > 1 else ""
 
@@ -507,10 +509,19 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
                     if tickets:
                         lines.append("Current Support Tickets logged by you:")
                         for t in tickets:
-                            lines.append(f"- Ticket #{t.id}: [{t.type.upper()}] '{t.subject}' (Status: {t.status}) - Description: {t.description}")
+                            lines.append(
+                                f"- Ticket #{t.id}: [{t.type.upper()}] '{t.subject}' (Status: {t.status}) - Description: {t.description}"
+                            )
                     else:
                         lines.append("No active support tickets logged yet.")
-                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+                except (
+                    AttributeError,
+                    KeyError,
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                ) as e:
                     lines.append(f"Could not retrieve tickets: {e}")
             else:
                 lines.append("No DB manager available to check tickets.")

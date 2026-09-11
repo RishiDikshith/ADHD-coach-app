@@ -14,9 +14,9 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-print("="*70)
+print("=" * 70)
 print("FINAL ADHD STACKED MODEL (REAL + STABLE)")
-print("="*70)
+print("=" * 70)
 
 # =========================
 # LOAD DATA
@@ -44,18 +44,13 @@ print("✓ Models loaded")
 meta_features = []
 
 for _, row in df.iterrows():
-
     # -------- NLP (text proxy) --------
-    text = str(row.get(
-        "if_yes_please_list_these_difficulties_and_or_symptoms", ""
-    ))
+    text = str(row.get("if_yes_please_list_these_difficulties_and_or_symptoms", ""))
     X_text = tfidf.transform([text])
     nlp_score = nlp_model.predict_proba(X_text)[:, 1][0]
 
     # -------- PRODUCTIVITY --------
-    prod_input = np.array([
-        row.get(f, 0) for f in prod_features
-    ]).reshape(1, -1)
+    prod_input = np.array([row.get(f, 0) for f in prod_features]).reshape(1, -1)
     prod_score = prod_model.predict(prod_input)[0]
 
     # -------- DEMOGRAPHIC --------
@@ -71,15 +66,9 @@ for _, row in df.iterrows():
     academic_stress = abs(row.get("matric_mark", 0) - row.get("nbt_ave", 0)) / 100
 
     # -------- FINAL FEATURE VECTOR --------
-    meta_features.append([
-        nlp_score,
-        prod_score,
-        age,
-        sex,
-        focus_proxy,
-        cognitive_load,
-        academic_stress
-    ])
+    meta_features.append(
+        [nlp_score, prod_score, age, sex, focus_proxy, cognitive_load, academic_stress]
+    )
 
 X_meta = np.array(meta_features)
 
@@ -95,14 +84,12 @@ X_train, X_test, y_train, y_test = train_test_split(
 # =========================
 # META MODEL
 # =========================
-model = Pipeline([
-    ("scaler", StandardScaler()),
-    ("clf", LogisticRegression(
-        class_weight="balanced",
-        max_iter=1000,
-        random_state=42
-    ))
-])
+model = Pipeline(
+    [
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(class_weight="balanced", max_iter=1000, random_state=42)),
+    ]
+)
 
 # =========================
 # TRAIN
@@ -126,13 +113,11 @@ print("AUC:", roc_auc_score(y_test, y_prob))
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 cv_scores = cross_val_score(model, X_meta, y, cv=cv, scoring="roc_auc")
 
-print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std()*2)
+print("\nCV AUC:", cv_scores.mean(), "+/-", cv_scores.std() * 2)
 
 # =========================
 # SAVE
 # =========================
-joblib.dump({
-    "model": model
-}, "models/adhd_stacked_model_final.pkl")
+joblib.dump({"model": model}, "models/adhd_stacked_model_final.pkl")
 
 print("\n✓ FINAL STACKED MODEL SAVED")

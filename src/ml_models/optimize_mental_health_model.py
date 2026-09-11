@@ -3,25 +3,19 @@ import warnings
 import joblib
 import pandas as pd
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 
-print("="*70)
+print("=" * 70)
 print("MENTAL HEALTH NLP MODEL - FINAL FAST VERSION")
-print("="*70)
+print("=" * 70)
 
 # =========================
 # LOAD DATA
@@ -48,11 +42,7 @@ print(f"Train: {len(X_train)}, Test: {len(X_test)}")
 print("\n--- TF-IDF Vectorization ---")
 
 tfidf = TfidfVectorizer(
-    max_features=15000,
-    ngram_range=(1, 2),
-    min_df=2,
-    max_df=0.95,
-    sublinear_tf=True
+    max_features=15000, ngram_range=(1, 2), min_df=2, max_df=0.95, sublinear_tf=True
 )
 
 X_train_tfidf = tfidf.fit_transform(X_train)
@@ -66,11 +56,7 @@ print(f"TF-IDF shape: {X_train_tfidf.shape}")
 print("\n--- Training Logistic Regression ---")
 
 lr = LogisticRegression(
-    C=10.0,
-    max_iter=1000,
-    solver='lbfgs',
-    class_weight='balanced',
-    random_state=42
+    C=10.0, max_iter=1000, solver="lbfgs", class_weight="balanced", random_state=42
 )
 
 lr.fit(X_train_tfidf, y_train)
@@ -80,7 +66,7 @@ lr.fit(X_train_tfidf, y_train)
 # =========================
 print("\n--- Training Fast Linear SVM ---")
 
-svm_base = LinearSVC(class_weight='balanced', max_iter=2000)
+svm_base = LinearSVC(class_weight="balanced", max_iter=2000)
 svm = CalibratedClassifierCV(svm_base)
 
 svm.fit(X_train_tfidf, y_train)
@@ -92,13 +78,14 @@ print("\n--- Creating Ensemble ---")
 
 ensemble = VotingClassifier(
     estimators=[
-        ('lr', lr),
-        ('svm', svm),
+        ("lr", lr),
+        ("svm", svm),
     ],
-    voting='soft'
+    voting="soft",
 )
 
 ensemble.fit(X_train_tfidf, y_train)
+
 
 # =========================
 # EVALUATION FUNCTION
@@ -114,12 +101,13 @@ def evaluate(name, model):
     print(f"  F1 Score:  {f1_score(y_test, y_pred):.4f}")
     print(f"  ROC-AUC:   {roc_auc_score(y_test, y_prob):.4f}")
 
+
 # =========================
 # RESULTS
 # =========================
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("MODEL PERFORMANCE")
-print("="*70)
+print("=" * 70)
 
 evaluate("Logistic Regression", lr)
 evaluate("Linear SVM", svm)
@@ -132,6 +120,6 @@ evaluate("Ensemble", ensemble)
 # Usually Logistic Regression wins
 joblib.dump((lr, tfidf), "models/mental_health_nlp_final.pkl")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("✓ FINAL NLP MODEL SAVED (Logistic Regression)")
-print("="*70)
+print("=" * 70)

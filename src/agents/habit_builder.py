@@ -133,7 +133,9 @@ class HabitBuilderAgent:
 
         return None
 
-    def get_habit_stacking_suggestion(self, new_habit: str, existing_routine: list | None = None) -> str:
+    def get_habit_stacking_suggestion(
+        self, new_habit: str, existing_routine: list | None = None
+    ) -> str:
         """Suggest how to stack a new habit onto existing routines."""
         if existing_routine is None:
             existing_routine = [
@@ -147,7 +149,9 @@ class HabitBuilderAgent:
         anchors = existing_routine[:3]
         return (
             f"To build '{new_habit}', try stacking it onto one of your existing routines:\n"
-            + "\n".join(["• After [routine], I will [new habit for 1 minute]" for routine in anchors])
+            + "\n".join(
+                ["• After [routine], I will [new habit for 1 minute]" for routine in anchors]
+            )
         )
 
     def get_system_prompt_extension(self, context: dict, current_streak: int = 0) -> str:

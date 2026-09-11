@@ -5,12 +5,7 @@ def final_score(productivity, adhd, mental_health, depression):
     """
 
     # Base weights
-    base_weights = {
-        "productivity": 0.35,
-        "adhd": 0.25,
-        "mental_health": 0.20,
-        "depression": 0.20
-    }
+    base_weights = {"productivity": 0.35, "adhd": 0.25, "mental_health": 0.20, "depression": 0.20}
 
     # Dynamic weighting based on risk levels
     if adhd < 40:  # High ADHD risk
@@ -32,14 +27,14 @@ def final_score(productivity, adhd, mental_health, depression):
 
     # Normalize weights to sum to 1
     total_weight = sum(base_weights.values())
-    weights = {k: v/total_weight for k, v in base_weights.items()}
+    weights = {k: v / total_weight for k, v in base_weights.items()}
 
     # Calculate weighted score
     score = (
-        weights["productivity"] * productivity +
-        weights["adhd"] * adhd +
-        weights["mental_health"] * mental_health +
-        weights["depression"] * depression
+        weights["productivity"] * productivity
+        + weights["adhd"] * adhd
+        + weights["mental_health"] * mental_health
+        + weights["depression"] * depression
     )
 
     # Clamp score
@@ -72,10 +67,10 @@ calculate_final_score = final_score
 def get_level_from_score(score):
     """
     Get level classification from a numeric score.
-    
+
     Args:
         score: float between 0-100
-        
+
     Returns:
         str: level classification
     """

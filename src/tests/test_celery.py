@@ -61,20 +61,20 @@ class TestADHDBackgroundQueue(unittest.TestCase):
             "breaks_per_day": 2,
             "coffee_intake_mg": 50,
             "exercise_minutes": 15,
-            "stress_level": 6
+            "stress_level": 6,
         }
-        
+
         # Trigger eagerly
         res = calculate_ml_scores_task.delay(
             user_data=user_data,
             text="I feel a bit overwhelmed and distracted today.",
             adhd_answers=["Often", "Sometimes", "Often", "Rarely", "Often"],
-            username="test_user"
+            username="test_user",
         )
-        
+
         self.assertEqual(res.status, "SUCCESS")
         result_payload = res.result
-        
+
         self.assertIn("scores", result_payload)
         self.assertIn("interventions", result_payload)
         scores = result_payload["scores"]
@@ -92,10 +92,7 @@ class TestADHDBackgroundQueue(unittest.TestCase):
         mock_db_instance.get_weekly_report.return_value = {"weekly": "data"}
         mock_db_instance.get_peak_focus_hours.return_value = [{"hour": 9, "avg_quality": 8.0}]
 
-        res = generate_analytics_task.delay(
-            username="test_user",
-            user_data={"stress_level": 5}
-        )
+        res = generate_analytics_task.delay(username="test_user", user_data={"stress_level": 5})
 
         self.assertEqual(res.status, "SUCCESS")
         result = res.result
@@ -114,7 +111,7 @@ class TestADHDBackgroundQueue(unittest.TestCase):
         mock_db_instance.get_facts_as_dict.return_value = {}
 
         res = synthesize_personality_task.delay(username="test_user")
-        
+
         self.assertEqual(res.status, "SUCCESS")
         result = res.result
         self.assertIn("adhd_archetype", result)
@@ -128,7 +125,7 @@ class TestADHDBackgroundQueue(unittest.TestCase):
         mock_db_instance.get_facts_as_dict.return_value = {}
 
         res = compile_context_task.delay(username="test_user")
-        
+
         self.assertEqual(res.status, "SUCCESS")
         result = res.result
         self.assertIn("summary", result)
@@ -138,18 +135,22 @@ class TestADHDBackgroundQueue(unittest.TestCase):
         payload = {
             "user_data": {"stress_level": 7, "sleep_hours": 6},
             "adhd_answers": ["Often", "Sometimes", "Often"],
-            "text": "I can't focus"
+            "text": "I can't focus",
         }
-        
+
         # Test default async behaviour
-        response = self.client.post("/tasks/calculate_scores?async_task=true&username=test_user", json=payload)
+        response = self.client.post(
+            "/tasks/calculate_scores?async_task=true&username=test_user", json=payload
+        )
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("task_id", data)
         self.assertEqual(data["status"], "queued")
 
         # Test sync fallback via the same endpoint
-        response = self.client.post("/tasks/calculate_scores?async_task=false&username=test_user", json=payload)
+        response = self.client.post(
+            "/tasks/calculate_scores?async_task=false&username=test_user", json=payload
+        )
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("scores", data)
@@ -161,9 +162,11 @@ class TestADHDBackgroundQueue(unittest.TestCase):
         payload = {
             "user_data": {"stress_level": 5, "sleep_hours": 7},
             "adhd_answers": [],
-            "text": "distracted"
+            "text": "distracted",
         }
-        response = self.client.post("/tasks/calculate_scores?async_task=true&username=test_user", json=payload)
+        response = self.client.post(
+            "/tasks/calculate_scores?async_task=true&username=test_user", json=payload
+        )
         task_id = response.json()["task_id"]
 
         # Retrieve status

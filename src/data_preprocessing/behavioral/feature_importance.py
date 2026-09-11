@@ -10,7 +10,7 @@ drop_cols = [
     "attendance_percentage",
     "assignments_completed",
     "health_score",
-    "study_efficiency"
+    "study_efficiency",
 ]
 
 for col in drop_cols:
@@ -24,10 +24,9 @@ y = df["productivity_score"]
 model = RandomForestRegressor()
 model.fit(X, y)
 
-importance = pd.DataFrame({
-    "Feature": X.columns,
-    "Importance": model.feature_importances_
-}).sort_values(by="Importance", ascending=False)
+importance = pd.DataFrame(
+    {"Feature": X.columns, "Importance": model.feature_importances_}
+).sort_values(by="Importance", ascending=False)
 
 print("\nFeature Importance:")
 print(importance)

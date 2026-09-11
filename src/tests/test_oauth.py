@@ -80,7 +80,12 @@ class TestOAuthAuthentication(unittest.TestCase):
         self.cleanup_db()
 
     def cleanup_db(self):
-        for f in ["./test_adhd_coach_temp.db", "./test_adhd_coach_temp.db-journal", "./test_adhd_coach_temp.db-wal", "./test_adhd_coach_temp.db-shm"]:
+        for f in [
+            "./test_adhd_coach_temp.db",
+            "./test_adhd_coach_temp.db-journal",
+            "./test_adhd_coach_temp.db-wal",
+            "./test_adhd_coach_temp.db-shm",
+        ]:
             if os.path.exists(f):
                 try:
                     os.remove(f)
@@ -131,12 +136,22 @@ class TestOAuthAuthentication(unittest.TestCase):
         loop = asyncio.new_event_loop()
         try:
             token = pyjwt.encode(
-                {"aud": "mock_google_client_id.apps.googleusercontent.com", "iss": "https://accounts.google.com", "sub": "123", "email": "a@b.com", "email_verified": True, "nonce": "nonce_a", "exp": time.time() + 1000},
+                {
+                    "aud": "mock_google_client_id.apps.googleusercontent.com",
+                    "iss": "https://accounts.google.com",
+                    "sub": "123",
+                    "email": "a@b.com",
+                    "email_verified": True,
+                    "nonce": "nonce_a",
+                    "exp": time.time() + 1000,
+                },
                 "secret",
-                algorithm="HS256"
+                algorithm="HS256",
             )
             with self.assertRaises(ValueError) as ctx:
-                loop.run_until_complete(verify_google_identity({"id_token": token}, expected_nonce="nonce_b"))
+                loop.run_until_complete(
+                    verify_google_identity({"id_token": token}, expected_nonce="nonce_b")
+                )
             self.assertIn("nonce mismatch", str(ctx.exception).lower())
         finally:
             loop.close()
@@ -146,9 +161,16 @@ class TestOAuthAuthentication(unittest.TestCase):
         loop = asyncio.new_event_loop()
         try:
             token = pyjwt.encode(
-                {"aud": "mock_google_client_id.apps.googleusercontent.com", "iss": "https://attacker.com", "sub": "123", "email": "a@b.com", "email_verified": True, "exp": time.time() + 1000},
+                {
+                    "aud": "mock_google_client_id.apps.googleusercontent.com",
+                    "iss": "https://attacker.com",
+                    "sub": "123",
+                    "email": "a@b.com",
+                    "email_verified": True,
+                    "exp": time.time() + 1000,
+                },
                 "secret",
-                algorithm="HS256"
+                algorithm="HS256",
             )
             with self.assertRaises(ValueError) as ctx:
                 loop.run_until_complete(verify_google_identity({"id_token": token}))
@@ -161,9 +183,16 @@ class TestOAuthAuthentication(unittest.TestCase):
         loop = asyncio.new_event_loop()
         try:
             token = pyjwt.encode(
-                {"aud": "unauthorized_client_id", "iss": "https://accounts.google.com", "sub": "123", "email": "a@b.com", "email_verified": True, "exp": time.time() + 1000},
+                {
+                    "aud": "unauthorized_client_id",
+                    "iss": "https://accounts.google.com",
+                    "sub": "123",
+                    "email": "a@b.com",
+                    "email_verified": True,
+                    "exp": time.time() + 1000,
+                },
                 "secret",
-                algorithm="HS256"
+                algorithm="HS256",
             )
             with self.assertRaises(ValueError) as ctx:
                 loop.run_until_complete(verify_google_identity({"id_token": token}))
@@ -176,9 +205,16 @@ class TestOAuthAuthentication(unittest.TestCase):
         loop = asyncio.new_event_loop()
         try:
             token = pyjwt.encode(
-                {"aud": "mock_google_client_id.apps.googleusercontent.com", "iss": "https://accounts.google.com", "sub": "123", "email": "a@b.com", "email_verified": True, "exp": time.time() - 100},
+                {
+                    "aud": "mock_google_client_id.apps.googleusercontent.com",
+                    "iss": "https://accounts.google.com",
+                    "sub": "123",
+                    "email": "a@b.com",
+                    "email_verified": True,
+                    "exp": time.time() - 100,
+                },
                 "secret",
-                algorithm="HS256"
+                algorithm="HS256",
             )
             with self.assertRaises(ValueError) as ctx:
                 loop.run_until_complete(verify_google_identity({"id_token": token}))
@@ -191,9 +227,16 @@ class TestOAuthAuthentication(unittest.TestCase):
         loop = asyncio.new_event_loop()
         try:
             token = pyjwt.encode(
-                {"aud": "mock_google_client_id.apps.googleusercontent.com", "iss": "https://accounts.google.com", "sub": "123", "email": "unverified@gmail.com", "email_verified": False, "exp": time.time() + 1000},
+                {
+                    "aud": "mock_google_client_id.apps.googleusercontent.com",
+                    "iss": "https://accounts.google.com",
+                    "sub": "123",
+                    "email": "unverified@gmail.com",
+                    "email_verified": False,
+                    "exp": time.time() + 1000,
+                },
                 "secret",
-                algorithm="HS256"
+                algorithm="HS256",
             )
             with self.assertRaises(ValueError) as ctx:
                 loop.run_until_complete(verify_google_identity({"id_token": token}))
@@ -208,7 +251,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             provider="google",
             provider_user_id="google_sub_1001",
             email="brand_new@gmail.com",
-            name="New ADHD User"
+            name="New ADHD User",
         )
         self.assertTrue(is_new)
         self.assertIsNone(user.password_hash)
@@ -225,7 +268,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="google_sub_repeat",
-            email="repeat@gmail.com"
+            email="repeat@gmail.com",
         )
         self.assertTrue(is_new1)
 
@@ -233,7 +276,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="google_sub_repeat",
-            email="repeat@gmail.com"
+            email="repeat@gmail.com",
         )
         self.assertFalse(is_new2)
         self.assertEqual(user1.id, user2.id)
@@ -248,7 +291,9 @@ class TestOAuthAuthentication(unittest.TestCase):
 
     def test_microsoft_callback_endpoint_rejected(self):
         """Verify /auth/oauth/microsoft/callback is rejected and redirects with unsupported_provider."""
-        resp = self.client.get("/auth/oauth/microsoft/callback?code=mock_code&state=mock_state", follow_redirects=False)
+        resp = self.client.get(
+            "/auth/oauth/microsoft/callback?code=mock_code&state=mock_state", follow_redirects=False
+        )
         self.assertEqual(resp.status_code, 303)
         self.assertIn("error=unsupported_provider", resp.headers.get("location", ""))
 
@@ -272,7 +317,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             password_hash=None,
             auth_provider="microsoft",
             role="user",
-            is_active=True
+            is_active=True,
         )
         self.db_manager.db.add(user)
         self.db_manager.db.commit()
@@ -281,13 +326,16 @@ class TestOAuthAuthentication(unittest.TestCase):
             user_id=user.id,
             provider="microsoft",
             provider_user_id="legacy_ms_guid_123",
-            email="legacy_ms@example.com"
+            email="legacy_ms@example.com",
         )
 
         from auth.auth_handler import create_access_token
+
         token = create_access_token({"sub": user.username})
 
-        resp = self.client.get("/auth/oauth/connected-accounts", headers={"Authorization": f"Bearer {token}"})
+        resp = self.client.get(
+            "/auth/oauth/connected-accounts", headers={"Authorization": f"Bearer {token}"}
+        )
         self.assertEqual(resp.status_code, 200)
         providers = [acc["provider"] for acc in resp.json()]
         self.assertEqual(providers, ["google"])
@@ -302,7 +350,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             email="victim@example.com",
             password_hash="argon2_or_bcrypt_secret_hash",
             role="user",
-            is_active=True
+            is_active=True,
         )
         self.db_manager.db.add(local_user)
         self.db_manager.db.commit()
@@ -313,7 +361,7 @@ class TestOAuthAuthentication(unittest.TestCase):
                 db=self.db_manager,
                 provider="google",
                 provider_user_id="attacker_or_separate_google_id",
-                email="victim@example.com"
+                email="victim@example.com",
             )
 
     def test_account_linking_authenticated_user_succeeds(self):
@@ -323,7 +371,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             email="safe@example.com",
             password_hash="existing_password",
             role="user",
-            is_active=True
+            is_active=True,
         )
         self.db_manager.db.add(local_user)
         self.db_manager.db.commit()
@@ -334,7 +382,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             provider="google",
             provider_user_id="google_safe_link_id",
             email="safe@example.com",
-            authenticated_user_id=local_user.id
+            authenticated_user_id=local_user.id,
         )
         self.assertFalse(is_new)
         self.assertEqual(linked_user.id, local_user.id)
@@ -351,7 +399,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             password_hash=None,
             auth_provider="google",
             role="user",
-            is_active=True
+            is_active=True,
         )
         self.db_manager.db.add(oauth_user)
         self.db_manager.db.commit()
@@ -361,7 +409,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="google_sub_linked_2",
-            email="shared_oauth@example.com"
+            email="shared_oauth@example.com",
         )
         self.assertFalse(is_new)
         self.assertEqual(user.id, oauth_user.id)
@@ -374,7 +422,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="dev_sub_1",
-            email="dev1@example.com"
+            email="dev1@example.com",
         )
         raw_token, token_hash = generate_trusted_device_token()
         self.assertEqual(hash_device_token(raw_token), token_hash)
@@ -393,14 +441,16 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="resume_sub",
-            email="resume@example.com"
+            email="resume@example.com",
         )
         raw_token, token_hash = generate_trusted_device_token()
         expires = datetime.now(timezone.utc) + timedelta(days=30)
         self.db_manager.save_hashed_trusted_device(user.id, token_hash, "Test Device", expires)
 
         # Call resume endpoint
-        resp = self.client.post("/auth/trusted-devices/resume", headers={"Cookie": f"trusted_device_token={raw_token}"})
+        resp = self.client.post(
+            "/auth/trusted-devices/resume", headers={"Cookie": f"trusted_device_token={raw_token}"}
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["username"], user.username)
 
@@ -418,7 +468,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="exp_sub",
-            email="expired@example.com"
+            email="expired@example.com",
         )
         raw_token, token_hash = generate_trusted_device_token()
         expired_date = datetime.now(timezone.utc) - timedelta(days=2)
@@ -433,7 +483,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="rev_sub",
-            email="revoked@example.com"
+            email="revoked@example.com",
         )
         raw_token, token_hash = generate_trusted_device_token()
         expires = datetime.now(timezone.utc) + timedelta(days=30)
@@ -449,9 +499,10 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="multi_sub",
-            email="multi@example.com"
+            email="multi@example.com",
         )
         from auth.auth_handler import create_access_token
+
         token = create_access_token({"sub": user.username})
 
         _, h1 = generate_trusted_device_token()
@@ -461,13 +512,18 @@ class TestOAuthAuthentication(unittest.TestCase):
         self.db_manager.save_hashed_trusted_device(user.id, h2, "D2", exp)
 
         # Revoke one
-        resp1 = self.client.post(f"/auth/trusted-devices/{d1.device_id}/revoke", headers={"Authorization": f"Bearer {token}"})
+        resp1 = self.client.post(
+            f"/auth/trusted-devices/{d1.device_id}/revoke",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         self.assertEqual(resp1.status_code, 200)
         self.assertIsNone(self.db_manager.get_trusted_device_by_hash(h1))
         self.assertIsNotNone(self.db_manager.get_trusted_device_by_hash(h2))
 
         # Revoke all
-        resp2 = self.client.post("/auth/trusted-devices/revoke-all", headers={"Authorization": f"Bearer {token}"})
+        resp2 = self.client.post(
+            "/auth/trusted-devices/revoke-all", headers={"Authorization": f"Bearer {token}"}
+        )
         self.assertEqual(resp2.status_code, 200)
         self.assertIsNone(self.db_manager.get_trusted_device_by_hash(h2))
 
@@ -476,12 +532,10 @@ class TestOAuthAuthentication(unittest.TestCase):
     def test_auth_me_with_valid_cookie(self):
         """Verify GET /auth/me validates access_token delivered via HttpOnly cookie."""
         user, _ = resolve_or_create_oauth_user(
-            db=self.db_manager,
-            provider="google",
-            provider_user_id="me_sub",
-            email="me@example.com"
+            db=self.db_manager, provider="google", provider_user_id="me_sub", email="me@example.com"
         )
         from auth.auth_handler import create_access_token
+
         access_token = create_access_token({"sub": user.username})
 
         resp = self.client.get("/auth/me", headers={"Cookie": f"access_token={access_token}"})
@@ -499,12 +553,13 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="inactive_sub",
-            email="inactive@example.com"
+            email="inactive@example.com",
         )
         user.is_active = False
         self.db_manager.db.commit()
 
         from auth.auth_handler import create_access_token
+
         access_token = create_access_token({"sub": user.username})
 
         resp = self.client.get("/auth/me", headers={"Cookie": f"access_token={access_token}"})
@@ -517,12 +572,14 @@ class TestOAuthAuthentication(unittest.TestCase):
             db=self.db_manager,
             provider="google",
             provider_user_id="logout_sub",
-            email="logout@example.com"
+            email="logout@example.com",
         )
         exp = datetime.now(timezone.utc) + timedelta(days=30)
         self.db_manager.save_hashed_trusted_device(user.id, token_hash, "Logout Dev", exp)
 
-        resp = self.client.post("/auth/logout", headers={"Cookie": f"trusted_device_token={raw_token}"})
+        resp = self.client.post(
+            "/auth/logout", headers={"Cookie": f"trusted_device_token={raw_token}"}
+        )
         self.assertEqual(resp.status_code, 200)
 
         # Device is revoked in DB
@@ -548,7 +605,7 @@ class TestOAuthAuthentication(unittest.TestCase):
             "provider": "google",
             "provider_user_id": "google_prod_sub",
             "email": "e2e_google@gmail.com",
-            "name": "Google Tester"
+            "name": "Google Tester",
         }
 
         resp = self.client.get(

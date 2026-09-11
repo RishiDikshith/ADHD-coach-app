@@ -49,25 +49,56 @@ class InterventionAgent:
 
         # CRITICAL urgency keywords — genuine distress signals
         critical_urgency = [
-            "can't do this", "giving up", "I quit", "too much",
-            "can't handle", "going to fail", "hate myself",
-            "what's wrong with me", "I'm useless", "I'm a failure",
-            "everything is wrong", "can't take it", "want to give up",
-            "don't want to be here", "end it", "no point",
-            "can't go on", "worthless", "nobody cares",
+            "can't do this",
+            "giving up",
+            "I quit",
+            "too much",
+            "can't handle",
+            "going to fail",
+            "hate myself",
+            "what's wrong with me",
+            "I'm useless",
+            "I'm a failure",
+            "everything is wrong",
+            "can't take it",
+            "want to give up",
+            "don't want to be here",
+            "end it",
+            "no point",
+            "can't go on",
+            "worthless",
+            "nobody cares",
         ]
 
         high_urgency = [
-            "overwhelmed", "stressed", "stuck", "can't focus",
-            "distracted", "frustrated", "exhausted", "tired",
-            "struggling", "lost", "confused", "no motivation",
-            "can't start", "procrastinating", "avoiding",
-            "spiral", "panicking", "breakdown",
+            "overwhelmed",
+            "stressed",
+            "stuck",
+            "can't focus",
+            "distracted",
+            "frustrated",
+            "exhausted",
+            "tired",
+            "struggling",
+            "lost",
+            "confused",
+            "no motivation",
+            "can't start",
+            "procrastinating",
+            "avoiding",
+            "spiral",
+            "panicking",
+            "breakdown",
         ]
 
         medium_urgency = [
-            "unsure", "worried", "drained", "meh",
-            "blah", "okay i guess", "bleh",
+            "unsure",
+            "worried",
+            "drained",
+            "meh",
+            "blah",
+            "okay i guess",
+            "bleh",
         ]
 
         msg_lower = user_message.lower()
@@ -133,9 +164,14 @@ class InterventionAgent:
 
         # 4. Hyperfocus detection
         hyperfocus_signals = [
-            "lost track of time", "hours passed", "forgot to eat",
-            "didn't realize", "can't stop", "hyperfocus",
-            "been working for", "can't pull away",
+            "lost track of time",
+            "hours passed",
+            "forgot to eat",
+            "didn't realize",
+            "can't stop",
+            "hyperfocus",
+            "been working for",
+            "can't pull away",
         ]
         if any(s in msg_lower for s in hyperfocus_signals):
             return {
@@ -157,7 +193,9 @@ class InterventionAgent:
 
         return None
 
-    def get_grounding_exercise(self, exercise_type: str = "quick", user_state: str = "neutral") -> dict:
+    def get_grounding_exercise(
+        self, exercise_type: str = "quick", user_state: str = "neutral"
+    ) -> dict:
         exercises = {
             "quick": {
                 "name": "5-4-3-2-1 Grounding",

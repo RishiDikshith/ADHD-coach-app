@@ -22,11 +22,30 @@ logger = logging.getLogger(__name__)
 SIGNAL_PATTERNS = {
     "overwhelm": {
         "keywords": [
-            "too much", "overwhelmed", "can't handle", "too many", "so much to do",
-            "spinning", "drowning", "sinking", "can't breathe", "everything at once",
-            "too fast", "can't keep up", "freaking out", "panic", "can't cope",
-            "stuck", "frozen", "paralyzed", "can't move", "so many things",
-            "i'm done", "can't do this", "too hard", "too difficult",
+            "too much",
+            "overwhelmed",
+            "can't handle",
+            "too many",
+            "so much to do",
+            "spinning",
+            "drowning",
+            "sinking",
+            "can't breathe",
+            "everything at once",
+            "too fast",
+            "can't keep up",
+            "freaking out",
+            "panic",
+            "can't cope",
+            "stuck",
+            "frozen",
+            "paralyzed",
+            "can't move",
+            "so many things",
+            "i'm done",
+            "can't do this",
+            "too hard",
+            "too difficult",
         ],
         "weight": 0.15,  # Per keyword match weight
         "rapid_message_threshold": 3,  # Messages in 60s window
@@ -35,11 +54,28 @@ SIGNAL_PATTERNS = {
     },
     "burnout": {
         "keywords": [
-            "exhausted", "burned out", "burnt out", "drained", "empty", "numb",
-            "tired of everything", "no energy", "can't anymore", "done with everything",
-            "nothing matters", "what's the point", "hopeless", "helpless",
-            "so tired", "always tired", "never enough", "giving up",
-            "can't even", "no motivation", "zero energy", "completely done",
+            "exhausted",
+            "burned out",
+            "burnt out",
+            "drained",
+            "empty",
+            "numb",
+            "tired of everything",
+            "no energy",
+            "can't anymore",
+            "done with everything",
+            "nothing matters",
+            "what's the point",
+            "hopeless",
+            "helpless",
+            "so tired",
+            "always tired",
+            "never enough",
+            "giving up",
+            "can't even",
+            "no motivation",
+            "zero energy",
+            "completely done",
         ],
         "weight": 0.12,
         "chronic_stress_days": 5,  # Days of high stress before flagging burnout
@@ -48,10 +84,22 @@ SIGNAL_PATTERNS = {
     },
     "hyperfocus": {
         "keywords": [
-            "can't stop", "lost track of time", "hours passed", "didn't notice",
-            "hyperfocus", "in the zone", "deep focus", "can't pull away",
-            "forgot to eat", "forgot to drink", "been hours", "can't stop working",
-            "obsessed", "can't look away", "deep dive", "rabbit hole",
+            "can't stop",
+            "lost track of time",
+            "hours passed",
+            "didn't notice",
+            "hyperfocus",
+            "in the zone",
+            "deep focus",
+            "can't pull away",
+            "forgot to eat",
+            "forgot to drink",
+            "been hours",
+            "can't stop working",
+            "obsessed",
+            "can't look away",
+            "deep dive",
+            "rabbit hole",
         ],
         "weight": 0.15,
         "long_session_minutes": 120,  # Extended session flag
@@ -60,28 +108,65 @@ SIGNAL_PATTERNS = {
     },
     "avoidance": {
         "keywords": [
-            "procrastinating", "avoiding", "putting off", "can't start",
-            "don't want to", "will do later", "starting tomorrow", "not ready yet",
-            "scrolling", "distracting myself", "binge watching", "endless scrolling",
-            "doing everything except", "finding excuses", "can't face it",
-            "dreading", "not in the mood", "later", "tomorrow",
+            "procrastinating",
+            "avoiding",
+            "putting off",
+            "can't start",
+            "don't want to",
+            "will do later",
+            "starting tomorrow",
+            "not ready yet",
+            "scrolling",
+            "distracting myself",
+            "binge watching",
+            "endless scrolling",
+            "doing everything except",
+            "finding excuses",
+            "can't face it",
+            "dreading",
+            "not in the mood",
+            "later",
+            "tomorrow",
         ],
         "weight": 0.12,
         "task_paralysis_keywords": [
-            "don't know where to start", "too big", "can't even begin",
-            "where do i even start", "don't know how",
+            "don't know where to start",
+            "too big",
+            "can't even begin",
+            "where do i even start",
+            "don't know how",
         ],
         "task_paralysis_weight": 0.35,
         "intensifiers": ["always", "constantly", "endlessly"],
     },
     "emotional_dysregulation": {
         "keywords": [
-            "so angry", "furious", "rage", "snapped", "exploded", "overreacted",
-            "so upset", "crying", "can't stop crying", "so frustrated",
-            "so sad", "devastated", "crushed", "hurt", "rejected",
-            "rsd", "rejection sensitivity", "over sensitive", "can't control",
-            "emotional", "mood swing", "feeling everything", "too intense",
-            "so anxious", "panic attack", "can't calm down",
+            "so angry",
+            "furious",
+            "rage",
+            "snapped",
+            "exploded",
+            "overreacted",
+            "so upset",
+            "crying",
+            "can't stop crying",
+            "so frustrated",
+            "so sad",
+            "devastated",
+            "crushed",
+            "hurt",
+            "rejected",
+            "rsd",
+            "rejection sensitivity",
+            "over sensitive",
+            "can't control",
+            "emotional",
+            "mood swing",
+            "feeling everything",
+            "too intense",
+            "so anxious",
+            "panic attack",
+            "can't calm down",
         ],
         "weight": 0.15,
         "rapid_mood_shift_weight": 0.3,
@@ -240,7 +325,11 @@ class ADHDStateDetector:
             # 2. Rapid message detection (for overwhelm)
             if "rapid_message_threshold" in config and config["rapid_message_threshold"] > 0:
                 self._message_timestamps.append(datetime.now(timezone.utc))
-                recent = [t for t in self._message_timestamps if (datetime.now(timezone.utc) - t).total_seconds() < 60]
+                recent = [
+                    t
+                    for t in self._message_timestamps
+                    if (datetime.now(timezone.utc) - t).total_seconds() < 60
+                ]
                 if len(recent) >= config["rapid_message_threshold"]:
                     score += config.get("rapid_message_weight", 0.2)
 
@@ -301,20 +390,35 @@ class ADHDStateDetector:
         # Positive states
         if context.get("text", ""):
             text = context.get("text", "").lower()
-            if any(kw in text for kw in ["hyperfocus", "deep focus", "in the zone"]) or \
-               (signal_scores.get("hyperfocus", 0) > 0 and signal_scores.get("overwhelm", 0) == 0):
+            if any(kw in text for kw in ["hyperfocus", "deep focus", "in the zone"]) or (
+                signal_scores.get("hyperfocus", 0) > 0 and signal_scores.get("overwhelm", 0) == 0
+            ):
                 return "hyperfocus", signal_scores.get("hyperfocus", 0.3)
 
         # Default to calm
         if all(score < 0.2 for score in signal_scores.values()):
-            focused_words = ["focus", "working", "doing", "productive", "accomplished", "completed", "done"]
-            if any(w in context.get("text", "").lower() for w in focused_words) if context.get("text") else False:
+            focused_words = [
+                "focus",
+                "working",
+                "doing",
+                "productive",
+                "accomplished",
+                "completed",
+                "done",
+            ]
+            if (
+                any(w in context.get("text", "").lower() for w in focused_words)
+                if context.get("text")
+                else False
+            ):
                 return "focused", 0.3
             return "calm", 0.5
 
         return "calm", max(0.3, 1.0 - max(signal_scores.values()))
 
-    def _generate_adaptations(self, state: str, state_config: dict, signal_scores: dict, context: dict) -> dict:
+    def _generate_adaptations(
+        self, state: str, state_config: dict, signal_scores: dict, context: dict
+    ) -> dict:
         """Generate specific adaptation suggestions based on the detected state."""
         adaptations = {
             "ui_changes": [],
@@ -328,7 +432,11 @@ class ADHDStateDetector:
         if state == "overwhelmed":
             adaptations["ui_changes"] = ["simplify_dashboard", "reduce_sidebar", "single_column"]
             adaptations["suggested_interventions"] = [
-                {"type": "grounding", "action": "5-4-3-2-1 grounding exercise", "priority": "immediate"},
+                {
+                    "type": "grounding",
+                    "action": "5-4-3-2-1 grounding exercise",
+                    "priority": "immediate",
+                },
                 {"type": "breathing", "action": "Box breathing: 4-4-4-4", "priority": "immediate"},
                 {"type": "micro_task", "action": "Pick ONE tiny thing to do", "priority": "high"},
             ]
@@ -340,8 +448,16 @@ class ADHDStateDetector:
         elif state == "burnout":
             adaptations["ui_changes"] = ["simplify_dashboard", "hide_stats", "show_recovery"]
             adaptations["suggested_interventions"] = [
-                {"type": "rest", "action": "Permission to rest — no productivity today", "priority": "immediate"},
-                {"type": "self_care", "action": "Do something that feels good, not productive", "priority": "high"},
+                {
+                    "type": "rest",
+                    "action": "Permission to rest — no productivity today",
+                    "priority": "immediate",
+                },
+                {
+                    "type": "self_care",
+                    "action": "Do something that feels good, not productive",
+                    "priority": "high",
+                },
                 {"type": "sleep", "action": "Prioritize sleep tonight", "priority": "high"},
             ]
             adaptations["messages"] = [
@@ -353,7 +469,11 @@ class ADHDStateDetector:
             adaptations["ui_changes"] = ["show_reminders", "gentle_timer"]
             adaptations["suggested_interventions"] = [
                 {"type": "hydration", "action": "Drink a glass of water", "priority": "medium"},
-                {"type": "movement", "action": "Stand up and stretch for 60 seconds", "priority": "medium"},
+                {
+                    "type": "movement",
+                    "action": "Stand up and stretch for 60 seconds",
+                    "priority": "medium",
+                },
                 {"type": "break", "action": "Take a 5-minute break", "priority": "low"},
             ]
             adaptations["messages"] = [
@@ -364,9 +484,21 @@ class ADHDStateDetector:
         elif state == "avoidant":
             adaptations["ui_changes"] = ["show_start_tiny", "hide_large_tasks"]
             adaptations["suggested_interventions"] = [
-                {"type": "tiny_start", "action": "2-minute rule: just do 2 minutes", "priority": "high"},
-                {"type": "accountability", "action": "Tell me one tiny step you'll take", "priority": "high"},
-                {"type": "barrier_removal", "action": "What's ONE thing blocking you? Let's remove it.", "priority": "medium"},
+                {
+                    "type": "tiny_start",
+                    "action": "2-minute rule: just do 2 minutes",
+                    "priority": "high",
+                },
+                {
+                    "type": "accountability",
+                    "action": "Tell me one tiny step you'll take",
+                    "priority": "high",
+                },
+                {
+                    "type": "barrier_removal",
+                    "action": "What's ONE thing blocking you? Let's remove it.",
+                    "priority": "medium",
+                },
             ]
             adaptations["messages"] = [
                 "Starting is the hardest part. Let's make it so small it feels silly.",
@@ -377,8 +509,16 @@ class ADHDStateDetector:
             adaptations["ui_changes"] = ["simplify_completely", "hide_all_stats", "calming_colors"]
             adaptations["suggested_interventions"] = [
                 {"type": "grounding", "action": "5-4-3-2-1 grounding", "priority": "immediate"},
-                {"type": "breathing", "action": "Deep breathing: in for 4, out for 6", "priority": "immediate"},
-                {"type": "safe_space", "action": "Find a quiet space for 5 minutes", "priority": "immediate"},
+                {
+                    "type": "breathing",
+                    "action": "Deep breathing: in for 4, out for 6",
+                    "priority": "immediate",
+                },
+                {
+                    "type": "safe_space",
+                    "action": "Find a quiet space for 5 minutes",
+                    "priority": "immediate",
+                },
             ]
             adaptations["messages"] = [
                 "I'm here. You're safe. Let's breathe together.",
@@ -389,14 +529,16 @@ class ADHDStateDetector:
 
     def _record_state(self, state: str, confidence: float, signal_scores: dict):
         """Record the detected state in history."""
-        self._last_states.append({
-            "state": state,
-            "confidence": confidence,
-            "signal_scores": signal_scores,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._last_states.append(
+            {
+                "state": state,
+                "confidence": confidence,
+                "signal_scores": signal_scores,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         if len(self._last_states) > self._max_history:
-            self._last_states = self._last_states[-self._max_history:]
+            self._last_states = self._last_states[-self._max_history :]
 
     def get_current_state_summary(self) -> dict | None:
         """Get the most recent state detection summary."""
@@ -426,7 +568,9 @@ class ADHDStateDetector:
         # Add coaching instructions based on state
         if state == "overwhelmed":
             parts.append("PRIORITY: Reduce cognitive load. Use short sentences. Validate first.")
-            parts.append("CRITICAL: Do NOT suggest long tasks or productivity. Focus on emotional safety.")
+            parts.append(
+                "CRITICAL: Do NOT suggest long tasks or productivity. Focus on emotional safety."
+            )
             parts.append("Adaptation: Use gentle tone. Suggest ONLY micro-steps (2 min or less).")
 
         elif state == "burnout":

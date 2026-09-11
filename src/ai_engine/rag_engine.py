@@ -82,13 +82,13 @@ class RAGEngine:
             # Try to cut at a sentence boundary
             last_period = result.rfind(".")
             if last_period > max_chars // 2:
-                result = result[:last_period + 1]
+                result = result[: last_period + 1]
 
         return result
 
     def _get_fact_context(self, username: str) -> str:
         """Get structured facts about the user."""
-        if not self.memory or not hasattr(self.memory, 'get_fact_context_for_prompt'):
+        if not self.memory or not hasattr(self.memory, "get_fact_context_for_prompt"):
             return ""
 
         try:
@@ -141,7 +141,7 @@ class RAGEngine:
 
     def _get_memory_context(self, query: str) -> str:
         """Get relevant memories from ChromaDB based on query similarity."""
-        if not self.memory or not hasattr(self.memory, 'search_memories'):
+        if not self.memory or not hasattr(self.memory, "search_memories"):
             return ""
 
         try:
@@ -238,11 +238,11 @@ class RAGEngine:
 
     def _get_insight_context(self, username: str) -> str:
         """Get behavioral insights from the user's profile."""
-        if not self.memory or not hasattr(self.memory, 'profile'):
+        if not self.memory or not hasattr(self.memory, "profile"):
             return ""
 
         try:
-            profile = self.memory.profile.data if hasattr(self.memory, 'profile') else {}
+            profile = self.memory.profile.data if hasattr(self.memory, "profile") else {}
             insights = profile.get("insights", [])
             if insights:
                 recent = insights[-3:]
@@ -259,7 +259,7 @@ class RAGEngine:
 class LLMRouter:
     """
     Routes LLM requests to the appropriate model based on task type.
-    
+
     Task routing:
     - emotional_support → primary model (GPT-4o / Groq)
     - task_generation → local model / fast model
@@ -267,32 +267,34 @@ class LLMRouter:
     - analytics → ML pipeline (no LLM needed)
     """
 
-    ROUTE_TYPES: ClassVar[MappingProxyType[str, dict[str, Any]]] = MappingProxyType({
-        "emotional_support": {
-            "priority": "high",
-            "requires_empathy": True,
-            "max_tokens": 1024,
-            "temperature": 0.7,
-        },
-        "task_generation": {
-            "priority": "medium",
-            "requires_empathy": False,
-            "max_tokens": 512,
-            "temperature": 0.3,
-        },
-        "memory_classification": {
-            "priority": "low",
-            "requires_empathy": False,
-            "max_tokens": 128,
-            "temperature": 0.1,
-        },
-        "analytics": {
-            "priority": "low",
-            "requires_empathy": False,
-            "max_tokens": 256,
-            "temperature": 0.3,
-        },
-    })
+    ROUTE_TYPES: ClassVar[MappingProxyType[str, dict[str, Any]]] = MappingProxyType(
+        {
+            "emotional_support": {
+                "priority": "high",
+                "requires_empathy": True,
+                "max_tokens": 1024,
+                "temperature": 0.7,
+            },
+            "task_generation": {
+                "priority": "medium",
+                "requires_empathy": False,
+                "max_tokens": 512,
+                "temperature": 0.3,
+            },
+            "memory_classification": {
+                "priority": "low",
+                "requires_empathy": False,
+                "max_tokens": 128,
+                "temperature": 0.1,
+            },
+            "analytics": {
+                "priority": "low",
+                "requires_empathy": False,
+                "max_tokens": 256,
+                "temperature": 0.3,
+            },
+        }
+    )
 
     def __init__(self, groq_api_key: str | None = None):
         self.groq_api_key = groq_api_key
@@ -309,34 +311,73 @@ class LLMRouter:
 
         # Emotional support / crisis
         crisis_keywords = [
-            "panic", "anxious", "anxiety", "overwhelmed", "scared", "worried",
-            "can't cope", "need help", "not okay", "struggling", "depressed",
-            "sad", "crying", "burned out", "exhausted", "hopeless",
+            "panic",
+            "anxious",
+            "anxiety",
+            "overwhelmed",
+            "scared",
+            "worried",
+            "can't cope",
+            "need help",
+            "not okay",
+            "struggling",
+            "depressed",
+            "sad",
+            "crying",
+            "burned out",
+            "exhausted",
+            "hopeless",
         ]
         if any(kw in text_lower for kw in crisis_keywords):
             return "emotional_support"
 
         # Task generation / planning
         task_keywords = [
-            "break down", "task", "to-do", "plan", "schedule", "organize",
-            "prioritize", "list", "steps", "micro", "start",
+            "break down",
+            "task",
+            "to-do",
+            "plan",
+            "schedule",
+            "organize",
+            "prioritize",
+            "list",
+            "steps",
+            "micro",
+            "start",
         ]
         if any(kw in text_lower for kw in task_keywords):
             return "task_generation"
 
         # Memory classification / recording
         memory_keywords = [
-            "remember", "remind", "note", "save", "store", "keep",
-            "my favorite", "i like", "i love", "i hate",
-            "i always", "i never", "i usually",
+            "remember",
+            "remind",
+            "note",
+            "save",
+            "store",
+            "keep",
+            "my favorite",
+            "i like",
+            "i love",
+            "i hate",
+            "i always",
+            "i never",
+            "i usually",
         ]
         if any(kw in text_lower for kw in memory_keywords):
             return "memory_classification"
 
         # Analytics / reflection
         analytics_keywords = [
-            "analytics", "report", "summary", "trend", "progress",
-            "how have i been", "stats", "statistics", "insight",
+            "analytics",
+            "report",
+            "summary",
+            "trend",
+            "progress",
+            "how have i been",
+            "stats",
+            "statistics",
+            "insight",
         ]
         if any(kw in text_lower for kw in analytics_keywords):
             return "analytics"

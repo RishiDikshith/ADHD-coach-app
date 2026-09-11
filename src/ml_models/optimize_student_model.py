@@ -4,7 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
@@ -19,9 +19,9 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 
-print("="*70)
+print("=" * 70)
 print("STUDENT DEPRESSION MODEL - FINAL BALANCED VERSION")
-print("="*70)
+print("=" * 70)
 
 # =========================
 # LOAD DATA
@@ -48,21 +48,20 @@ print(f"\nTrain samples: {len(X_train)}, Test samples: {len(X_test)}")
 # =========================
 # PIPELINE
 # =========================
-pipeline = ImbPipeline([
-    ('smote', SMOTE(random_state=42, k_neighbors=3)),
-    ('model', LogisticRegression(
-        class_weight='balanced',
-        random_state=42
-    ))
-])
+pipeline = ImbPipeline(
+    [
+        ("smote", SMOTE(random_state=42, k_neighbors=3)),
+        ("model", LogisticRegression(class_weight="balanced", random_state=42)),
+    ]
+)
 
 # =========================
 # GRID SEARCH (STABLE)
 # =========================
 params = {
-    'model__C': [0.1, 1, 10],   # removed extreme 0.01
-    'model__solver': ['liblinear'],
-    'model__max_iter': [500, 1000],
+    "model__C": [0.1, 1, 10],  # removed extreme 0.01
+    "model__solver": ["liblinear"],
+    "model__max_iter": [500, 1000],
 }
 
 print("\nRunning GridSearchCV...")
@@ -71,9 +70,9 @@ grid = GridSearchCV(
     pipeline,
     params,
     cv=StratifiedKFold(n_splits=3, shuffle=True, random_state=42),
-    scoring='f1',
+    scoring="f1",
     n_jobs=-1,
-    verbose=1
+    verbose=1,
 )
 
 grid.fit(X_train, y_train)
@@ -111,9 +110,9 @@ y_pred = (y_prob > best_threshold).astype(int)
 # =========================
 # EVALUATION
 # =========================
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("FINAL TEST PERFORMANCE")
-print("="*70)
+print("=" * 70)
 
 accuracy = accuracy_score(y_test, y_pred)
 precision = precision_score(y_test, y_pred, zero_division=0)
@@ -133,11 +132,8 @@ print(classification_report(y_test, y_pred))
 # =========================
 # SAVE MODEL
 # =========================
-joblib.dump({
-    "model": best_model,
-    "threshold": best_threshold
-}, "models/student_model_final.pkl")
+joblib.dump({"model": best_model, "threshold": best_threshold}, "models/student_model_final.pkl")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("✓ FINAL BALANCED MODEL SAVED!")
-print("="*70)
+print("=" * 70)

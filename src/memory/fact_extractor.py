@@ -26,22 +26,28 @@ FACT_PATTERNS = {
         "patterns": [
             (r"(?:my\s+)?favorite\s+(\w+)\s+is\s+(\w+)", 1.0),
             (r"(?:i\s+)?(?:love|like|enjoy)\s+(\w+(?:\s+\w+)?)(?:\s+(?:a\s+)?lot)?", 0.7),
-            (r"(?:i\s+)?(?:prefer|rather)\s+(\w+(?:\s+\w+)?)\s+(?:over|to|than)\s+(\w+(?:\s+\w+)?)", 0.8),
+            (
+                r"(?:i\s+)?(?:prefer|rather)\s+(\w+(?:\s+\w+)?)\s+(?:over|to|than)\s+(\w+(?:\s+\w+)?)",
+                0.8,
+            ),
             (r"(?:i\s+)?(?:hate|dislike|can't\s+stand)\s+(\w+(?:\s+\w+)?)", 0.6),
             (r"i'm\s+(?:really\s+)?(?:into|interested\sin)\s+(\w+(?:\s+\w+)?)", 0.8),
         ],
         "key_extractors": [
             (r"favorite\s+(\w+)", lambda m: f"favorite_{m.group(1).lower()}"),
-        ]
+        ],
     },
     "habits": {
         "patterns": [
             (r"(?:i\s+)?(?:usually|always|often|typically|normally)\s+(\w+\s+\w+(?:\s+\w+)?)", 0.7),
             (r"(?:i\s+)?(?:never|rarely|hardly\s+ever)\s+(\w+\s+\w+(?:\s+\w+)?)", 0.6),
-            (r"(?:every|each)\s+(?:morning|day|night|evening|afternoon)\s+(?:i\s+)?(\w+\s+\w+(?:\s+\w+)?)", 0.8),
+            (
+                r"(?:every|each)\s+(?:morning|day|night|evening|afternoon)\s+(?:i\s+)?(\w+\s+\w+(?:\s+\w+)?)",
+                0.8,
+            ),
             (r"(?:my\s+)?(?:routine|habit)\s+(?:is|includes)\s+(\w+(?:\s+\w+)?)", 0.8),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "sleep": {
         "patterns": [
@@ -51,69 +57,123 @@ FACT_PATTERNS = {
             (r"(?:can't|cannot|couldn't)\s+sleep", 0.7),
             (r"(?:insomnia|sleep\s+issues|bad\s+sleep)", 0.8),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "focus_work": {
         "patterns": [
-            (r"(?:i\s+)?(?:work|study|code)\s+(?:best|better|well)\s+(?:in|at|during)\s+(?:the\s+)?(morning|afternoon|evening|night)", 0.9),
-            (r"(?:i\s+)?(?:can't|cannot|struggle\s+to)\s+(?:focus|concentrate|pay\s+attention)", 0.8),
+            (
+                r"(?:i\s+)?(?:work|study|code)\s+(?:best|better|well)\s+(?:in|at|during)\s+(?:the\s+)?(morning|afternoon|evening|night)",
+                0.9,
+            ),
+            (
+                r"(?:i\s+)?(?:can't|cannot|struggle\s+to)\s+(?:focus|concentrate|pay\s+attention)",
+                0.8,
+            ),
             (r"(?:i\s+)?get\s+(?:easily\s+)?distracted\s+(?:by|when)\s+(\w+(?:\s+\w+)?)", 0.7),
             (r"(?:hyperfocus|hyper\s*focus)(?:\s+on)?\s+(\w+(?:\s+\w+)?)", 0.8),
             (r"(?:i\s+)?(?:work|study)\s+(?:from\s+)?(home|office|cafe|library)", 0.6),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "health": {
         "patterns": [
-            (r"(?:i\s+)?(?:take|on)\s+(\w+(?:\s+\w+)?)\s*(?:medication|medicine|pills|supplements)", 0.8),
+            (
+                r"(?:i\s+)?(?:take|on)\s+(\w+(?:\s+\w+)?)\s*(?:medication|medicine|pills|supplements)",
+                0.8,
+            ),
             (r"(?:diagnosed\s+with|have)\s+(ADHD|anxiety|depression|OCD|PTSD|bipolar)", 0.9),
-            (r"(?:i\s+)?(?:exercise|work\s*out|run|walk|swim|yoga)\s+(\d+\s*(?:times|days|minutes))", 0.8),
+            (
+                r"(?:i\s+)?(?:exercise|work\s*out|run|walk|swim|yoga)\s+(\d+\s*(?:times|days|minutes))",
+                0.8,
+            ),
             (r"(?:caffeine|coffee|tea)\s+(\d+\s*(?:cups|times))", 0.7),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "goals": {
         "patterns": [
-            (r"(?:i\s+)?(?:want\s+to|wish\s+to|hope\s+to|aim\s+to|plan\s+to)\s+(\w+\s+\w+(?:\s+\w+)?)", 0.7),
-            (r"(?:my\s+)?(?:goal|aim|objective|target)\s+(?:is|was)\s+(?:to\s+)?(\w+\s+\w+(?:\s+\w+)?)", 0.8),
+            (
+                r"(?:i\s+)?(?:want\s+to|wish\s+to|hope\s+to|aim\s+to|plan\s+to)\s+(\w+\s+\w+(?:\s+\w+)?)",
+                0.7,
+            ),
+            (
+                r"(?:my\s+)?(?:goal|aim|objective|target)\s+(?:is|was)\s+(?:to\s+)?(\w+\s+\w+(?:\s+\w+)?)",
+                0.8,
+            ),
             (r"(?:i'm|i\s+am)\s+(?:trying|working)\s+to\s+(\w+\s+\w+(?:\s+\w+)?)", 0.6),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "struggles": {
         "patterns": [
-            (r"(?:i\s+)?(?:struggle|have\s+trouble|find\s+it\s+hard|find\s+it\s+difficult)\s+(?:with\s+)?(\w+(?:\s+\w+)?)", 0.8),
-            (r"(?:i'm|i\s+am)\s+(?:overwhelmed|burned\s*out|exhausted)\s+(?:by|with)\s+(\w+(?:\s+\w+)?)", 0.9),
+            (
+                r"(?:i\s+)?(?:struggle|have\s+trouble|find\s+it\s+hard|find\s+it\s+difficult)\s+(?:with\s+)?(\w+(?:\s+\w+)?)",
+                0.8,
+            ),
+            (
+                r"(?:i'm|i\s+am)\s+(?:overwhelmed|burned\s*out|exhausted)\s+(?:by|with)\s+(\w+(?:\s+\w+)?)",
+                0.9,
+            ),
             (r"(?:i\s+)?(?:procrastinate|avoid|put\s+off)\s+(\w+(?:\s+\w+)?)", 0.7),
             (r"(?:too\s+much|so\s+much)\s+(\w+\s+\w+)", 0.6),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "cognitive_styles": {
         "patterns": [
-            (r"(?:i\s+)?(?:only\s+)?(?:work|focus|do\s+well)\s+(?:when|under)\s+(?:there's\s+)?(?:pressure|deadlines?|crisis)", 0.9),
-            (r"(?:i\s+)?(?:love|get|enjoy)\s+(?:hyperfocus(?:ing)?|hyper\s*focus(?:ing)?)\s*(?:on)?", 0.9),
-            (r"(?:i\s+)?(?:need|prefer)\s+(?:someone|body\s*double|co-work|buddy)\s+(?:to\s+)?(?:be\s+there|sit\s+with|work\s+with)", 0.8),
+            (
+                r"(?:i\s+)?(?:only\s+)?(?:work|focus|do\s+well)\s+(?:when|under)\s+(?:there's\s+)?(?:pressure|deadlines?|crisis)",
+                0.9,
+            ),
+            (
+                r"(?:i\s+)?(?:love|get|enjoy)\s+(?:hyperfocus(?:ing)?|hyper\s*focus(?:ing)?)\s*(?:on)?",
+                0.9,
+            ),
+            (
+                r"(?:i\s+)?(?:need|prefer)\s+(?:someone|body\s*double|co-work|buddy)\s+(?:to\s+)?(?:be\s+there|sit\s+with|work\s+with)",
+                0.8,
+            ),
             (r"(?:i\s+)?get\s+bored\s+(?:easily|quickly|so\s+fast)", 0.8),
             (r"(?:i'm|i\s+am)\s+(?:interest-driven|motivated\s+by\s+interest|novelty-seeker)", 0.9),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
     "interests": {
         "patterns": [
-            (r"i(?:\s+really)?\s+(?:like|love|enjoy)\s+(programming|coding|design|writing|drawing|music|art|reading|gaming)", 0.8),
+            (
+                r"i(?:\s+really)?\s+(?:like|love|enjoy)\s+(programming|coding|design|writing|drawing|music|art|reading|gaming)",
+                0.8,
+            ),
             (r"my\s+hobb(?:y|ies)\s+(?:is|are)\s+(\w+(?:\s+\w+)?)", 0.8),
         ],
-        "key_extractors": []
+        "key_extractors": [],
     },
 }
 
 # Keywords that indicate facts to extract
 FACT_TRIGGER_KEYWORDS = [
-    "favorite", "love", "hate", "always", "never", "usually",
-    "diagnosed", "medication", "struggle", "goal", "want to",
-    "i am", "i'm", "i have", "my", "every day", "every morning",
-    "hyperfocus", "co-work", "bored", "deadline", "interest",
+    "favorite",
+    "love",
+    "hate",
+    "always",
+    "never",
+    "usually",
+    "diagnosed",
+    "medication",
+    "struggle",
+    "goal",
+    "want to",
+    "i am",
+    "i'm",
+    "i have",
+    "my",
+    "every day",
+    "every morning",
+    "hyperfocus",
+    "co-work",
+    "bored",
+    "deadline",
+    "interest",
 ]
 
 # Fact type mapping from category
@@ -144,8 +204,12 @@ class FactExtractor:
         compiled = {}
         for category, config in FACT_PATTERNS.items():
             compiled[category] = {
-                "patterns": [(re.compile(p, re.IGNORECASE), score) for p, score in config["patterns"]],
-                "key_extractors": [(re.compile(p, re.IGNORECASE), func) for p, func in config["key_extractors"]],
+                "patterns": [
+                    (re.compile(p, re.IGNORECASE), score) for p, score in config["patterns"]
+                ],
+                "key_extractors": [
+                    (re.compile(p, re.IGNORECASE), func) for p, func in config["key_extractors"]
+                ],
             }
         return compiled
 
@@ -176,15 +240,17 @@ class FactExtractor:
                     fact_value = self._build_value(match)
                     confidence = self._adjust_confidence(base_score, text_lower, match)
 
-                    extracted.append({
-                        "type": FACT_TYPE_MAP.get(category, "behavior"),
-                        "category": category,
-                        "key": fact_key,
-                        "value": fact_value,
-                        "confidence": confidence,
-                        "source": "extraction",
-                        "context": text[:200],  # Store context snippet
-                    })
+                    extracted.append(
+                        {
+                            "type": FACT_TYPE_MAP.get(category, "behavior"),
+                            "category": category,
+                            "key": fact_key,
+                            "value": fact_value,
+                            "confidence": confidence,
+                            "source": "extraction",
+                            "context": text[:200],  # Store context snippet
+                        }
+                    )
 
         # Deduplicate by key, keeping highest confidence
         seen = {}
@@ -214,7 +280,7 @@ class FactExtractor:
         # Generate key from category and matched value
         if main_value:
             # Clean up the value
-            main_value = re.sub(r'[^a-z0-9\s]', '', main_value)
+            main_value = re.sub(r"[^a-z0-9\s]", "", main_value)
             main_value = main_value[:50].strip()
             if main_value:
                 return f"{category}_{main_value.replace(' ', '_')}"
@@ -252,9 +318,11 @@ class FactExtractor:
         return max(0.0, min(1.0, confidence))
 
     def _extract_identity_facts(self, text_lower: str, facts: dict):
-        """Extract explicit identity statements like 'I am a student'. """
+        """Extract explicit identity statements like 'I am a student'."""
         # "I am a [role]"
-        role_match = re.search(r"i(?:'m| am)\s+(?:a|an)\s+(\w+(?:\s+\w+)?)(?:\.|,|$|\s+(?:and|but|with))", text_lower)
+        role_match = re.search(
+            r"i(?:'m| am)\s+(?:a|an)\s+(\w+(?:\s+\w+)?)(?:\.|,|$|\s+(?:and|but|with))", text_lower
+        )
         if role_match:
             role = role_match.group(1).strip()
             key = f"identity_{role.replace(' ', '_')}"
@@ -270,7 +338,10 @@ class FactExtractor:
                 }
 
         # "I have [X] years of [Y]"
-        exp_match = re.search(r"(\d+)\s*(?:\+?\s*)?years?\s+(?:of\s+)?(?:experience\sin\s+)?(\w+(?:\s+\w+)?)", text_lower)
+        exp_match = re.search(
+            r"(\d+)\s*(?:\+?\s*)?years?\s+(?:of\s+)?(?:experience\sin\s+)?(\w+(?:\s+\w+)?)",
+            text_lower,
+        )
         if exp_match:
             years = exp_match.group(1)
             domain = exp_match.group(2)
@@ -302,7 +373,9 @@ class FactExtractor:
 
         lines = []
         for fact in high_confidence:
-            lines.append(f"[User Fact] Category: {fact['category']} | {fact['key']}: {fact['value']}")
+            lines.append(
+                f"[User Fact] Category: {fact['category']} | {fact['key']}: {fact['value']}"
+            )
 
         return "\n".join(lines)
 
@@ -362,9 +435,9 @@ class FactMemoryConsolidator:
             parts = ["[User Knowledge Base: Known facts about this user]"]
             for category, facts in facts_dict.items():
                 category_facts = [
-                    f"  - {key}: {info['value']}" 
-                    for key, info in facts.items() 
-                    if info.get('confidence', 0) >= 0.5
+                    f"  - {key}: {info['value']}"
+                    for key, info in facts.items()
+                    if info.get("confidence", 0) >= 0.5
                 ]
                 if category_facts:
                     parts.append(f"\n{category.title()}:")

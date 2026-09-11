@@ -321,11 +321,13 @@ class GamificationEngine:
         achievement_details = []
         for a in achievements:
             defn = ACHIEVEMENTS.get(a["id"], {})
-            achievement_details.append({
-                **a,
-                "emoji": defn.get("emoji", "⭐"),
-                "icon": defn.get("icon", "star"),
-            })
+            achievement_details.append(
+                {
+                    **a,
+                    "emoji": defn.get("emoji", "⭐"),
+                    "icon": defn.get("icon", "star"),
+                }
+            )
 
         # Map skill data to full definitions
         skill_details = []
@@ -334,14 +336,16 @@ class GamificationEngine:
             levels = tree.get("levels", {})
             current_level_def = levels.get(s["level"], {})
             next_level_def = levels.get(s["level"] + 1, {})
-            skill_details.append({
-                **s,
-                "emoji": tree.get("emoji", "⭐"),
-                "title": current_level_def.get("title", f"Level {s['level']}"),
-                "next_title": next_level_def.get("title", "Max Level"),
-                "description": tree.get("description", ""),
-                "progress_pct": s.get("progress_pct", 0),
-            })
+            skill_details.append(
+                {
+                    **s,
+                    "emoji": tree.get("emoji", "⭐"),
+                    "title": current_level_def.get("title", f"Level {s['level']}"),
+                    "next_title": next_level_def.get("title", "Max Level"),
+                    "description": tree.get("description", ""),
+                    "progress_pct": s.get("progress_pct", 0),
+                }
+            )
 
         return {
             "total_xp": total_xp,
@@ -375,20 +379,24 @@ class GamificationEngine:
         for skill_id, tree in SKILL_TREES.items():
             levels = []
             for level_num, level_def in sorted(tree["levels"].items()):
-                levels.append({
-                    "level": level_num,
-                    "title": level_def["title"],
-                    "xp_required": level_def["xp_required"],
-                })
-            result.append({
-                "id": skill_id,
-                "name": tree["name"],
-                "emoji": tree["emoji"],
-                "description": tree["description"],
-                "improved_by": tree["improved_by"],
-                "xp_per_action": tree["xp_per_action"],
-                "levels": levels,
-            })
+                levels.append(
+                    {
+                        "level": level_num,
+                        "title": level_def["title"],
+                        "xp_required": level_def["xp_required"],
+                    }
+                )
+            result.append(
+                {
+                    "id": skill_id,
+                    "name": tree["name"],
+                    "emoji": tree["emoji"],
+                    "description": tree["description"],
+                    "improved_by": tree["improved_by"],
+                    "xp_per_action": tree["xp_per_action"],
+                    "levels": levels,
+                }
+            )
         return result
 
     # ==================== Prompt Integration ====================
@@ -430,7 +438,9 @@ def award_xp(db_manager, username: str, action: str) -> dict:
 
 
 # Convenience function for quick celebration messages
-def get_celebration_message(action: str, level_up: bool = False, achievement: dict | None = None) -> str:
+def get_celebration_message(
+    action: str, level_up: bool = False, achievement: dict | None = None
+) -> str:
     """Generate a celebration message for an action."""
     if achievement:
         return (

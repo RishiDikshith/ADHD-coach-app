@@ -131,9 +131,11 @@ class DatabaseManager:
                 email=email,
                 role=role,
                 settings={
-                    "theme": "dark", "language": "en",
-                    "notifications_enabled": True, "coach_tone": "encouraging",
-                }
+                    "theme": "dark",
+                    "language": "en",
+                    "notifications_enabled": True,
+                    "coach_tone": "encouraging",
+                },
             )
             self.db.add(user)
             self._safe_commit()
@@ -157,8 +159,10 @@ class DatabaseManager:
             email=email,
             role="admin" if username == "admin" else "user",
             settings={
-                "theme": "dark", "language": "en",
-                "notifications_enabled": True, "coach_tone": "encouraging",
+                "theme": "dark",
+                "language": "en",
+                "notifications_enabled": True,
+                "coach_tone": "encouraging",
             },
         )
         try:
@@ -211,7 +215,9 @@ class DatabaseManager:
 
     # ==================== Refresh Tokens / RTR ====================
 
-    def save_refresh_token(self, token: str, username: str, family_id: str, expires_at: datetime) -> RefreshToken | None:
+    def save_refresh_token(
+        self, token: str, username: str, family_id: str, expires_at: datetime
+    ) -> RefreshToken | None:
         """Save a new refresh token for Refresh Token Rotation (RTR)."""
         try:
             rt = RefreshToken(
@@ -220,7 +226,7 @@ class DatabaseManager:
                 family_id=family_id,
                 expires_at=expires_at,
                 is_used=False,
-                is_revoked=False
+                is_revoked=False,
             )
             self.db.add(rt)
             self.db.commit()
@@ -260,7 +266,7 @@ class DatabaseManager:
                 .filter(
                     TrustedDevice.user_id == user_id,
                     TrustedDevice.device_id == device_id,
-                    TrustedDevice.is_active == True
+                    TrustedDevice.is_active == True,
                 )
                 .first()
             )
@@ -277,7 +283,15 @@ class DatabaseManager:
                 .filter(TrustedDevice.device_id == device_id, TrustedDevice.is_active == True)
                 .first()
             )
-        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            SQLAlchemyError,
+        ) as e:
             logger.warning(f"Failed to query trusted device by ID: {e}")
             return None
 
@@ -304,7 +318,7 @@ class DatabaseManager:
                     device_id=device_id,
                     device_name=device_name,
                     pin_hash=pin_hash,
-                    is_active=True
+                    is_active=True,
                 )
                 self.db.add(device)
             self.db.commit()
@@ -331,7 +345,12 @@ class DatabaseManager:
             return []
 
     def save_hashed_trusted_device(
-        self, user_id: int, token_hash: str, device_name: str, expires_at: datetime, device_id: str | None = None
+        self,
+        user_id: int,
+        token_hash: str,
+        device_name: str,
+        expires_at: datetime,
+        device_id: str | None = None,
     ) -> TrustedDevice | None:
         """Save a trusted device with a secure token hash."""
         try:
@@ -357,7 +376,7 @@ class DatabaseManager:
                     expires_at=expires_at,
                     is_active=True,
                     created_at=datetime.now(timezone.utc),
-                    last_used=datetime.now(timezone.utc)
+                    last_used=datetime.now(timezone.utc),
                 )
                 self.db.add(device)
             self.db.commit()
@@ -378,7 +397,7 @@ class DatabaseManager:
                     TrustedDevice.token_hash == token_hash,
                     TrustedDevice.is_active == True,
                     TrustedDevice.revoked_at == None,
-                    (TrustedDevice.expires_at == None) | (TrustedDevice.expires_at > now)
+                    (TrustedDevice.expires_at == None) | (TrustedDevice.expires_at > now),
                 )
                 .first()
             )
@@ -410,9 +429,7 @@ class DatabaseManager:
         try:
             self._ensure_session()
             device = (
-                self.db.query(TrustedDevice)
-                .filter(TrustedDevice.token_hash == token_hash)
-                .first()
+                self.db.query(TrustedDevice).filter(TrustedDevice.token_hash == token_hash).first()
             )
             if device:
                 device.is_active = False
@@ -453,7 +470,10 @@ class DatabaseManager:
             self._ensure_session()
             return (
                 self.db.query(OAuthAccount)
-                .filter(OAuthAccount.provider == provider, OAuthAccount.provider_user_id == provider_user_id)
+                .filter(
+                    OAuthAccount.provider == provider,
+                    OAuthAccount.provider_user_id == provider_user_id,
+                )
                 .first()
             )
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
@@ -464,11 +484,7 @@ class DatabaseManager:
         """Retrieve all linked OAuth accounts for a user."""
         try:
             self._ensure_session()
-            return (
-                self.db.query(OAuthAccount)
-                .filter(OAuthAccount.user_id == user_id)
-                .all()
-            )
+            return self.db.query(OAuthAccount).filter(OAuthAccount.user_id == user_id).all()
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to query OAuth accounts for user: {e}")
             return []
@@ -485,13 +501,21 @@ class DatabaseManager:
                 provider_user_id=provider_user_id,
                 email=email,
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
             self.db.add(account)
             self.db.commit()
             self.db.refresh(account)
             return account
-        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            SQLAlchemyError,
+        ) as e:
             logger.warning(f"Failed to create OAuth account: {e}")
             try:
                 self.db.rollback()
@@ -506,16 +530,19 @@ class DatabaseManager:
         try:
             self._ensure_session()
             return (
-                self.db.query(User)
-                .filter(func.lower(User.email) == email.lower().strip())
-                .first()
+                self.db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
             )
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to query user by email: {e}")
             return None
 
     def create_oauth_user(
-        self, username: str, email: str | None, provider: str, provider_user_id: str, role: str = "user"
+        self,
+        username: str,
+        email: str | None,
+        provider: str,
+        provider_user_id: str,
+        role: str = "user",
     ) -> User | None:
         """Create a new local User along with their initial OAuthAccount."""
         try:
@@ -529,20 +556,25 @@ class DatabaseManager:
                 is_active=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
-                settings={"coach_tone": "encouraging"}
+                settings={"coach_tone": "encouraging"},
             )
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
 
             self.create_oauth_account(
-                user_id=user.id,
-                provider=provider,
-                provider_user_id=provider_user_id,
-                email=email
+                user_id=user.id, provider=provider, provider_user_id=provider_user_id, email=email
             )
             return user
-        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            SQLAlchemyError,
+        ) as e:
             logger.warning(f"Failed to create OAuth user: {e}")
             try:
                 self.db.rollback()
@@ -553,15 +585,22 @@ class DatabaseManager:
     # ==================== Chat History ====================
 
     def save_chat_message(
-        self, username: str, role: str, content: str,
-        emotion: str | None = None, metadata_json: dict | None = None
+        self,
+        username: str,
+        role: str,
+        content: str,
+        emotion: str | None = None,
+        metadata_json: dict | None = None,
     ) -> ChatMessage | None:
         user = self.get_user(username)
         if not user:
             return None
         msg = ChatMessage(
-            user_id=user.id, role=role, content=content,
-            emotion=emotion, metadata_json=metadata_json or {}
+            user_id=user.id,
+            role=role,
+            content=content,
+            emotion=emotion,
+            metadata_json=metadata_json or {},
         )
         self.db.add(msg)
         self.db.commit()
@@ -589,10 +628,7 @@ class DatabaseManager:
             return []
         return (
             self.db.query(ChatMessage)
-            .filter(
-                ChatMessage.user_id == user.id,
-                ChatMessage.content.ilike(f"%{query}%")
-            )
+            .filter(ChatMessage.user_id == user.id, ChatMessage.content.ilike(f"%{query}%"))
             .order_by(ChatMessage.created_at.desc())
             .limit(limit)
             .all()
@@ -609,7 +645,7 @@ class DatabaseManager:
             .filter(
                 ChatMessage.user_id == user.id,
                 ChatMessage.emotion.isnot(None),
-                ChatMessage.created_at >= cutoff
+                ChatMessage.created_at >= cutoff,
             )
             .order_by(ChatMessage.created_at.asc())
             .all()
@@ -619,18 +655,30 @@ class DatabaseManager:
     # ==================== Mood Tracking ====================
 
     def save_mood(
-        self, username: str, mood: str, emoji: str | None = None,
-        energy: int | None = None, focus: int | None = None,
-        burnout: int | None = None, anxiety: int | None = None,
-        productivity: int | None = None, note: str | None = None
+        self,
+        username: str,
+        mood: str,
+        emoji: str | None = None,
+        energy: int | None = None,
+        focus: int | None = None,
+        burnout: int | None = None,
+        anxiety: int | None = None,
+        productivity: int | None = None,
+        note: str | None = None,
     ) -> MoodEntry | None:
         user = self.get_user(username)
         if not user:
             return None
         entry = MoodEntry(
-            user_id=user.id, mood=mood, emoji=emoji,
-            energy=energy, focus=focus, burnout=burnout,
-            anxiety=anxiety, productivity=productivity, note=note
+            user_id=user.id,
+            mood=mood,
+            emoji=emoji,
+            energy=energy,
+            focus=focus,
+            burnout=burnout,
+            anxiety=anxiety,
+            productivity=productivity,
+            note=note,
         )
         self.db.add(entry)
         self.db.commit()
@@ -666,7 +714,11 @@ class DatabaseManager:
             "avg_burnout": round(sum(burnouts) / len(burnouts), 1) if burnouts else None,
             "avg_anxiety": round(sum(anxieties) / len(anxieties), 1) if anxieties else None,
             "entry_count": len(entries),
-            "most_common_mood": max({e.mood for e in entries}, key=lambda m: sum(1 for e in entries if e.mood == m)) if entries else None,
+            "most_common_mood": max(
+                {e.mood for e in entries}, key=lambda m: sum(1 for e in entries if e.mood == m)
+            )
+            if entries
+            else None,
         }
 
     def detect_burnout_alert(self, username: str) -> dict | None:
@@ -676,8 +728,12 @@ class DatabaseManager:
             return None
 
         recent = entries[-3:]
-        avg_burnout = sum(e.burnout for e in recent if e.burnout) / max(sum(1 for e in recent if e.burnout), 1)
-        avg_energy = sum(e.energy for e in recent if e.energy) / max(sum(1 for e in recent if e.energy), 1)
+        avg_burnout = sum(e.burnout for e in recent if e.burnout) / max(
+            sum(1 for e in recent if e.burnout), 1
+        )
+        avg_energy = sum(e.energy for e in recent if e.energy) / max(
+            sum(1 for e in recent if e.energy), 1
+        )
 
         if avg_burnout >= 7 and avg_energy <= 3:
             return {
@@ -700,16 +756,23 @@ class DatabaseManager:
     # ==================== Intervention Completions ====================
 
     def record_intervention(
-        self, username: str, intervention_type: str, title: str,
-        duration_minutes: int | None = None, metadata_json: dict | None = None
+        self,
+        username: str,
+        intervention_type: str,
+        title: str,
+        duration_minutes: int | None = None,
+        metadata_json: dict | None = None,
     ) -> InterventionCompletion | None:
         user = self.get_user(username)
         if not user:
             return None
         record = InterventionCompletion(
-            user_id=user.id, intervention_type=intervention_type,
-            title=title, duration_minutes=duration_minutes,
-            completed=True, metadata_json=metadata_json or {}
+            user_id=user.id,
+            intervention_type=intervention_type,
+            title=title,
+            duration_minutes=duration_minutes,
+            completed=True,
+            metadata_json=metadata_json or {},
         )
         self.db.add(record)
         self.db.commit()
@@ -725,7 +788,7 @@ class DatabaseManager:
             self.db.query(InterventionCompletion)
             .filter(
                 InterventionCompletion.user_id == user.id,
-                InterventionCompletion.created_at >= cutoff
+                InterventionCompletion.created_at >= cutoff,
             )
             .all()
         )
@@ -748,7 +811,7 @@ class DatabaseManager:
             .filter(
                 InterventionCompletion.user_id == user.id,
                 InterventionCompletion.intervention_type == intervention_type,
-                InterventionCompletion.created_at >= cutoff
+                InterventionCompletion.created_at >= cutoff,
             )
             .count()
         )
@@ -771,9 +834,11 @@ class DatabaseManager:
 
         if not streak:
             streak = Streak(
-                user_id=user.id, streak_type=streak_type,
-                current_streak=1, longest_streak=1,
-                last_activity_date=now
+                user_id=user.id,
+                streak_type=streak_type,
+                current_streak=1,
+                longest_streak=1,
+                last_activity_date=now,
             )
             self.db.add(streak)
         else:
@@ -829,9 +894,15 @@ class DatabaseManager:
     # ==================== Structured Facts (Memory Upgrade) ====================
 
     def save_fact(
-        self, username: str, fact_type: str, key: str, value: str,
-        category: str | None = None, confidence: float = 1.0,
-        source: str = "extraction", context: str | None = None
+        self,
+        username: str,
+        fact_type: str,
+        key: str,
+        value: str,
+        category: str | None = None,
+        confidence: float = 1.0,
+        source: str = "extraction",
+        context: str | None = None,
     ) -> UserFact | None:
         user = self.get_user(username)
         if not user:
@@ -840,11 +911,7 @@ class DatabaseManager:
         # Update existing fact if same key exists
         existing = (
             self.db.query(UserFact)
-            .filter(
-                UserFact.user_id == user.id,
-                UserFact.key == key,
-                UserFact.is_active == True
-            )
+            .filter(UserFact.user_id == user.id, UserFact.key == key, UserFact.is_active == True)
             .first()
         )
         if existing:
@@ -856,9 +923,14 @@ class DatabaseManager:
             return existing
 
         fact = UserFact(
-            user_id=user.id, fact_type=fact_type, category=category,
-            key=key, value=value, confidence=confidence,
-            source=source, context=context
+            user_id=user.id,
+            fact_type=fact_type,
+            category=category,
+            key=key,
+            value=value,
+            confidence=confidence,
+            source=source,
+            context=context,
         )
         self.db.add(fact)
         self.db.commit()
@@ -901,10 +973,10 @@ class DatabaseManager:
                 UserFact.user_id == user.id,
                 UserFact.is_active == True,
                 (
-                    UserFact.key.ilike(f"%{query}%") |
-                    UserFact.value.ilike(f"%{query}%") |
-                    UserFact.category.ilike(f"%{query}%")
-                )
+                    UserFact.key.ilike(f"%{query}%")
+                    | UserFact.value.ilike(f"%{query}%")
+                    | UserFact.category.ilike(f"%{query}%")
+                ),
             )
             .all()
         )
@@ -912,19 +984,30 @@ class DatabaseManager:
     # ==================== Focus Sessions ====================
 
     def save_focus_session(
-        self, username: str, mode: str, duration_minutes: int,
-        completed: bool = False, quality: int | None = None,
-        energy_before: int | None = None, energy_after: int | None = None,
-        distractions: int = 0, notes: str | None = None
+        self,
+        username: str,
+        mode: str,
+        duration_minutes: int,
+        completed: bool = False,
+        quality: int | None = None,
+        energy_before: int | None = None,
+        energy_after: int | None = None,
+        distractions: int = 0,
+        notes: str | None = None,
     ) -> FocusSession | None:
         user = self.get_user(username)
         if not user:
             return None
         session = FocusSession(
-            user_id=user.id, mode=mode, duration_minutes=duration_minutes,
-            completed=completed, quality=quality,
-            energy_before=energy_before, energy_after=energy_after,
-            distractions=distractions, notes=notes
+            user_id=user.id,
+            mode=mode,
+            duration_minutes=duration_minutes,
+            completed=completed,
+            quality=quality,
+            energy_before=energy_before,
+            energy_after=energy_after,
+            distractions=distractions,
+            notes=notes,
         )
         self.db.add(session)
         self.db.commit()
@@ -938,10 +1021,7 @@ class DatabaseManager:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         return (
             self.db.query(FocusSession)
-            .filter(
-                FocusSession.user_id == user.id,
-                FocusSession.created_at >= cutoff
-            )
+            .filter(FocusSession.user_id == user.id, FocusSession.created_at >= cutoff)
             .order_by(FocusSession.created_at.desc())
             .all()
         )
@@ -956,15 +1036,21 @@ class DatabaseManager:
             "total_sessions": len(sessions),
             "completed_sessions": len(completed),
             "total_minutes": sum(s.duration_minutes for s in sessions),
-            "avg_quality": round(sum(s.quality or 0 for s in completed) / len(completed), 1) if completed else None,
-            "avg_distractions": round(sum(s.distractions or 0 for s in sessions) / len(sessions), 1),
+            "avg_quality": round(sum(s.quality or 0 for s in completed) / len(completed), 1)
+            if completed
+            else None,
+            "avg_distractions": round(
+                sum(s.distractions or 0 for s in sessions) / len(sessions), 1
+            ),
             "by_mode": dict(
-                self.db.query(
-                    FocusSession.mode, func.count(FocusSession.id)
-                ).filter(
-                    FocusSession.user_id == (self.get_user(username).id if self.get_user(username) else 0),
-                    FocusSession.created_at >= (datetime.now(timezone.utc) - timedelta(days=days))
-                ).group_by(FocusSession.mode).all()
+                self.db.query(FocusSession.mode, func.count(FocusSession.id))
+                .filter(
+                    FocusSession.user_id
+                    == (self.get_user(username).id if self.get_user(username) else 0),
+                    FocusSession.created_at >= (datetime.now(timezone.utc) - timedelta(days=days)),
+                )
+                .group_by(FocusSession.mode)
+                .all()
             ),
         }
 
@@ -980,17 +1066,22 @@ class DatabaseManager:
     # ==================== Distraction Tracking ====================
 
     def log_distraction(
-        self, username: str, distraction: str,
-        category: str | None = None, energy_level: int | None = None,
-        session_id: int | None = None
+        self,
+        username: str,
+        distraction: str,
+        category: str | None = None,
+        energy_level: int | None = None,
+        session_id: int | None = None,
     ) -> DistractionLog | None:
         user = self.get_user(username)
         if not user:
             return None
         log = DistractionLog(
-            user_id=user.id, distraction=distraction,
-            category=category, energy_level=energy_level,
-            session_id=session_id
+            user_id=user.id,
+            distraction=distraction,
+            category=category,
+            energy_level=energy_level,
+            session_id=session_id,
         )
         self.db.add(log)
         self.db.commit()
@@ -1032,8 +1123,7 @@ class DatabaseManager:
         )
         if not progress:
             progress = SkillProgress(
-                user_id=user.id, skill_name=skill,
-                level=1, xp=0, xp_to_next_level=100
+                user_id=user.id, skill_name=skill, level=1, xp=0, xp_to_next_level=100
             )
             self.db.add(progress)
 
@@ -1050,7 +1140,7 @@ class DatabaseManager:
                     username,
                     f"{skill}_level_{progress.level}",
                     f"Reached {skill} level {progress.level}!",
-                    xp_reward=50
+                    xp_reward=50,
                 )
 
         progress.updated_at = datetime.now(timezone.utc)
@@ -1066,8 +1156,12 @@ class DatabaseManager:
         }
 
     def unlock_achievement(
-        self, username: str, achievement_id: str,
-        title: str, description: str | None = None, xp_reward: int = 0
+        self,
+        username: str,
+        achievement_id: str,
+        title: str,
+        description: str | None = None,
+        xp_reward: int = 0,
     ) -> Achievement | None:
         """Unlock an achievement for a user. No-op if already unlocked."""
         user = self.get_user(username)
@@ -1076,18 +1170,18 @@ class DatabaseManager:
 
         existing = (
             self.db.query(Achievement)
-            .filter(
-                Achievement.user_id == user.id,
-                Achievement.achievement_id == achievement_id
-            )
+            .filter(Achievement.user_id == user.id, Achievement.achievement_id == achievement_id)
             .first()
         )
         if existing:
             return existing
 
         achievement = Achievement(
-            user_id=user.id, achievement_id=achievement_id,
-            title=title, description=description, xp_reward=xp_reward
+            user_id=user.id,
+            achievement_id=achievement_id,
+            title=title,
+            description=description,
+            xp_reward=xp_reward,
         )
         self.db.add(achievement)
         self.db.commit()
@@ -1132,7 +1226,9 @@ class DatabaseManager:
                 "level": s.level,
                 "xp": s.xp,
                 "xp_to_next": s.xp_to_next_level,
-                "progress_pct": round((s.xp / s.xp_to_next_level) * 100, 1) if s.xp_to_next_level > 0 else 0,
+                "progress_pct": round((s.xp / s.xp_to_next_level) * 100, 1)
+                if s.xp_to_next_level > 0
+                else 0,
             }
             for s in skills
         ]
@@ -1153,42 +1249,107 @@ class DatabaseManager:
         streaks = self.get_streaks(username)
         for s in streaks:
             if s["current"] >= 3 and f"streak_3_{s['type']}" not in existing_ids:
-                a = self.unlock_achievement(username, f"streak_3_{s['type']}", "3-Day Momentum", "Maintained a 3-day streak!", 20)
-                if a: new_achievements.append(a)
+                a = self.unlock_achievement(
+                    username,
+                    f"streak_3_{s['type']}",
+                    "3-Day Momentum",
+                    "Maintained a 3-day streak!",
+                    20,
+                )
+                if a:
+                    new_achievements.append(a)
             if s["current"] >= 7 and f"streak_7_{s['type']}" not in existing_ids:
-                a = self.unlock_achievement(username, f"streak_7_{s['type']}", "Week Warrior", "Maintained a 7-day streak!", 50)
-                if a: new_achievements.append(a)
+                a = self.unlock_achievement(
+                    username,
+                    f"streak_7_{s['type']}",
+                    "Week Warrior",
+                    "Maintained a 7-day streak!",
+                    50,
+                )
+                if a:
+                    new_achievements.append(a)
             if s["current"] >= 30 and f"streak_30_{s['type']}" not in existing_ids:
-                a = self.unlock_achievement(username, f"streak_30_{s['type']}", "Monthly Master", "Maintained a 30-day streak!", 200)
-                if a: new_achievements.append(a)
+                a = self.unlock_achievement(
+                    username,
+                    f"streak_30_{s['type']}",
+                    "Monthly Master",
+                    "Maintained a 30-day streak!",
+                    200,
+                )
+                if a:
+                    new_achievements.append(a)
 
         # Check focus session achievements
         sessions = self.get_focus_sessions(username, days=30)
         completed_count = sum(1 for s in sessions if s.completed)
         if completed_count >= 1 and "first_focus_session" not in existing_ids:
-            a = self.unlock_achievement(username, "first_focus_session", "First Focus Session", "Completed your first focus session!", 10)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "first_focus_session",
+                "First Focus Session",
+                "Completed your first focus session!",
+                10,
+            )
+            if a:
+                new_achievements.append(a)
         if completed_count >= 10 and "ten_focus_sessions" not in existing_ids:
-            a = self.unlock_achievement(username, "ten_focus_sessions", "Focus Apprentice", "Completed 10 focus sessions!", 50)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "ten_focus_sessions",
+                "Focus Apprentice",
+                "Completed 10 focus sessions!",
+                50,
+            )
+            if a:
+                new_achievements.append(a)
         if completed_count >= 50 and "fifty_focus_sessions" not in existing_ids:
-            a = self.unlock_achievement(username, "fifty_focus_sessions", "Focus Master", "Completed 50 focus sessions!", 150)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "fifty_focus_sessions",
+                "Focus Master",
+                "Completed 50 focus sessions!",
+                150,
+            )
+            if a:
+                new_achievements.append(a)
 
         # Check intervention completions
-        intervention_count = self.get_intervention_stats(username, days=30).get("total_completions", 0)
+        intervention_count = self.get_intervention_stats(username, days=30).get(
+            "total_completions", 0
+        )
         if intervention_count >= 1 and "first_intervention" not in existing_ids:
-            a = self.unlock_achievement(username, "first_intervention", "First Step", "Completed your first intervention!", 10)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "first_intervention",
+                "First Step",
+                "Completed your first intervention!",
+                10,
+            )
+            if a:
+                new_achievements.append(a)
         if intervention_count >= 20 and "twenty_interventions" not in existing_ids:
-            a = self.unlock_achievement(username, "twenty_interventions", "Building Habits", "Completed 20 interventions!", 75)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "twenty_interventions",
+                "Building Habits",
+                "Completed 20 interventions!",
+                75,
+            )
+            if a:
+                new_achievements.append(a)
 
         # Check mood tracking
         moods = self.get_mood_history(username, days=7)
         if len(moods) >= 5 and "mood_tracker" not in existing_ids:
-            a = self.unlock_achievement(username, "mood_tracker", "Emotional Awareness", "Tracked your mood 5 times this week!", 30)
-            if a: new_achievements.append(a)
+            a = self.unlock_achievement(
+                username,
+                "mood_tracker",
+                "Emotional Awareness",
+                "Tracked your mood 5 times this week!",
+                30,
+            )
+            if a:
+                new_achievements.append(a)
 
         return new_achievements
 
@@ -1208,7 +1369,7 @@ class DatabaseManager:
             .filter(
                 ChatMessage.user_id == user.id,
                 ChatMessage.created_at >= today,
-                ChatMessage.role == "user"
+                ChatMessage.role == "user",
             )
             .count()
         )
@@ -1219,9 +1380,10 @@ class DatabaseManager:
             .filter(
                 FocusSession.user_id == user.id,
                 FocusSession.created_at >= today,
-                FocusSession.completed == True
+                FocusSession.completed == True,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # Latest mood
@@ -1237,7 +1399,7 @@ class DatabaseManager:
             self.db.query(InterventionCompletion)
             .filter(
                 InterventionCompletion.user_id == user.id,
-                InterventionCompletion.created_at >= today
+                InterventionCompletion.created_at >= today,
             )
             .count()
         )
@@ -1250,7 +1412,9 @@ class DatabaseManager:
                 "mood": latest_mood.mood if latest_mood else None,
                 "emoji": latest_mood.emoji if latest_mood else None,
                 "energy": latest_mood.energy if latest_mood else None,
-            } if latest_mood else None,
+            }
+            if latest_mood
+            else None,
             "streaks": self.get_all_streak_summary(username),
             "achievements": len(self.get_achievements(username)),
             "skills": self.get_skills(username),
@@ -1302,7 +1466,7 @@ class DatabaseManager:
             .filter(
                 FocusSession.user_id == user.id,
                 FocusSession.created_at >= cutoff,
-                FocusSession.quality.isnot(None)
+                FocusSession.quality.isnot(None),
             )
             .all()
         )
@@ -1318,12 +1482,14 @@ class DatabaseManager:
         result = []
         for hour in sorted(hour_map.keys()):
             data = hour_map[hour]
-            result.append({
-                "hour": hour,
-                "avg_quality": round(data["total_quality"] / data["count"], 1),
-                "total_minutes": data["total_minutes"],
-                "sessions": data["count"],
-            })
+            result.append(
+                {
+                    "hour": hour,
+                    "avg_quality": round(data["total_quality"] / data["count"], 1),
+                    "total_minutes": data["total_minutes"],
+                    "sessions": data["count"],
+                }
+            )
         return result
 
     # ==================== Feedback & Support ====================

@@ -188,9 +188,9 @@ class AccountabilityAgent:
             )
             summary["personal_note"] = "Progress > perfection. You're doing it."
         else:
-            summary["overall_recommendation"] = (
-                "Good session! Sometimes the win is just showing up and talking it through."
-            )
+            summary[
+                "overall_recommendation"
+            ] = "Good session! Sometimes the win is just showing up and talking it through."
             summary["personal_note"] = "Being here counts."
 
         return summary

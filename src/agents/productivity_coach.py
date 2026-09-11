@@ -20,7 +20,7 @@ class ProductivityCoachAgent:
     Productivity Coach Agent.
     Provides motivation, focus guidance, productivity tips,
     and burnout prevention tailored to the user's pattern.
-    
+
     Improvement: Emotionally intelligent coaching with adaptive tone,
     conversational memory, and human-like encouragement.
     """
@@ -50,7 +50,7 @@ class ProductivityCoachAgent:
         session.get("current_mood", "neutral")
         energy = session.get("current_energy", 5)
         turn_count = session.get("turn_count", 0)
-        
+
         # First-time greeting
         if turn_count <= 1:
             if stress >= 7:
@@ -59,7 +59,7 @@ class ProductivityCoachAgent:
                 return "Hi! You seem a bit low on energy. That's totally fine — we'll keep things super light today. What's one tiny thing that feels doable?"
             else:
                 return "Hey there! Great to see you. Let's make today work for *you* — what kind of energy are you bringing?"
-        
+
         # Returning user - reference continuity
         if stress >= 7:
             return "I remember you were dealing with a lot last time. No pressure today — we can just sit with whatever comes up."
@@ -68,35 +68,35 @@ class ProductivityCoachAgent:
             if last_completed > 0:
                 return "You made real progress last session! How are you feeling about continuing that momentum?"
             return "You seem in a good space today! This is a great time to tackle something you've been putting off."
-        
+
         return ""
 
     def get_encouragement(self, context: dict) -> str:
         """Generate context-aware encouragement that feels human."""
         session = context.get("session", {})
         user = context.get("user", {})
-        
+
         stress = session.get("current_stress", 5)
         turn_count = session.get("turn_count", 0)
         completed = session.get("completed_tasks_count", 0)
         streak = user.get("session_count", 0)
-        
+
         # Progress acknowledgment
         if completed > 0 and turn_count > 1:
             return "You got things done since we started talking — that's real progress! ADHD brains often don't give themselves credit for the small steps. I see you. 💛"
-        
+
         # Showing up is winning
         if turn_count > 0 and turn_count % 3 == 0:
             return "Just showing up consistently is a HUGE win for ADHD brains. Most people don't understand how much energy that takes. I'm proud of you for being here."
-        
+
         # Streak recognition
         if streak > 0 and streak % 5 == 0:
             return "You've been showing up consistently. That's not luck — that's you building a system that works for your brain. Keep going at your own pace."
-        
+
         # Gentle for stressed users
         if stress >= 7:
             return "Right now, just breathing is enough. You don't have to earn rest. You don't have to be productive to be worthy. Let's just be here for a moment."
-        
+
         return ""
 
     def get_suggestion(self, context: dict) -> dict | None:

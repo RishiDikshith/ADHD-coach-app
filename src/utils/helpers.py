@@ -9,9 +9,7 @@ import pandas as pd
 os.makedirs("logs", exist_ok=True)
 
 logging.basicConfig(
-    filename="logs/app.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    filename="logs/app.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -50,11 +48,11 @@ def prepare_model_for_inference(model):
             model.n_jobs = 1
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Could not set n_jobs=1 on model: {e}")
-    
+
     if hasattr(model, "thread_count") and model.thread_count not in (None, 1):
         try:
             model.thread_count = 1
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Could not set thread_count=1 on model: {e}")
-    
+
     return model

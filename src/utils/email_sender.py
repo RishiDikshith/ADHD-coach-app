@@ -19,10 +19,10 @@ def send_otp_email(recipient_email, otp):
     if not all([smtp_server, smtp_port, smtp_user, smtp_password]):
         logger.warning("SMTP environment variables not set. Cannot send real email.")
         logger.warning(f"DEMO MODE: OTP for {recipient_email} is {otp}")
-        return True # Pretend it was sent successfully
+        return True  # Pretend it was sent successfully
 
     sender_email = os.getenv("SMTP_FROM_EMAIL", smtp_user)
-    
+
     message = MIMEMultipart("alternative")
     message["Subject"] = f"Your Verification Code for ADHD AI Coach is {otp}"
     message["From"] = sender_email

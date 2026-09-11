@@ -46,13 +46,10 @@ class UTCDateTime(TypeDecorator):
             return value.replace(tzinfo=timezone.utc)
         return value
 
+
 # Determine database URL: PostgreSQL in production, SQLite in development
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    os.getenv(
-        "POSTGRES_URL",  # Neon PostgreSQL
-        "sqlite:///./adhd_coach.db"
-    )
+    "DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./adhd_coach.db")  # Neon PostgreSQL
 )
 
 # Handle postgres:// vs postgresql:// dialect naming issue for SQLAlchemy
@@ -66,7 +63,7 @@ if DATABASE_URL.startswith("sqlite") and not DATABASE_URL.startswith("sqlite:///
     raw_path = DATABASE_URL
     for prefix in ("sqlite:///", "sqlite://"):
         if raw_path.startswith(prefix):
-            raw_path = raw_path[len(prefix):]
+            raw_path = raw_path[len(prefix) :]
             break
     raw_path = raw_path.removeprefix("./")
     path_obj = Path(raw_path)
@@ -99,13 +96,10 @@ if DATABASE_URL.startswith("sqlite"):
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.close()
+
 else:
     engine = create_engine(
-        DATABASE_URL,
-        pool_size=10,
-        max_overflow=20,
-        pool_recycle=300,
-        pool_pre_ping=True
+        DATABASE_URL, pool_size=10, max_overflow=20, pool_recycle=300, pool_pre_ping=True
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -188,10 +182,14 @@ def migrate_users_schema():
                     tx_conn.execute(text("DROP INDEX IF EXISTS ix_users_username"))
                     tx_conn.execute(text("ALTER TABLE users RENAME TO _users_old"))
                     User.__table__.create(tx_conn)
-                    tx_conn.execute(text(f"INSERT INTO users ({col_str}) SELECT {col_str} FROM _users_old"))
+                    tx_conn.execute(
+                        text(f"INSERT INTO users ({col_str}) SELECT {col_str} FROM _users_old")
+                    )
                     tx_conn.execute(text("DROP TABLE _users_old"))
                     tx_conn.execute(text("PRAGMA foreign_keys=ON"))
-                    logger.info("Applied non-destructive SQLite users migration: password_hash is now nullable.")
+                    logger.info(
+                        "Applied non-destructive SQLite users migration: password_hash is now nullable."
+                    )
         except Exception as exc:  # noqa: BLE001
             logger.warning("SQLite users migration for nullable password_hash encountered: %s", exc)
 
@@ -200,10 +198,14 @@ def migrate_users_schema():
             with engine.begin() as conn:
                 for column_name in missing_columns:
                     if is_pg:
-                        column_type = USER_SCHEMA_COLUMNS_PG.get(column_name, USER_SCHEMA_COLUMNS[column_name])
+                        column_type = USER_SCHEMA_COLUMNS_PG.get(
+                            column_name, USER_SCHEMA_COLUMNS[column_name]
+                        )
                         statement = f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"
                     else:
-                        column_type = USER_SCHEMA_COLUMNS_SQLITE.get(column_name, USER_SCHEMA_COLUMNS[column_name])
+                        column_type = USER_SCHEMA_COLUMNS_SQLITE.get(
+                            column_name, USER_SCHEMA_COLUMNS[column_name]
+                        )
                         statement = f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"
                     conn.execute(text(statement))
         except Exception as exc:
@@ -219,11 +221,21 @@ def migrate_users_schema():
         with engine.begin() as conn:
             if "updated_at" in actual_columns:
                 if "created_at" in actual_columns:
-                    conn.execute(text("UPDATE users SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL"))
+                    conn.execute(
+                        text(
+                            "UPDATE users SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL"
+                        )
+                    )
                 else:
-                    conn.execute(text("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                    conn.execute(
+                        text(
+                            "UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"
+                        )
+                    )
             if "created_at" in actual_columns:
-                conn.execute(text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                conn.execute(
+                    text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+                )
             if "is_active" in actual_columns:
                 conn.execute(text("UPDATE users SET is_active = 1 WHERE is_active IS NULL"))
             if "role" in actual_columns:
@@ -231,14 +243,18 @@ def migrate_users_schema():
             if "is_admin" in actual_columns:
                 conn.execute(text("UPDATE users SET is_admin = 0 WHERE is_admin IS NULL"))
             if "has_pin_enabled" in actual_columns:
-                conn.execute(text("UPDATE users SET has_pin_enabled = 0 WHERE has_pin_enabled IS NULL"))
+                conn.execute(
+                    text("UPDATE users SET has_pin_enabled = 0 WHERE has_pin_enabled IS NULL")
+                )
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"Backfill for users schema encountered a non-fatal warning: {exc}")
 
     actual_columns = {column["name"] for column in inspect(engine).get_columns("users")}
     still_missing = set(USER_SCHEMA_COLUMNS) - actual_columns
     if still_missing:
-        raise RuntimeError(f"Users schema is still missing columns: {', '.join(sorted(still_missing))}")
+        raise RuntimeError(
+            f"Users schema is still missing columns: {', '.join(sorted(still_missing))}"
+        )
 
 
 def migrate_auth_schema():
@@ -259,7 +275,9 @@ def migrate_auth_schema():
                         else:
                             stmt = f"ALTER TABLE trusted_devices ADD COLUMN {col_name} {col_type}"
                         conn.execute(text(stmt))
-                print(f"Applied non-destructive trusted_devices schema migration: {', '.join(missing)}")
+                print(
+                    f"Applied non-destructive trusted_devices schema migration: {', '.join(missing)}"
+                )
             except Exception as exc:
                 raise RuntimeError(
                     f"Non-destructive trusted_devices schema migration failed for: {', '.join(missing)}"
@@ -282,6 +300,7 @@ def init_db():
 
 # ==================== Refresh Tokens for RTR ====================
 
+
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
@@ -297,16 +316,23 @@ class RefreshToken(Base):
 
 # ==================== OAuth Accounts ====================
 
+
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     provider = Column(String(50), nullable=False, index=True)
     provider_user_id = Column(String(255), nullable=False, index=True)
     email = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_user_id", name="uq_oauth_provider_user_id"),
@@ -317,11 +343,14 @@ class OAuthAccount(Base):
 
 # ==================== Trusted Devices ====================
 
+
 class TrustedDevice(Base):
     __tablename__ = "trusted_devices"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     device_id = Column(String(255), nullable=False, index=True)
     device_name = Column(String(255), nullable=False)
     token_hash = Column(String(255), nullable=True, index=True)
@@ -347,6 +376,7 @@ class TrustedDevice(Base):
 
 # ==================== User & Auth ====================
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -358,7 +388,11 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     auth_provider = Column(String(50), nullable=True, default=None)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     last_login = Column(DateTime, nullable=True)
     settings = Column(JSON, default=dict)
     role = Column(String(50), default="user", server_default="user")
@@ -366,22 +400,37 @@ class User(Base):
     has_pin_enabled = Column(Boolean, default=False, server_default="false")
 
     # Relationships
-    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
-    trusted_devices = relationship("TrustedDevice", back_populates="user", cascade="all, delete-orphan")
+    oauth_accounts = relationship(
+        "OAuthAccount", back_populates="user", cascade="all, delete-orphan"
+    )
+    trusted_devices = relationship(
+        "TrustedDevice", back_populates="user", cascade="all, delete-orphan"
+    )
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
     mood_entries = relationship("MoodEntry", back_populates="user", cascade="all, delete-orphan")
-    interventions = relationship("InterventionCompletion", back_populates="user", cascade="all, delete-orphan")
+    interventions = relationship(
+        "InterventionCompletion", back_populates="user", cascade="all, delete-orphan"
+    )
     streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
     facts = relationship("UserFact", back_populates="user", cascade="all, delete-orphan")
-    focus_sessions = relationship("FocusSession", back_populates="user", cascade="all, delete-orphan")
-    distraction_logs = relationship("DistractionLog", back_populates="user", cascade="all, delete-orphan")
+    focus_sessions = relationship(
+        "FocusSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    distraction_logs = relationship(
+        "DistractionLog", back_populates="user", cascade="all, delete-orphan"
+    )
     achievements = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills = relationship("SkillProgress", back_populates="user", cascade="all, delete-orphan")
-    feedback_entries = relationship("UserFeedback", back_populates="user", cascade="all, delete-orphan")
-    support_tickets = relationship("SupportTicket", back_populates="user", cascade="all, delete-orphan")
+    feedback_entries = relationship(
+        "UserFeedback", back_populates="user", cascade="all, delete-orphan"
+    )
+    support_tickets = relationship(
+        "SupportTicket", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 # ==================== Chat History ====================
+
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -398,6 +447,7 @@ class ChatMessage(Base):
 
 
 # ==================== Mood Tracking ====================
+
 
 class MoodEntry(Base):
     __tablename__ = "mood_entries"
@@ -419,12 +469,15 @@ class MoodEntry(Base):
 
 # ==================== Intervention Completions ====================
 
+
 class InterventionCompletion(Base):
     __tablename__ = "intervention_completions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    intervention_type = Column(String(100), nullable=False, index=True)  # "breathing", "focus_session", "hydration", "micro_task"
+    intervention_type = Column(
+        String(100), nullable=False, index=True
+    )  # "breathing", "focus_session", "hydration", "micro_task"
     title = Column(String(255), nullable=False)
     duration_minutes = Column(Integer, nullable=True)
     completed = Column(Boolean, default=True)
@@ -436,12 +489,15 @@ class InterventionCompletion(Base):
 
 # ==================== Streak System ====================
 
+
 class Streak(Base):
     __tablename__ = "streaks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    streak_type = Column(String(50), nullable=False, default="daily")  # "daily", "focus", "emotional_recovery", "task_consistency"
+    streak_type = Column(
+        String(50), nullable=False, default="daily"
+    )  # "daily", "focus", "emotional_recovery", "task_consistency"
     current_streak = Column(Integer, default=0)
     longest_streak = Column(Integer, default=0)
     last_activity_date = Column(DateTime, nullable=True)
@@ -452,13 +508,18 @@ class Streak(Base):
 
 # ==================== Structured Facts (Memory Upgrade) ====================
 
+
 class UserFact(Base):
     __tablename__ = "user_facts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    fact_type = Column(String(50), nullable=False, index=True)  # "preference", "behavior", "life_event", "goal", "struggle"
-    category = Column(String(100), nullable=True, index=True)  # "sleep", "focus", "food", "social", "work"
+    fact_type = Column(
+        String(50), nullable=False, index=True
+    )  # "preference", "behavior", "life_event", "goal", "struggle"
+    category = Column(
+        String(100), nullable=True, index=True
+    )  # "sleep", "focus", "food", "social", "work"
     key = Column(String(255), nullable=False)  # e.g. "favorite_color", "best_focus_time"
     value = Column(Text, nullable=False)
     confidence = Column(Float, default=1.0)  # 0.0 to 1.0 — how certain we are
@@ -466,19 +527,26 @@ class UserFact(Base):
     context = Column(Text, nullable=True)  # original context where this was learned
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     user = relationship("User", back_populates="facts")
 
 
 # ==================== Focus Sessions ====================
 
+
 class FocusSession(Base):
     __tablename__ = "focus_sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    mode = Column(String(50), default="standard")  # "deep_focus", "gentle_start", "recovery", "sprint", "standard"
+    mode = Column(
+        String(50), default="standard"
+    )  # "deep_focus", "gentle_start", "recovery", "sprint", "standard"
     duration_minutes = Column(Integer, nullable=False)
     completed = Column(Boolean, default=False)
     quality = Column(Integer, nullable=True)  # 1-10 user rating
@@ -493,6 +561,7 @@ class FocusSession(Base):
 
 # ==================== Distraction Tracking ====================
 
+
 class DistractionLog(Base):
     __tablename__ = "distraction_logs"
 
@@ -500,7 +569,9 @@ class DistractionLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     session_id = Column(Integer, ForeignKey("focus_sessions.id"), nullable=True)
     distraction = Column(String(255), nullable=False)
-    category = Column(String(50), nullable=True)  # "phone", "people", "noise", "thoughts", "urge", "other"
+    category = Column(
+        String(50), nullable=True
+    )  # "phone", "people", "noise", "thoughts", "urge", "other"
     energy_level = Column(Integer, nullable=True)  # 1-10
     recovery_time_minutes = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -510,12 +581,15 @@ class DistractionLog(Base):
 
 # ==================== Gamification ====================
 
+
 class Achievement(Base):
     __tablename__ = "achievements"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    achievement_id = Column(String(100), nullable=False)  # e.g. "first_focus_session", "three_day_streak"
+    achievement_id = Column(
+        String(100), nullable=False
+    )  # e.g. "first_focus_session", "three_day_streak"
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     xp_reward = Column(Integer, default=0)
@@ -529,25 +603,32 @@ class SkillProgress(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    skill_name = Column(String(100), nullable=False)  # "focus", "consistency", "emotional_resilience", "task_management"
+    skill_name = Column(
+        String(100), nullable=False
+    )  # "focus", "consistency", "emotional_resilience", "task_management"
     level = Column(Integer, default=1)
     xp = Column(Integer, default=0)
     xp_to_next_level = Column(Integer, default=100)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     user = relationship("User", back_populates="skills")
 
 
 # ==================== Feedback & Support ====================
 
+
 class UserFeedback(Base):
     __tablename__ = "user_feedback"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    rating = Column(Integer, nullable=False) # 1-5
-    category = Column(String(100), nullable=False) # "coach", "app", "features", etc.
+    rating = Column(Integer, nullable=False)  # 1-5
+    category = Column(String(100), nullable=False)  # "coach", "app", "features", etc.
     feedback_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
@@ -559,10 +640,10 @@ class SupportTicket(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    type = Column(String(50), nullable=False) # "glitch", "question", "urgency"
+    type = Column(String(50), nullable=False)  # "glitch", "question", "urgency"
     subject = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
-    status = Column(String(50), default="open") # "open", "resolved"
+    status = Column(String(50), default="open")  # "open", "resolved"
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user = relationship("User", back_populates="support_tickets")

@@ -18,8 +18,14 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 always_eager = os.getenv("CELERY_ALWAYS_EAGER", "false").lower() in ("true", "1", "yes")
 environment = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
 database_url = os.getenv("DATABASE_URL", "sqlite:///./adhd_coach.db")
-is_local_sqlite = database_url.startswith("sqlite") and environment not in {"production", "prod", "staging"}
-is_testing = "unittest" in "".join(os.getenv("PYTEST_CURRENT_TEST", "")) or database_url.startswith("sqlite:///:memory:")
+is_local_sqlite = database_url.startswith("sqlite") and environment not in {
+    "production",
+    "prod",
+    "staging",
+}
+is_testing = "unittest" in "".join(os.getenv("PYTEST_CURRENT_TEST", "")) or database_url.startswith(
+    "sqlite:///:memory:"
+)
 
 if is_testing or is_local_sqlite:
     logger.info("Test environment detected. Forcing Celery eager mode (synchronous).")
@@ -52,6 +58,4 @@ celery_app.conf.update(
 # Auto-discover tasks in src.utils.celery_tasks module
 celery_app.autodiscover_tasks(["utils"], related_name="celery_tasks")
 
-logger.info(
-    f"Celery initialized with Broker={CELERY_BROKER_URL}, EagerMode={always_eager}"
-)
+logger.info(f"Celery initialized with Broker={CELERY_BROKER_URL}, EagerMode={always_eager}")

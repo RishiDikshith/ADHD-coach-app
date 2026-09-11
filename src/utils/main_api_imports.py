@@ -6,26 +6,79 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 STRESS_KEYWORDS = {
-    "stress", "stressed", "overwhelm", "overwhelmed", "anxious", "panic",
-    "too much", "hard", "stuck", "tired", "sad", "depressed", "burned out",
-    "tension", "tense", "cant focus", "can't focus", "cant understand", "can't understand"
+    "stress",
+    "stressed",
+    "overwhelm",
+    "overwhelmed",
+    "anxious",
+    "panic",
+    "too much",
+    "hard",
+    "stuck",
+    "tired",
+    "sad",
+    "depressed",
+    "burned out",
+    "tension",
+    "tense",
+    "cant focus",
+    "can't focus",
+    "cant understand",
+    "can't understand",
 }
 POSITIVE_KEYWORDS = {
-    "happy", "great", "good", "awesome", "fantastic", "amazing", "productive",
-    "done", "finished", "excited", "glad", "joy", "better", "calm", "relaxed"
+    "happy",
+    "great",
+    "good",
+    "awesome",
+    "fantastic",
+    "amazing",
+    "productive",
+    "done",
+    "finished",
+    "excited",
+    "glad",
+    "joy",
+    "better",
+    "calm",
+    "relaxed",
 }
 PRODUCTIVE_KEYWORDS = {
-    "productive", "done", "finished", "completed", "focused", "progress",
-    "did it", "working", "achieved", "accomplished", "on track", "next"
+    "productive",
+    "done",
+    "finished",
+    "completed",
+    "focused",
+    "progress",
+    "did it",
+    "working",
+    "achieved",
+    "accomplished",
+    "on track",
+    "next",
 }
 UNPRODUCTIVE_KEYWORDS = {
-    "distracted", "procrastinating", "lazy", "unproductive", "cant focus",
-    "can't focus", "behind", "stuck", "failing", "off track", "cant understand", "can't understand"
+    "distracted",
+    "procrastinating",
+    "lazy",
+    "unproductive",
+    "cant focus",
+    "can't focus",
+    "behind",
+    "stuck",
+    "failing",
+    "off track",
+    "cant understand",
+    "can't understand",
 }
+
 
 def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
-    if any(kw in prompt_lower for kw in ["focus", "distract", "attention", "overwhelm", "concentration"]):
+    if any(
+        kw in prompt_lower
+        for kw in ["focus", "distract", "attention", "overwhelm", "concentration"]
+    ):
         reply = """REPLY:
 Hey there! It sounds like you're feeling pretty overwhelmed right now, which makes focusing incredibly difficult. That's completely normal and okay! 🌬️
 
@@ -63,8 +116,10 @@ TASKS:
 - Start the first step"""
     return reply
 
+
 MAX_CONCURRENT_AI_REQUESTS = int(os.getenv("MAX_CONCURRENT_AI_REQUESTS", "4"))
 ai_queue_semaphore = threading.Semaphore(MAX_CONCURRENT_AI_REQUESTS)
+
 
 @lru_cache(maxsize=1000)
 def get_ai_reply(prompt, language: str = "en"):
@@ -76,11 +131,14 @@ def get_ai_reply(prompt, language: str = "en"):
         if not groq_api_key:
             return generate_offline_reply(prompt)
         from groq import Groq
+
         client = Groq(api_key=groq_api_key)
         model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=model, temperature=0.7, max_tokens=1024,
+            model=model,
+            temperature=0.7,
+            max_tokens=1024,
         )
         return chat_completion.choices[0].message.content
     except Exception as exc:  # noqa: BLE001

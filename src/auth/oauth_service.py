@@ -70,6 +70,7 @@ def get_oauth_config(provider: str) -> dict[str, str]:
 
 # ==================== PKCE & Session-Bound State ====================
 
+
 def generate_pkce_pair() -> tuple[str, str]:
     """Generate high-entropy PKCE code_verifier and code_challenge (RFC 7636)."""
     verifier = secrets.token_urlsafe(48)
@@ -79,9 +80,7 @@ def generate_pkce_pair() -> tuple[str, str]:
 
 
 def create_oauth_session(
-    provider: str,
-    remember_device: bool = False,
-    extra: dict[str, Any] | None = None
+    provider: str, remember_device: bool = False, extra: dict[str, Any] | None = None
 ) -> tuple[str, str, str]:
     """
     Generate an OAuth session returning (auth_url, state, signed_cookie_value).
@@ -108,7 +107,9 @@ def create_oauth_session(
 
     # HMAC-SHA256 signature for tamper-proof session cookie
     serialized = json.dumps(session_payload, separators=(",", ":"), sort_keys=True)
-    sig = hmac.new(SECRET_KEY.encode("utf-8"), serialized.encode("utf-8"), hashlib.sha256).hexdigest()
+    sig = hmac.new(
+        SECRET_KEY.encode("utf-8"), serialized.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     signed_cookie_value = f"{serialized.encode('utf-8').hex()}.{sig}"
 
     # Build Google authorization URL with PKCE and nonce
@@ -131,9 +132,7 @@ def create_oauth_session(
 
 
 def verify_oauth_session_cookie(
-    cookie_value: str | None,
-    incoming_state: str | None,
-    expected_provider: str
+    cookie_value: str | None, incoming_state: str | None, expected_provider: str
 ) -> dict[str, Any] | None:
     """
     Validate the session-bound state cookie against the callback parameters.
@@ -149,7 +148,9 @@ def verify_oauth_session_cookie(
         hex_data, sig = parts
         serialized = bytes.fromhex(hex_data).decode("utf-8")
 
-        expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), serialized.encode("utf-8"), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(
+            SECRET_KEY.encode("utf-8"), serialized.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None
 
@@ -178,7 +179,9 @@ def verify_oauth_session_cookie(
 
 
 # Helper for backward compatibility with existing tests
-def create_oauth_state(provider: str, remember_device: bool = False, extra_data: dict | None = None) -> str:
+def create_oauth_state(
+    provider: str, remember_device: bool = False, extra_data: dict | None = None
+) -> str:
     """Legacy state generator: returns state string from create_oauth_session."""
     _, state, _ = create_oauth_session(provider, remember_device, extra_data)
     return state
@@ -192,7 +195,9 @@ def verify_oauth_state(state: str, expected_provider: str) -> dict | None:
         if len(parts) == 2:
             hex_data, sig = parts
             raw_bytes = bytes.fromhex(hex_data)
-            expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest()
+            expected_sig = hmac.new(
+                SECRET_KEY.encode("utf-8"), raw_bytes, hashlib.sha256
+            ).hexdigest()
             if hmac.compare_digest(sig, expected_sig):
                 payload = json.loads(raw_bytes.decode("utf-8"))
                 ts = payload.get("ts", payload.get("exp", 0))
@@ -225,6 +230,7 @@ def get_google_auth_url(state: str, nonce: str | None = None) -> str:
 
 # ==================== Token Exchange ====================
 
+
 async def exchange_google_code(code: str, code_verifier: str | None = None) -> dict[str, Any]:
     """Exchange authorization code for tokens at Google's official token endpoint with PKCE."""
     cfg = get_oauth_config("google")
@@ -247,7 +253,10 @@ async def exchange_google_code(code: str, code_verifier: str | None = None) -> d
 
 # ==================== Standard OpenID Connect Token Validation ====================
 
-async def verify_google_identity(token_data: dict[str, Any], expected_nonce: str | None = None) -> dict[str, Any]:
+
+async def verify_google_identity(
+    token_data: dict[str, Any], expected_nonce: str | None = None
+) -> dict[str, Any]:
     """
     Verify Google OpenID Connect ID token using PyJWT and official Google JWKS.
     Validates signature, issuer, audience, expiration, nonce, and verified email.
@@ -315,6 +324,7 @@ async def verify_google_identity(token_data: dict[str, Any], expected_nonce: str
 
 
 # ==================== Account Linking & User Provisioning ====================
+
 
 class AccountLinkingRequiredError(Exception):
     """Raised when an existing password-based account matches the OAuth email and must be linked authenticated."""
@@ -402,6 +412,7 @@ def resolve_or_create_oauth_user(
 
 # ==================== Trusted Device Token & Rotation ====================
 
+
 def hash_device_token(token: str) -> str:
     """Compute SHA-256 hexadecimal hash of a raw device token."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -413,10 +424,7 @@ def generate_trusted_device_token() -> tuple[str, str]:
     return raw_token, hash_device_token(raw_token)
 
 
-def resume_trusted_device_session(
-    db: DatabaseManager,
-    raw_token: str
-) -> tuple[User, str] | None:
+def resume_trusted_device_session(db: DatabaseManager, raw_token: str) -> tuple[User, str] | None:
     """
     Validate trusted device token, enforce rotation, and return (User, new_raw_token).
     Stores only the SHA-256 hash in SQLite.
@@ -430,7 +438,9 @@ def resume_trusted_device_session(
         return None
 
     # Verify not expired
-    if device.expires_at and device.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+    if device.expires_at and device.expires_at.replace(tzinfo=timezone.utc) < datetime.now(
+        timezone.utc
+    ):
         return None
 
     user = db.get_user_by_id(device.user_id)

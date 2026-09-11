@@ -23,11 +23,7 @@ import asyncio
 import httpx
 
 from api.main_api import app, bootstrap_admin
-from auth.auth_handler import (
-    get_password_hash,
-    require_admin,
-    verify_password,
-)
+from auth.auth_handler import get_password_hash, require_admin, verify_password
 from database.crud import DatabaseManager
 from database.models import User, engine, init_db
 
@@ -75,6 +71,7 @@ class TestAdminSystem(unittest.TestCase):
     @patch("utils.audit_logger.audit_log")
     def test_bootstrap_admin_creation_success(self, mock_audit, mock_getenv):
         """Verify bootstrap_admin successfully creates admin user when env vars are set."""
+
         def getenv_mock(key, default=None):
             vals = {
                 "ADMIN_USERNAME": "superadmin",
@@ -82,6 +79,7 @@ class TestAdminSystem(unittest.TestCase):
                 "ENVIRONMENT": "development",
             }
             return vals.get(key, default)
+
         mock_getenv.side_effect = getenv_mock
 
         bootstrap_admin(self.db_manager)
@@ -97,7 +95,7 @@ class TestAdminSystem(unittest.TestCase):
             username="superadmin",
             action="admin_bootstrap_creation",
             status="SUCCESS",
-            details={"message": "Admin user created successfully"}
+            details={"message": "Admin user created successfully"},
         )
 
     @patch("api.main_api.os.getenv")
@@ -106,9 +104,7 @@ class TestAdminSystem(unittest.TestCase):
         """Verify bootstrap_admin promotes an existing user to admin role."""
         # 1. Create a normal user first
         normal_user = User(
-            username="promote_me",
-            password_hash=get_password_hash("SomePassword123!"),
-            role="user"
+            username="promote_me", password_hash=get_password_hash("SomePassword123!"), role="user"
         )
         self.db_manager.db.add(normal_user)
         self.db_manager.db.commit()
@@ -121,6 +117,7 @@ class TestAdminSystem(unittest.TestCase):
                 "ENVIRONMENT": "development",
             }
             return vals.get(key, default)
+
         mock_getenv.side_effect = getenv_mock
 
         bootstrap_admin(self.db_manager)
@@ -133,12 +130,13 @@ class TestAdminSystem(unittest.TestCase):
             username="promote_me",
             action="admin_bootstrap_promotion",
             status="SUCCESS",
-            details={"message": "Existing user promoted to admin role"}
+            details={"message": "Existing user promoted to admin role"},
         )
 
     @patch("api.main_api.os.getenv")
     def test_bootstrap_admin_dev_missing_vars(self, mock_getenv):
         """Verify missing env vars in development do not raise errors."""
+
         def getenv_mock(key, default=None):
             vals = {
                 "ADMIN_USERNAME": "",
@@ -146,6 +144,7 @@ class TestAdminSystem(unittest.TestCase):
                 "ENVIRONMENT": "development",
             }
             return vals.get(key, default)
+
         mock_getenv.side_effect = getenv_mock
 
         # Should log a warning and return cleanly
@@ -158,6 +157,7 @@ class TestAdminSystem(unittest.TestCase):
     @patch("utils.audit_logger.audit_log")
     def test_bootstrap_admin_prod_missing_vars_fatal(self, mock_audit, mock_getenv):
         """Verify missing env vars in production fail startup."""
+
         def getenv_mock(key, default=None):
             vals = {
                 "ADMIN_USERNAME": "",
@@ -165,18 +165,19 @@ class TestAdminSystem(unittest.TestCase):
                 "ENVIRONMENT": "production",
             }
             return vals.get(key, default)
+
         mock_getenv.side_effect = getenv_mock
 
         with self.assertRaises(RuntimeError) as context:
             bootstrap_admin(self.db_manager)
-        
+
         self.assertIn("ADMIN_USERNAME or ADMIN_PASSWORD not configured", str(context.exception))
         mock_audit.assert_called_with(
             username="system",
             action="admin_bootstrap",
             status="FAILED",
             details={"reason": "missing_env_vars", "is_prod": True},
-            severity="CRITICAL"
+            severity="CRITICAL",
         )
 
     @patch("api.main_api.os.getenv")
@@ -184,13 +185,14 @@ class TestAdminSystem(unittest.TestCase):
     def test_bootstrap_admin_prod_weak_password_fatal(self, mock_audit, mock_getenv):
         """Verify weak admin password in production fails startup."""
         weak_passwords = [
-            "weakpass",           # short, no upper/digit/special
-            "Weakpassword",       # no digit/special
-            "Weakpassword1",      # no special
-            "Secure1!",           # too short (< 12 chars)
+            "weakpass",  # short, no upper/digit/special
+            "Weakpassword",  # no digit/special
+            "Weakpassword1",  # no special
+            "Secure1!",  # too short (< 12 chars)
         ]
 
         for pwd in weak_passwords:
+
             def make_getenv_mock(current_pwd):
                 def getenv_mock(key, default=None):
                     vals = {
@@ -199,27 +201,28 @@ class TestAdminSystem(unittest.TestCase):
                         "ENVIRONMENT": "production",
                     }
                     return vals.get(key, default)
+
                 return getenv_mock
 
             mock_getenv.side_effect = make_getenv_mock(pwd)
 
             with self.assertRaises(RuntimeError) as context:
                 bootstrap_admin(self.db_manager)
-            
+
             self.assertIn("fails complexity requirements", str(context.exception))
-            
+
         mock_audit.assert_called_with(
             username="system",
             action="admin_bootstrap",
             status="FAILED",
             details={"reason": "weak_password", "reasons": unittest.mock.ANY},
-            severity="CRITICAL"
+            severity="CRITICAL",
         )
 
     def test_admin_health_route_auth_required(self):
         """Verify GET /admin/health rejects unauthenticated and non-admin requests."""
         client = SyncTestClient(app)
-        
+
         try:
             # 1. Unauthenticated request -> 401 Unauthorized
             response = client.get("/admin/health")
@@ -230,7 +233,7 @@ class TestAdminSystem(unittest.TestCase):
             normal_user = User(
                 username="normal_user",
                 password_hash=get_password_hash("NormalPassword123!"),
-                role="user"
+                role="user",
             )
             self.db_manager.db.add(normal_user)
             self.db_manager.db.commit()
@@ -242,15 +245,15 @@ class TestAdminSystem(unittest.TestCase):
             # If we override require_admin to return a username, FastAPI thinks it's authorized.
             # To test the actual role verification, let's override get_db or the token logic,
             # or just call RoleChecker manually.
-            
+
             # Let's use FastAPI dependency override to simulate a normal user vs admin user.
             # First, test the dependency class itself manually.
             from fastapi import Request
 
             from auth.auth_handler import RoleChecker
-            
+
             checker = RoleChecker(allowed_roles=["admin"])
-            
+
             # Mock request
             mock_request = MagicMock(spec=Request)
             mock_request.headers = {"Authorization": "Bearer mock_token"}
@@ -259,12 +262,13 @@ class TestAdminSystem(unittest.TestCase):
             mock_request.client.host = "127.0.0.1"
             mock_request.url.path = "/admin/health"
             mock_request.method = "GET"
-            
+
             with patch("auth.auth_handler.verify_token") as mock_verify:
                 mock_verify.return_value = {"sub": "normal_user", "type": "access"}
-                
+
                 # RoleChecker should raise 403 for standard user
                 from fastapi import HTTPException
+
                 with self.assertRaises(HTTPException) as ctx:
                     checker(mock_request)
                 self.assertEqual(ctx.exception.status_code, 403)
@@ -275,18 +279,18 @@ class TestAdminSystem(unittest.TestCase):
             admin_user = User(
                 username="admin_user",
                 password_hash=get_password_hash("AdminPassword123!"),
-                role="admin"
+                role="admin",
             )
             self.db_manager.db.add(admin_user)
             self.db_manager.db.commit()
 
             with patch("auth.auth_handler.verify_token") as mock_verify:
                 mock_verify.return_value = {"sub": "admin_user", "type": "access"}
-                
+
                 # Should return the admin's username
                 allowed_user = checker(mock_request)
                 self.assertEqual(allowed_user, "admin_user")
-                
+
         finally:
             app.dependency_overrides.clear()
             client.close()

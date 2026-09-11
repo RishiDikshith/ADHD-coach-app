@@ -8,11 +8,7 @@ if "student_id" in df.columns:
     df = df.drop("student_id", axis=1)
 
 # Encode gender
-df["gender"] = df["gender"].map({
-    "Male": 0,
-    "Female": 1,
-    "Other": 2
-})
+df["gender"] = df["gender"].map({"Male": 0, "Female": 1, "Other": 2})
 
 # -------------------------
 # Handle Missing Values

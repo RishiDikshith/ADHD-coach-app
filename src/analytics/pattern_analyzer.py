@@ -37,19 +37,18 @@ class PatternAnalyzer:
             hour_quality[hour].append(quality)
 
         # Average quality by hour
-        avg_by_hour = {
-            hour: sum(scores) / len(scores)
-            for hour, scores in hour_quality.items()
-        }
+        avg_by_hour = {hour: sum(scores) / len(scores) for hour, scores in hour_quality.items()}
 
         # Find best and worst hours (with enough data)
         best_hours = [
-            hour for hour, avg in sorted(avg_by_hour.items(), key=lambda x: x[1], reverse=True)
+            hour
+            for hour, avg in sorted(avg_by_hour.items(), key=lambda x: x[1], reverse=True)
             if len(hour_quality[hour]) >= 2
         ][:3]
 
         worst_hours = [
-            hour for hour, avg in sorted(avg_by_hour.items(), key=lambda x: x[1])
+            hour
+            for hour, avg in sorted(avg_by_hour.items(), key=lambda x: x[1])
             if len(hour_quality[hour]) >= 2
         ][:3]
 
@@ -81,10 +80,19 @@ class PatternAnalyzer:
         stress_values = [m.get("stress", 5) for m in recent]
 
         if len(stress_values) >= 3:
-            first_half = sum(stress_values[:len(stress_values)//2]) / max(len(stress_values)//2, 1)
-            second_half = sum(stress_values[len(stress_values)//2:]) / max(len(stress_values) - len(stress_values)//2, 1)
-            trend = "increasing" if second_half > first_half + 0.5 else \
-                    "decreasing" if second_half < first_half - 0.5 else "stable"
+            first_half = sum(stress_values[: len(stress_values) // 2]) / max(
+                len(stress_values) // 2, 1
+            )
+            second_half = sum(stress_values[len(stress_values) // 2 :]) / max(
+                len(stress_values) - len(stress_values) // 2, 1
+            )
+            trend = (
+                "increasing"
+                if second_half > first_half + 0.5
+                else "decreasing"
+                if second_half < first_half - 0.5
+                else "stable"
+            )
         else:
             trend = "insufficient_data"
 
@@ -115,33 +123,39 @@ class PatternAnalyzer:
 
         # Sleep correlation
         if sleep < 6 and stress >= 6:
-            correlations.append({
-                "factor": "sleep",
-                "correlation": "negative",
-                "strength": "strong",
-                "insight": "Low sleep appears linked to higher stress levels.",
-                "suggestion": "Prioritize 7-8 hours of sleep to improve stress management.",
-            })
+            correlations.append(
+                {
+                    "factor": "sleep",
+                    "correlation": "negative",
+                    "strength": "strong",
+                    "insight": "Low sleep appears linked to higher stress levels.",
+                    "suggestion": "Prioritize 7-8 hours of sleep to improve stress management.",
+                }
+            )
 
         # Phone distractions
         if phone > 4:
-            correlations.append({
-                "factor": "phone_distractions",
-                "correlation": "negative",
-                "strength": "strong",
-                "insight": "High phone distraction hours may be reducing focus capacity.",
-                "suggestion": "Try phone-free focus blocks using the 'phone in another room' method.",
-            })
+            correlations.append(
+                {
+                    "factor": "phone_distractions",
+                    "correlation": "negative",
+                    "strength": "strong",
+                    "insight": "High phone distraction hours may be reducing focus capacity.",
+                    "suggestion": "Try phone-free focus blocks using the 'phone in another room' method.",
+                }
+            )
 
         # Sleep-productivity link
         if sleep >= 7 and stress <= 4:
-            correlations.append({
-                "factor": "sleep_stress_balance",
-                "correlation": "positive",
-                "strength": "positive",
-                "insight": "Good sleep and low stress create optimal conditions for productivity.",
-                "suggestion": "This is your peak state. Use it for your most important tasks!",
-            })
+            correlations.append(
+                {
+                    "factor": "sleep_stress_balance",
+                    "correlation": "positive",
+                    "strength": "positive",
+                    "insight": "Good sleep and low stress create optimal conditions for productivity.",
+                    "suggestion": "This is your peak state. Use it for your most important tasks!",
+                }
+            )
 
         return correlations
 
@@ -170,9 +184,15 @@ class PatternAnalyzer:
         most_active_hour = hour_activity.most_common(1)[0][0]
         most_active_day = day_activity.most_common(1)[0][0] if day_activity else None
 
-        time_of_day = "morning" if 5 <= most_active_hour < 12 else \
-                      "afternoon" if 12 <= most_active_hour < 17 else \
-                      "evening" if 17 <= most_active_hour < 21 else "night"
+        time_of_day = (
+            "morning"
+            if 5 <= most_active_hour < 12
+            else "afternoon"
+            if 12 <= most_active_hour < 17
+            else "evening"
+            if 17 <= most_active_hour < 21
+            else "night"
+        )
 
         return {
             "pattern_detected": True,
@@ -187,25 +207,25 @@ class PatternAnalyzer:
         insights = []
 
         focus_patterns = user_profile.get("focus_patterns", {})
-        focus_analysis = self.analyze_focus_patterns(
-            focus_patterns.get("focus_quality_trend", [])
-        )
+        focus_analysis = self.analyze_focus_patterns(focus_patterns.get("focus_quality_trend", []))
         if focus_analysis.get("pattern_detected") and focus_analysis.get("best_focus_hours"):
-            insights.append({
-                "type": "timing",
-                "message": f"Best focus time: {', '.join(focus_analysis['best_focus_hours'][:2])}",
-                "action": "Schedule deep work during these windows",
-            })
+            insights.append(
+                {
+                    "type": "timing",
+                    "message": f"Best focus time: {', '.join(focus_analysis['best_focus_hours'][:2])}",
+                    "action": "Schedule deep work during these windows",
+                }
+            )
 
         mood_patterns = user_profile.get("emotional_patterns", {})
-        mood_analysis = self.analyze_mood_patterns(
-            mood_patterns.get("mood_trend", [])
-        )
+        mood_analysis = self.analyze_mood_patterns(mood_patterns.get("mood_trend", []))
         if mood_analysis.get("pattern_detected"):
-            insights.append({
-                "type": "stress",
-                "message": f"Stress trend: {mood_analysis['stress_trend']} (avg {mood_analysis['avg_stress']}/10)",
-                "action": "Adjust daily demands based on stress trend",
-            })
+            insights.append(
+                {
+                    "type": "stress",
+                    "message": f"Stress trend: {mood_analysis['stress_trend']} (avg {mood_analysis['avg_stress']}/10)",
+                    "action": "Adjust daily demands based on stress trend",
+                }
+            )
 
         return insights

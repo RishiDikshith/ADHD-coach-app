@@ -157,4 +157,5 @@ class JustBeginMode:
             "🌟 The hardest step is the first one. And I've already taken it.",
         ]
         import random
+
         return random.choice(mantras)

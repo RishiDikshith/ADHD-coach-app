@@ -1,26 +1,26 @@
 def mental_health_score(prediction):
     """
     Convert mental health stress probability (0-1) to health score (0-100).
-    
+
     Uses non-linear scaling for more realistic results:
     - 0.0 stress = 100 (Excellent)
     - 0.3 stress = 80 (Good)
     - 0.5 stress = 65 (Moderate)
     - 0.7 stress = 45 (Concerning)
     - 1.0 stress = 10 (Critical)
-    
+
     Args:
         prediction: float - Stress probability (0-1)
-        
+
     Returns:
         float - Health score (0-100, higher is better)
     """
     if prediction is None:
         return 50.0
-    
+
     # Ensure prediction is in valid range
     prediction = max(0.0, min(1.0, float(prediction)))
-    
+
     # Non-linear scaling for more realistic results
     # Uses exponential function to make small stress differences matter less
     # but critical stress levels stand out
@@ -39,25 +39,25 @@ def mental_health_score(prediction):
     else:
         # 70-100% stress = 10-45 (Concerning to Critical)
         score = 10 + (1 - (prediction - 0.7) / 0.3) * 35
-    
+
     return float(max(10, min(100, round(score, 1))))
 
 
 def get_stress_level_category(stress_probability):
     """
     Get stress level category (0-10 scale) from probability.
-    
+
     Args:
         stress_probability: float - Stress probability (0-1)
-        
+
     Returns:
         tuple - (level: 0-10, category: str, description: str)
     """
     stress_probability = max(0.0, min(1.0, float(stress_probability)))
-    
+
     # Convert 0-1 probability to 0-10 scale
     stress_level = stress_probability * 10
-    
+
     if stress_level < 1:
         category = "Minimal"
         description = "No detectable stress"
@@ -88,27 +88,27 @@ def get_stress_level_category(stress_probability):
     else:
         category = "Critical"
         description = "Critical stress level, immediate support needed"
-    
+
     return (round(stress_level, 1), category, description)
 
 
 def analyze_stress_text(text):
     """
     Advanced stress detection with multi-level analysis.
-    
+
     Args:
         text: str - User input text to analyze
-        
+
     Returns:
         float - Stress score from 0-1 (0 = no stress, 1 = high stress)
     """
     if not text or not isinstance(text, str):
         return 0.0
-    
+
     text_lower = text.lower().strip()
     if len(text_lower) < 3:
         return 0.0
-    
+
     # Level 1: Critical stress indicators (highest severity)
     critical_indicators = {
         "suicide": 0.95,
@@ -120,7 +120,7 @@ def analyze_stress_text(text):
         "severe anxiety": 0.8,
         "completely overwhelmed": 0.8,
     }
-    
+
     # Level 2: High stress indicators
     high_stress_indicators = {
         "overwhelm": 0.6,
@@ -135,7 +135,7 @@ def analyze_stress_text(text):
         "tension": 0.6,
         "tense": 0.55,
     }
-    
+
     # Level 3: Moderate stress indicators
     moderate_stress_indicators = {
         "stressed": 0.45,
@@ -164,7 +164,7 @@ def analyze_stress_text(text):
         "insomnia": 0.45,
         "sleep issues": 0.35,
     }
-    
+
     # Level 4: Mild stress indicators
     mild_stress_indicators = {
         "busy": 0.15,
@@ -185,7 +185,7 @@ def analyze_stress_text(text):
         "difficult": 0.15,
         "challenging": 0.1,
     }
-    
+
     # Positive/calming indicators (reduce stress score)
     positive_indicators = {
         "feeling better": -0.2,
@@ -205,10 +205,10 @@ def analyze_stress_text(text):
         "meditate": -0.15,
         "take a break": -0.1,
     }
-    
+
     stress_score = 0.0
     indicator_count = 0
-    
+
     # Check all stress indicator levels
     all_indicators = {
         **critical_indicators,
@@ -217,17 +217,17 @@ def analyze_stress_text(text):
         **mild_stress_indicators,
         **positive_indicators,
     }
-    
+
     # Find all matching indicators (cumulative approach)
     matched_indicators = []
     for indicator, value in all_indicators.items():
         if indicator in text_lower:
             matched_indicators.append((indicator, value))
             indicator_count += 1
-    
+
     if not matched_indicators:
         return 0.0
-    
+
     # Calculate stress score based on matched indicators
     if indicator_count == 1:
         # Single indicator: use its value directly
@@ -236,31 +236,31 @@ def analyze_stress_text(text):
         # Multiple indicators: use weighted average with emphasis on higher severity
         weighted_sum = 0.0
         weight_sum = 0.0
-        
+
         for indicator, value in matched_indicators:
             # Weight by absolute value (higher stress = higher weight)
             weight = abs(value)
             weighted_sum += value * weight
             weight_sum += weight
-        
+
         stress_score = weighted_sum / weight_sum if weight_sum > 0 else 0.0
-    
+
     # Frequency boost: multiple mentions increase stress
     if indicator_count > 1:
         frequency_boost = min(0.15, (indicator_count - 1) * 0.05)
         stress_score = min(0.95, stress_score + frequency_boost)
-    
+
     # Sentiment context: check for negations that might reduce stress
     text_words = text_lower.split()
-    
+
     # If text is mostly questions, reduce stress (curiosity/seeking help is positive)
     question_ratio = text_lower.count("?") / max(1, len(text_words) / 10)
     if question_ratio > 0.3:
         stress_score *= 0.85  # 15% reduction for question-heavy text
-    
+
     # Normalize to 0-1 scale with realistic bounds
     stress_score = max(0.0, min(1.0, stress_score))
-    
+
     # Avoid extreme 0 or 1 unless explicitly critical
     if stress_score < 0.05:
         return 0.0
@@ -269,5 +269,5 @@ def analyze_stress_text(text):
         has_critical = any(ind in text_lower for ind in critical_indicators)
         if not has_critical:
             stress_score = min(0.75, stress_score)
-    
+
     return stress_score

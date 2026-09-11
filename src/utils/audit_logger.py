@@ -17,21 +17,24 @@ audit_logger.setLevel(logging.INFO)
 if not audit_logger.handlers:
     # Handler for writing structured JSON audit logs
     file_handler = logging.FileHandler("logs/security_audit.log", encoding="utf-8")
-    
+
     # Custom formatter for JSON audit log format
     class JSONFormatter(logging.Formatter):
         def format(self, record):
             log_data = record.msg
             if isinstance(log_data, dict):
                 return json.dumps(log_data)
-            return json.dumps({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "message": record.getMessage(),
-                "level": record.levelname
-            })
-            
+            return json.dumps(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": record.getMessage(),
+                    "level": record.levelname,
+                }
+            )
+
     file_handler.setFormatter(JSONFormatter())
     audit_logger.addHandler(file_handler)
+
 
 def audit_log(
     username: str,
@@ -39,7 +42,7 @@ def audit_log(
     status: str,
     ip_address: str | None = None,
     details: dict[str, Any] | None = None,
-    severity: str = "INFO"
+    severity: str = "INFO",
 ):
     """
     Log security and transaction critical events in a structured JSON audit log format.
@@ -51,14 +54,14 @@ def audit_log(
         "action": action,
         "status": status,
         "ip_address": ip_address or "unknown",
-        "details": details or {}
+        "details": details or {},
     }
-    
+
     log_msg = f"Audit Log - {severity.upper()} - User: {username} - Action: {action} - Status: {status} - Details: {json.dumps(details or {})}"
-    
+
     # Also log to main app logger for general visibility
     logger.info(log_msg)
-    
+
     # Log structured event to dedicated audit log
     if severity.upper() == "CRITICAL":
         audit_logger.critical(event)

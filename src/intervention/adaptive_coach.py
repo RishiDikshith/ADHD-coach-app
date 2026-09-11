@@ -246,7 +246,7 @@ class AdaptiveCoach:
                 if emoji in clean_mood:
                     clean_mood = target
                     break
-        
+
         # Lowercase and fallback mapping
         clean_mood = clean_mood.lower()
         if "happy" in clean_mood or "excited" in clean_mood or "joy" in clean_mood:
@@ -260,14 +260,17 @@ class AdaptiveCoach:
         elif "ok" in clean_mood or "fine" in clean_mood:
             clean_mood = "neutral"
 
-        return MOOD_STRATEGIES.get(clean_mood, {
-            "tone": "warm",
-            "interventions": ["check_in", "gentle_support"],
-            "task_style": "normal",
-            "productivity_goals": True,
-            "focus_mode": "standard",
-            "messages": ["How are you feeling right now?"],
-        })
+        return MOOD_STRATEGIES.get(
+            clean_mood,
+            {
+                "tone": "warm",
+                "interventions": ["check_in", "gentle_support"],
+                "task_style": "normal",
+                "productivity_goals": True,
+                "focus_mode": "standard",
+                "messages": ["How are you feeling right now?"],
+            },
+        )
 
     def get_coaching_plan(
         self,
@@ -351,27 +354,34 @@ class AdaptiveCoach:
         additions.append(f"[Coaching Tone] Use a {tone} tone.")
 
         if coaching_plan.get("priority") == "crisis":
-            additions.append("[CRITICAL] The user is in a crisis state. Emotional safety is the ONLY priority.")
+            additions.append(
+                "[CRITICAL] The user is in a crisis state. Emotional safety is the ONLY priority."
+            )
 
         if coaching_plan.get("task_size") == "micro":
             additions.append("[Task Size] Suggest ONLY micro-tasks (1-2 minutes). Nothing larger.")
 
         if not coaching_plan.get("productivity_safe", True):
-            additions.append("[Productivity] Do NOT suggest productivity goals. Focus on rest and emotional support.")
+            additions.append(
+                "[Productivity] Do NOT suggest productivity goals. Focus on rest and emotional support."
+            )
 
         if coaching_plan.get("messages"):
             additions.append(f"[Suggested Message] {coaching_plan['messages'][0]}")
 
         if coaching_plan.get("interventions"):
-            additions.append(f"[Intervention Focus] {', '.join(coaching_plan['interventions'][:3])}")
+            additions.append(
+                f"[Intervention Focus] {', '.join(coaching_plan['interventions'][:3])}"
+            )
 
         if additions:
             return system_prompt + "\n\n" + "\n".join(additions)
 
         return system_prompt
 
-    def get_system_prompt_extension(self, text: str, context: dict | None = None,
-                                    mood: str | None = None) -> str:
+    def get_system_prompt_extension(
+        self, text: str, context: dict | None = None, mood: str | None = None
+    ) -> str:
         """Generate a system prompt extension combining state detection, mood, and time awareness."""
         if not self.state_detector:
             return ""
@@ -389,7 +399,9 @@ class AdaptiveCoach:
 
         # Priority
         if coaching_plan["priority"] == "crisis":
-            parts.append("[CRITICAL] Crisis mode — emotional safety only. No tasks. No productivity.")
+            parts.append(
+                "[CRITICAL] Crisis mode — emotional safety only. No tasks. No productivity."
+            )
 
         # Focus mode
         parts.append(f"[Focus Mode] {coaching_plan['focus_mode']}")

@@ -4,7 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
@@ -13,9 +13,9 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import cross_val_score, train_test_split
 from xgboost import XGBRegressor
 
-print("="*70)
+print("=" * 70)
 print("PRODUCTIVITY MODEL - FINAL FAST VERSION")
-print("="*70)
+print("=" * 70)
 
 # =========================
 # LOAD DATA
@@ -25,9 +25,7 @@ df = pd.read_csv("data/featured/behavioral_scaled.csv")
 X = df.drop("productivity_score", axis=1)
 y = np.log1p(df["productivity_score"])
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
 
@@ -39,10 +37,9 @@ print("\n--- Feature Importance ---")
 quick_cb = CatBoostRegressor(iterations=200, verbose=0, random_state=42)
 quick_cb.fit(X_train, y_train)
 
-importance = pd.DataFrame({
-    "feature": X.columns,
-    "importance": quick_cb.get_feature_importance()
-}).sort_values("importance", ascending=False)
+importance = pd.DataFrame(
+    {"feature": X.columns, "importance": quick_cb.get_feature_importance()}
+).sort_values("importance", ascending=False)
 
 top_features = importance.head(15)["feature"].tolist()
 
@@ -59,12 +56,7 @@ print("\n--- Training Models ---")
 
 # CatBoost (BEST)
 cat_model = CatBoostRegressor(
-    iterations=800,
-    learning_rate=0.03,
-    depth=7,
-    l2_leaf_reg=2,
-    verbose=0,
-    random_state=42
+    iterations=800, learning_rate=0.03, depth=7, l2_leaf_reg=2, verbose=0, random_state=42
 )
 cat_model.fit(X_train, y_train)
 
@@ -77,18 +69,13 @@ xgb_model = XGBRegressor(
     colsample_bytree=0.9,
     random_state=42,
     n_jobs=-1,
-    tree_method='hist'
+    tree_method="hist",
 )
 xgb_model.fit(X_train, y_train)
 
 # LightGBM (optional)
 lgb_model = LGBMRegressor(
-    n_estimators=600,
-    learning_rate=0.03,
-    max_depth=7,
-    random_state=42,
-    n_jobs=-1,
-    verbose=-1
+    n_estimators=600, learning_rate=0.03, max_depth=7, random_state=42, n_jobs=-1, verbose=-1
 )
 lgb_model.fit(X_train, y_train)
 
@@ -97,17 +84,14 @@ lgb_model.fit(X_train, y_train)
 # =========================
 print("\n--- Creating Ensemble ---")
 
-ensemble = VotingRegressor([
-    ('cat', cat_model),
-    ('xgb', xgb_model),
-    ('lgb', lgb_model)
-])
+ensemble = VotingRegressor([("cat", cat_model), ("xgb", xgb_model), ("lgb", lgb_model)])
 
 ensemble.fit(X_train, y_train)
 
 # =========================
 # EVALUATION
 # =========================
+
 
 def evaluate(name, model):
     pred_log = model.predict(X_test)
@@ -126,9 +110,10 @@ def evaluate(name, model):
     print(f"  Original R2: {r2_orig:.4f}")
     print(f"  MAE: {mae_orig:.4f}")
 
-print("\n" + "="*70)
+
+print("\n" + "=" * 70)
 print("MODEL PERFORMANCE")
-print("="*70)
+print("=" * 70)
 
 evaluate("CatBoost", cat_model)
 evaluate("XGBoost", xgb_model)
@@ -141,7 +126,7 @@ evaluate("Ensemble", ensemble)
 
 print("\n--- Cross Validation (CatBoost) ---")
 
-cv_scores = cross_val_score(cat_model, X_train, y_train, cv=5, scoring='r2')
+cv_scores = cross_val_score(cat_model, X_train, y_train, cv=5, scoring="r2")
 print(f"CV R2: {cv_scores.mean():.4f} (+/- {cv_scores.std()*2:.4f})")
 
 # =========================
@@ -151,6 +136,6 @@ print(f"CV R2: {cv_scores.mean():.4f} (+/- {cv_scores.std()*2:.4f})")
 # Use CatBoost (best)
 joblib.dump((cat_model, top_features), "models/productivity_model_final.pkl")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("✓ FINAL MODEL SAVED (CatBoost)")
-print("="*70)
+print("=" * 70)

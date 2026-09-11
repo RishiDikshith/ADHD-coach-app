@@ -5,13 +5,21 @@ def get_avatar_color(username):
     """Generate consistent color from username hash"""
     hash_obj = hashlib.md5(username.encode())
     hash_hex = hash_obj.hexdigest()
-    
+
     # Predefined color palette for consistency
     colors = [
-        "#667eea", "#764ba2", "#f093fb", "#4facfe", "#43e97b",
-        "#fa709a", "#fee140", "#30cfd0", "#a8edea", "#fed6e3"
+        "#667eea",
+        "#764ba2",
+        "#f093fb",
+        "#4facfe",
+        "#43e97b",
+        "#fa709a",
+        "#fee140",
+        "#30cfd0",
+        "#a8edea",
+        "#fed6e3",
     ]
-    
+
     # Use hash to pick a color
     color_index = int(hash_hex, 16) % len(colors)
     return colors[color_index]
@@ -26,7 +34,7 @@ def render_avatar_html(username, size="40px"):
     """Generate HTML for avatar badge"""
     initials = get_avatar_initials(username)
     color = get_avatar_color(username)
-    
+
     return f"""
     <div style="
         display: inline-flex;

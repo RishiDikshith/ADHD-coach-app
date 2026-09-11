@@ -83,14 +83,16 @@ class TestADHDProductivityAPI(unittest.TestCase):
     def tearDownClass(cls):
         """Close the test client and clean up database files."""
         cls.client.close()
-        
+
         # Force close main app database session
         from api import main_api
+
         if main_api._db_manager:
             main_api._db_manager.close()
 
         # Force engine disposal to release file locks on Windows
         from database.models import engine
+
         try:
             engine.dispose()
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
@@ -99,6 +101,7 @@ class TestADHDProductivityAPI(unittest.TestCase):
         # Remove the temp database files
         try:
             import os
+
             for f in ["./test_adhd_coach_temp.db", "./test_adhd_coach_temp.db-journal"]:
                 if os.path.exists(f):
                     os.remove(f)
@@ -131,7 +134,9 @@ class TestADHDProductivityAPI(unittest.TestCase):
         """A newly registered account must authenticate in a fresh request."""
         username = f"auth_{uuid.uuid4().hex[:12]}"
         password = "StrongPassword123!"
-        registration = self.client.post("/auth/register", json={"username": username, "password": password})
+        registration = self.client.post(
+            "/auth/register", json={"username": username, "password": password}
+        )
         self.assertEqual(registration.status_code, 200)
         self.assertTrue(registration.json()["success"])
         self.assertTrue(registration.json().get("token"))
@@ -141,7 +146,9 @@ class TestADHDProductivityAPI(unittest.TestCase):
         self.assertTrue(login.json()["success"])
         self.assertTrue(login.json().get("token"))
 
-        duplicate = self.client.post("/auth/register", json={"username": username.upper(), "password": password})
+        duplicate = self.client.post(
+            "/auth/register", json={"username": username.upper(), "password": password}
+        )
         self.assertEqual(duplicate.status_code, 409)
         self.assertFalse(duplicate.json()["success"])
 
@@ -160,15 +167,15 @@ class TestADHDProductivityAPI(unittest.TestCase):
                 "breaks_per_day": 3,
                 "coffee_intake_mg": 100,
                 "exercise_minutes": 30,
-                "stress_level": 5
+                "stress_level": 5,
             },
             "adhd_answers": ["Often", "Sometimes", "Rarely", "Often", "Very Often"],
-            "text": "I feel slightly distracted today"
+            "text": "I feel slightly distracted today",
         }
         response = self.client.post("/calculate_scores", json=payload)
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        
+
         # Verify scores dictionary contains essential metrics
         self.assertIn("scores", data)
         scores = data["scores"]
@@ -183,17 +190,13 @@ class TestADHDProductivityAPI(unittest.TestCase):
     def test_interventions_endpoint(self):
         """Verify interventions are correctly derived from calculated score indicators."""
         payload = {
-            "user_data": {
-                "stress_level": 9,
-                "sleep_hours": 5,
-                "energy_level": 3
-            },
+            "user_data": {"stress_level": 9, "sleep_hours": 5, "energy_level": 3},
             "scores": {
                 "productivity_score": 40.0,
                 "adhd_risk": 0.8,
                 "mental_health_score": 30.0,
-                "depression_score": 40.0
-            }
+                "depression_score": 40.0,
+            },
         }
         response = self.client.post("/get_interventions", json=payload)
         self.assertEqual(response.status_code, 200)
@@ -204,10 +207,12 @@ class TestADHDProductivityAPI(unittest.TestCase):
     @patch("api.main_api.get_ai_reply")
     def test_task_paralysis_decomp(self, mock_ai):
         """Verify task paralysis analyzer suggests micro-steps."""
-        mock_ai.return_value = 'REPLY:\nLet\'s smash this.\nTASKS:\n- Open your notes\n- Read one page'
+        mock_ai.return_value = (
+            "REPLY:\nLet's smash this.\nTASKS:\n- Open your notes\n- Read one page"
+        )
         payload = {
             "task": "Write an entire marketing plan",
-            "user_data": {"stress_level": 8, "energy_level": 4}
+            "user_data": {"stress_level": 8, "energy_level": 4},
         }
         response = self.client.post("/task-paralysis/analyze", json=payload)
         self.assertEqual(response.status_code, 200)
@@ -227,15 +232,16 @@ class TestADHDProductivityAPI(unittest.TestCase):
     def test_voice_assistant_settings(self):
         """Verify voice assistant preferences can be updated, saved to DB, and retrieved."""
         from auth.auth_handler import require_user
+
         # Override require_user dependency to bypass active JWT authentication logic in test environment
         app.dependency_overrides[require_user] = lambda: "test_user"
-        
+
         try:
             # 1. Register test_user in SQLite DB so they exist
             register_payload = {
                 "username": "test_user",
                 "password": "password123",
-                "email": "test@example.com"
+                "email": "test@example.com",
             }
             self.client.post("/auth/register", json=register_payload)
 
@@ -257,14 +263,14 @@ class TestADHDProductivityAPI(unittest.TestCase):
                 "voice_autospeak": True,
                 "voice_speed": 1.25,
                 "voice_pitch": 0.95,
-                "voice_accent": "es-ES"
+                "voice_accent": "es-ES",
             }
             # Put the updated preferences
             response = self.client.put("/settings/test_user", json=payload)
             self.assertEqual(response.status_code, 200)
             data = response.json()
             self.assertTrue(data.get("success", False))
-            
+
             # Retrieve updated preferences and assert correct parsing
             response = self.client.get("/settings/test_user")
             self.assertEqual(response.status_code, 200)

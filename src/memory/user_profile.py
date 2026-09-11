@@ -40,14 +40,12 @@ class UserProfile:
             "user_id": user_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
-
             # ADHD-specific profile
             "adhd_type": None,  # inattentive, hyperactive, combined, unknown
             "primary_challenges": [],  # e.g., ["task_initiation", "focus_maintenance", "time_blindness"]
             "strengths": [],  # e.g., ["hyperfocus", "creativity", "problem_solving"]
             "cognitive_styles": [],  # e.g. ["hyperfocus_driven", "crisis_motivated", "body_double_preferred"]
             "interests": [],  # e.g. ["programming", "music"]
-
             # Focus patterns
             "focus_patterns": {
                 "best_focus_hours": [],  # e.g., ["09:00", "10:00", "22:00", "23:00"]
@@ -55,35 +53,30 @@ class UserProfile:
                 "optimal_session_length_minutes": 25,
                 "focus_quality_trend": [],  # list of {date, quality_score, session_length}
             },
-
             # Procrastination
             "procrastination_triggers": {
                 "common_triggers": [],  # e.g., ["large_tasks", "administrative_work"]
                 "avoidance_patterns": [],  # e.g., ["social_media", "snacking"]
                 "task_types_avoided": [],
             },
-
             # Emotional patterns
             "emotional_patterns": {
                 "mood_trend": [],  # list of {date, mood, energy, stress}
                 "common_emotions": [],
                 "burnout_indicators": [],
             },
-
             # Intervention effectiveness
             "intervention_history": {
                 "successful_interventions": [],  # what worked
                 "failed_interventions": [],  # what didn't
                 "preferred_intervention_style": "gentle",  # gentle, direct, energetic
             },
-
             # Energy patterns
             "energy_patterns": {
                 "peak_energy_times": [],
                 "low_energy_times": [],
                 "sleep_sensitivity": "moderate",  # how strongly sleep affects next day
             },
-
             # Task patterns
             "task_patterns": {
                 "completion_rate": 0.0,
@@ -91,7 +84,6 @@ class UserProfile:
                 "break_frequency_minutes": 30,
                 "distraction_factors": [],
             },
-
             # User preferences
             "preferences": {
                 "coach_tone": "empathetic",  # empathetic, direct, energetic
@@ -99,7 +91,6 @@ class UserProfile:
                 "language": "en",
                 "notification_preference": "gentle_reminders",
             },
-
             # Session history summary
             "session_summary": {
                 "total_sessions": 0,
@@ -109,7 +100,6 @@ class UserProfile:
                 "highest_streak": 0,
                 "badges_earned": [],
             },
-
             # Behavioral insights (computed by analytics engine)
             "insights": [],
         }
@@ -155,12 +145,14 @@ class UserProfile:
         patterns = self.data["focus_patterns"]
         quality = max(1, min(10, quality))
 
-        patterns["focus_quality_trend"].append({
-            "date": datetime.now(timezone.utc).date().isoformat(),
-            "quality_score": quality,
-            "session_length": duration_minutes,
-            "hour": hour,
-        })
+        patterns["focus_quality_trend"].append(
+            {
+                "date": datetime.now(timezone.utc).date().isoformat(),
+                "quality_score": quality,
+                "session_length": duration_minutes,
+                "hour": hour,
+            }
+        )
 
         # Update best/worst hours
         if quality >= 7:
@@ -195,12 +187,14 @@ class UserProfile:
     def record_emotion(self, emotion: str, stress: int, energy: int | None = None):
         """Record an emotional data point."""
         patterns = self.data["emotional_patterns"]
-        patterns["mood_trend"].append({
-            "date": datetime.now(timezone.utc).isoformat(),
-            "mood": emotion,
-            "stress": stress,
-            "energy": energy or 5,
-        })
+        patterns["mood_trend"].append(
+            {
+                "date": datetime.now(timezone.utc).isoformat(),
+                "mood": emotion,
+                "stress": stress,
+                "energy": energy or 5,
+            }
+        )
 
         # Track common emotions
         if emotion not in patterns["common_emotions"]:
@@ -215,7 +209,11 @@ class UserProfile:
     def record_intervention_result(self, intervention: str, success: bool, context: str = ""):
         """Record whether an intervention was effective."""
         history = self.data["intervention_history"]
-        entry = {"intervention": intervention, "context": context, "date": datetime.now(timezone.utc).isoformat()}
+        entry = {
+            "intervention": intervention,
+            "context": context,
+            "date": datetime.now(timezone.utc).isoformat(),
+        }
 
         if success:
             history["successful_interventions"].append(entry)
@@ -244,7 +242,9 @@ class UserProfile:
         patterns["completion_rate"] = (
             patterns["completion_rate"] * 0.8 + (1.0 if completed else 0.0) * 0.2
         )
-        patterns["preferred_task_size"] = task_size if completed else patterns["preferred_task_size"]
+        patterns["preferred_task_size"] = (
+            task_size if completed else patterns["preferred_task_size"]
+        )
 
         self.save()
 
@@ -292,9 +292,7 @@ class UserProfile:
         trend = patterns["focus_quality_trend"]
         recent = trend[-7:] if len(trend) >= 7 else trend
 
-        avg_quality = (
-            sum(s["quality_score"] for s in recent) / max(len(recent), 1)
-        )
+        avg_quality = sum(s["quality_score"] for s in recent) / max(len(recent), 1)
 
         return {
             "best_hours": patterns["best_focus_hours"][-3:],
@@ -312,9 +310,7 @@ class UserProfile:
 
         if recent:
             avg_stress = sum(m["stress"] for m in recent) / len(recent)
-            avg_energy = sum(
-                (m.get("energy") or 5) for m in recent
-            ) / len(recent)
+            avg_energy = sum((m.get("energy") or 5) for m in recent) / len(recent)
         else:
             avg_stress = 5.0
             avg_energy = 5.0
@@ -334,7 +330,8 @@ class UserProfile:
             "successful_count": len(history["successful_interventions"]),
             "failed_count": len(history["failed_interventions"]),
             "last_successful": history["successful_interventions"][-1]
-            if history["successful_interventions"] else None,
+            if history["successful_interventions"]
+            else None,
         }
 
     def get_personalization_context(self) -> dict:

@@ -54,8 +54,7 @@ class TaskParalysisRecoveryEngine:
         # Record in memory
         self.memory.set_task_paralysis(True)
         self.memory.record_procrastination_trigger(
-            trigger=user_message[:100],
-            context=f"Paralysis type: {detection['paralysis_type']}"
+            trigger=user_message[:100], context=f"Paralysis type: {detection['paralysis_type']}"
         )
 
         # Step 2: Generate recovery strategy
@@ -83,8 +82,7 @@ class TaskParalysisRecoveryEngine:
         elif recovery_level == "moderate":
             # Moderate paralysis: Microtasks + Just Begin
             result["microtasks"] = self.microtask_gen.generate_breakthrough_sequence(
-                detected_task or "your current task",
-                recovery_level
+                detected_task or "your current task", recovery_level
             )
             result["just_begin_offer"] = self.just_begin.create_begin_session(
                 detected_task or "your current task"
@@ -98,8 +96,7 @@ class TaskParalysisRecoveryEngine:
         else:
             # Mild paralysis: Microtasks
             microtasks = self.microtask_gen.generate_microtasks(
-                detected_task or "your current task",
-                count=3
+                detected_task or "your current task", count=3
             )
             result["microtasks"] = microtasks
             result["recovery_suggestions"] = {
@@ -124,8 +121,15 @@ class TaskParalysisRecoveryEngine:
 
         # Common patterns for task mentions
         patterns = [
-            "need to ", "have to ", "should ", "gotta ", "must ",
-            "working on ", "trying to ", "supposed to ", "task:",
+            "need to ",
+            "have to ",
+            "should ",
+            "gotta ",
+            "must ",
+            "working on ",
+            "trying to ",
+            "supposed to ",
+            "task:",
         ]
 
         for pattern in patterns:
@@ -135,7 +139,8 @@ class TaskParalysisRecoveryEngine:
                 remaining = message[idx:].strip()
                 # Take up to first sentence end or comma
                 import re
-                match = re.match(r'^([^.,!?;]+)', remaining)
+
+                match = re.match(r"^([^.,!?;]+)", remaining)
                 if match:
                     task = match.group(1).strip()
                     if len(task) > 5:

@@ -21,20 +21,20 @@ logger = logging.getLogger(__name__)
 
 # Importance weights for different memory types
 MEMORY_IMPORTANCE = {
-    "intervention": 0.9,       # Interventions are highly important
-    "crisis": 1.0,             # Crisis events are critical
-    "emotion": 0.7,            # Emotional patterns matter
-    "insight": 0.8,            # Behavioral insights are important
-    "focus_session": 0.6,      # Focus data is moderately important
-    "procrastination": 0.7,    # Triggers matter for prediction
-    "task_completed": 0.5,     # Task completion is useful
-    "conversation": 0.3,       # General conversation is less critical
-    "commitment_made": 0.6,    # Commitments are important to track
-    "commitment_kept": 0.7,    # Keeping commitments is very important
-    "streak_update": 0.5,      # Streak tracking is useful
-    "achievement": 0.6,        # Achievements boost motivation
-    "habit": 0.6,              # Habit data is useful
-    "goal": 0.8,               # Goals are important
+    "intervention": 0.9,  # Interventions are highly important
+    "crisis": 1.0,  # Crisis events are critical
+    "emotion": 0.7,  # Emotional patterns matter
+    "insight": 0.8,  # Behavioral insights are important
+    "focus_session": 0.6,  # Focus data is moderately important
+    "procrastination": 0.7,  # Triggers matter for prediction
+    "task_completed": 0.5,  # Task completion is useful
+    "conversation": 0.3,  # General conversation is less critical
+    "commitment_made": 0.6,  # Commitments are important to track
+    "commitment_kept": 0.7,  # Keeping commitments is very important
+    "streak_update": 0.5,  # Streak tracking is useful
+    "achievement": 0.6,  # Achievements boost motivation
+    "habit": 0.6,  # Habit data is useful
+    "goal": 0.8,  # Goals are important
     "default": 0.3,
 }
 
@@ -80,11 +80,11 @@ class MemoryManager:
         Extract structured facts from a user message and store them.
         Returns extracted facts.
         """
-        if not hasattr(self, 'fact_extractor'):
+        if not hasattr(self, "fact_extractor"):
             self.fact_extractor = FactExtractor()
             self.fact_consolidator = FactMemoryConsolidator()
 
-        if not hasattr(self, '_db') or not self._db:
+        if not hasattr(self, "_db") or not self._db:
             # Just extract without persisting
             if self.fact_extractor.should_process(message):
                 return self.fact_extractor.extract_facts(message)
@@ -94,7 +94,7 @@ class MemoryManager:
 
     def get_fact_context_for_prompt(self) -> str:
         """Get structured fact knowledge for prompt injection."""
-        if not hasattr(self, 'fact_consolidator'):
+        if not hasattr(self, "fact_consolidator"):
             return ""
         return self.fact_consolidator.get_fact_context_prompt(self.user_id)
 
@@ -103,7 +103,7 @@ class MemoryManager:
     def _get_importance(self, memory_type: str, metadata: dict | None = None) -> float:
         """Calculate importance score for a memory based on type and context."""
         base = MEMORY_IMPORTANCE.get(memory_type, MEMORY_IMPORTANCE["default"])
-        
+
         # Boost importance based on emotional intensity
         if metadata:
             stress = metadata.get("stress", 5)
@@ -111,24 +111,24 @@ class MemoryManager:
                 base = min(1.0, base + 0.2)
             elif stress >= 6:
                 base = min(1.0, base + 0.1)
-            
+
             # Boost for successful interventions
             if metadata.get("success"):
                 base = min(1.0, base + 0.2)
-            
+
             # Boost for repeated patterns
             if metadata.get("is_pattern", False):
                 base = min(1.0, base + 0.15)
-        
+
         return round(base, 2)
 
     def _tag_emotion(self, content: str, emotion: str | None = None) -> list:
         """Tag memory with emotional context for better retrieval."""
         emotional_tags = []
-        
+
         if emotion:
             emotional_tags.append(f"emotion:{emotion}")
-        
+
         # Content-based emotion detection
         content_lower = content.lower()
         emotion_keywords = {
@@ -142,11 +142,11 @@ class MemoryManager:
             "tired": ["tired", "exhausted", "drained", "burned out"],
             "stressed": ["stressed", "stress", "pressure"],
         }
-        
+
         for tag, keywords in emotion_keywords.items():
             if any(k in content_lower for k in keywords):
                 emotional_tags.append(f"emotion:{tag}")
-        
+
         return list(set(emotional_tags))
 
     def _summarize_for_memory(self, content: str, max_length: int = 200) -> str:
@@ -157,7 +157,7 @@ class MemoryManager:
         truncated = content[:max_length]
         last_period = truncated.rfind(".")
         if last_period > max_length // 2:
-            return content[:last_period + 1]
+            return content[: last_period + 1]
         return truncated + "..."
 
     # ---------- Conversation Recording ----------
@@ -171,16 +171,16 @@ class MemoryManager:
         emotion: str | None = None,
     ):
         metadata = metadata or {}
-        
+
         # Session memory
         self.session.record_turn(user_message, assistant_message, interaction_type)
 
         # Tag with emotional context
         emotional_tags = self._tag_emotion(user_message, emotion)
-        
+
         # Calculate importance
         importance = self._get_importance("conversation", {**metadata, "emotion": emotion})
-        
+
         # Store user message with emotional tags and importance
         self.store.store(
             content=self._summarize_for_memory(user_message),
@@ -229,7 +229,7 @@ class MemoryManager:
         self.profile.record_emotion(emotion, stress, energy)
 
         importance = self._get_importance("emotion", {"stress": stress})
-        
+
         self.store.store(
             content=f"Mood: {emotion}, Stress: {stress}/10, Energy: {energy or 'N/A'}/10",
             metadata={
@@ -248,7 +248,7 @@ class MemoryManager:
         self.profile.record_focus_session(duration_minutes, quality, hour)
 
         importance = self._get_importance("focus_session", {})
-        
+
         self.store.store(
             content=f"Focus session: {duration_minutes}min, quality {quality}/10 at hour {hour}",
             metadata={
@@ -306,7 +306,7 @@ class MemoryManager:
         )
 
         importance = self._get_importance("task_completed", {})
-        
+
         self.store.store(
             content=f"Completed task: {task} (difficulty: {difficulty}/10)",
             metadata={
@@ -324,8 +324,10 @@ class MemoryManager:
         self.profile.record_procrastination_trigger(trigger, context)
 
         emotional_tags = self._tag_emotion(context)
-        importance = self._get_importance("procrastination", {"stress": self.session.state.get("current_stress", 5)})
-        
+        importance = self._get_importance(
+            "procrastination", {"stress": self.session.state.get("current_stress", 5)}
+        )
+
         self.store.store(
             content=f"Procrastination trigger: {trigger}. Context: {self._summarize_for_memory(context, 100)}",
             metadata={
@@ -402,8 +404,7 @@ class MemoryManager:
 
         # Sort by importance for context priority
         high_priority = [
-            m for m in all_recent
-            if m.get("metadata", {}).get("importance", 0.3) >= 0.7
+            m for m in all_recent if m.get("metadata", {}).get("importance", 0.3) >= 0.7
         ]
 
         return {
@@ -424,23 +425,25 @@ class MemoryManager:
         """Generate a summary of important memory patterns."""
         if not memories:
             return ""
-        
-        high_importance = [m for m in memories if m.get("metadata", {}).get("importance", 0.3) >= 0.6]
+
+        high_importance = [
+            m for m in memories if m.get("metadata", {}).get("importance", 0.3) >= 0.6
+        ]
         if not high_importance:
             return ""
-        
+
         types = {}
         for m in high_importance:
             mtype = m.get("metadata", {}).get("type", "unknown")
             if mtype not in types:
                 types[mtype] = 0
             types[mtype] += 1
-        
+
         parts = []
         for mtype, count in sorted(types.items(), key=lambda x: -x[1]):
             if count >= 2:
                 parts.append(f"{count} significant {mtype} events")
-        
+
         if parts:
             return "Recent important patterns: " + "; ".join(parts)
         return ""
@@ -513,8 +516,8 @@ class MemoryManager:
                 "focus_sessions": len(self.profile.data["focus_patterns"]["focus_quality_trend"]),
                 "mood_records": len(self.profile.data["emotional_patterns"]["mood_trend"]),
                 "interventions_tracked": (
-                    len(self.profile.data["intervention_history"]["successful_interventions"]) +
-                    len(self.profile.data["intervention_history"]["failed_interventions"])
+                    len(self.profile.data["intervention_history"]["successful_interventions"])
+                    + len(self.profile.data["intervention_history"]["failed_interventions"])
                 ),
                 "insights_generated": len(self.profile.data["insights"]),
             },

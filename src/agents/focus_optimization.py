@@ -107,9 +107,9 @@ class FocusOptimizationAgent:
             return {
                 "break_duration": 2,
                 "activities": [
-                "Stand up and stretch",
-                "Take 5 deep breaths",
-                "Look out the window for 30 seconds",
+                    "Stand up and stretch",
+                    "Take 5 deep breaths",
+                    "Look out the window for 30 seconds",
                 ],
             }
         elif session_duration_minutes <= 30:

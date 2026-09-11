@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 try:
     import chromadb
     from chromadb.config import Settings
+
     HAS_CHROMA = True
 except ImportError:
     logger.warning("ChromaDB not installed — using JSON fallback storage")
@@ -124,12 +125,14 @@ class ChromaMemoryStore:
         """Store a memory entry with optional metadata and semantic deduplication."""
         if metadata is None:
             metadata = {}
-        metadata.update({
-            "user_id": self.user_id,
-            "memory_type": memory_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "duplicate_count": 1,
-        })
+        metadata.update(
+            {
+                "user_id": self.user_id,
+                "memory_type": memory_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "duplicate_count": 1,
+            }
+        )
 
         entry_id = self._make_id(memory_type, content[:100])
 
@@ -140,7 +143,7 @@ class ChromaMemoryStore:
                 similar = self.collection.query(
                     query_texts=[content],
                     n_results=1,
-                    where={"user_id": self.user_id, "memory_type": memory_type}
+                    where={"user_id": self.user_id, "memory_type": memory_type},
                 )
                 if similar and similar.get("documents") and similar["documents"][0]:
                     doc = similar["documents"][0][0]
@@ -148,16 +151,22 @@ class ChromaMemoryStore:
                     # Standard cosine/L2 distance threshold for near-duplicates
                     if dist < 0.18:
                         match_id = similar["ids"][0][0]
-                        existing_meta = similar["metadatas"][0][0] if (similar.get("metadatas") and similar["metadatas"][0]) else {}
-                        existing_meta["duplicate_count"] = existing_meta.get("duplicate_count", 1) + 1
+                        existing_meta = (
+                            similar["metadatas"][0][0]
+                            if (similar.get("metadatas") and similar["metadatas"][0])
+                            else {}
+                        )
+                        existing_meta["duplicate_count"] = (
+                            existing_meta.get("duplicate_count", 1) + 1
+                        )
                         existing_meta["last_updated"] = datetime.now(timezone.utc).isoformat()
                         if "importance" in existing_meta:
-                            existing_meta["importance"] = min(1.0, existing_meta["importance"] + 0.05)
-                        
+                            existing_meta["importance"] = min(
+                                1.0, existing_meta["importance"] + 0.05
+                            )
+
                         self.collection.update(
-                            ids=[match_id],
-                            documents=[doc],
-                            metadatas=[existing_meta]
+                            ids=[match_id], documents=[doc], metadatas=[existing_meta]
                         )
                         logger.debug(f"Deduplicated existing memory matching: {match_id}")
                         return
@@ -200,11 +209,13 @@ class ChromaMemoryStore:
         # Fallback: JSON storage
         existing_ids = {e.get("id") for e in self._fallback_data}
         if entry_id not in existing_ids:
-            self._fallback_data.append({
-                "id": entry_id,
-                "content": content,
-                "metadata": metadata,
-            })
+            self._fallback_data.append(
+                {
+                    "id": entry_id,
+                    "content": content,
+                    "metadata": metadata,
+                }
+            )
             self._save_fallback()
 
     def search(
@@ -232,13 +243,17 @@ class ChromaMemoryStore:
                 )
                 if raw and raw.get("documents") and raw["documents"][0]:
                     for i, doc in enumerate(raw["documents"][0]):
-                        results.append({
-                            "content": doc,
-                            "metadata": (raw.get("metadatas") or [{}])[0][i]
-                            if raw.get("metadatas") else {},
-                            "distance": (raw.get("distances") or [[]])[0][i]
-                            if raw.get("distances") else None,
-                        })
+                        results.append(
+                            {
+                                "content": doc,
+                                "metadata": (raw.get("metadatas") or [{}])[0][i]
+                                if raw.get("metadatas")
+                                else {},
+                                "distance": (raw.get("distances") or [[]])[0][i]
+                                if raw.get("distances")
+                                else None,
+                            }
+                        )
                 return results
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB search failed: {e} — using fallback")
@@ -255,11 +270,13 @@ class ChromaMemoryStore:
             content_words = set(content_lower.split())
             overlap = len(query_words & content_words)
             if overlap > 0:
-                results.append({
-                    "content": entry.get("content", ""),
-                    "metadata": entry.get("metadata", {}),
-                    "relevance_score": overlap / max(len(query_words), 1),
-                })
+                results.append(
+                    {
+                        "content": entry.get("content", ""),
+                        "metadata": entry.get("metadata", {}),
+                        "relevance_score": overlap / max(len(query_words), 1),
+                    }
+                )
 
         results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
         return results[:n_results]
@@ -286,23 +303,25 @@ class ChromaMemoryStore:
                 where = {"user_id": self.user_id}
                 if memory_type:
                     where["memory_type"] = memory_type
-                
+
                 raw_all = self.collection.get(where=where)
                 if raw_all and raw_all.get("documents"):
                     all_docs = []
                     for i, doc in enumerate(raw_all["documents"]):
                         meta = (raw_all.get("metadatas") or [{}])[i] or {}
                         ts = meta.get("timestamp", "")
-                        all_docs.append({
-                            "id": raw_all["ids"][i],
-                            "content": doc,
-                            "metadata": meta,
-                            "timestamp": ts,
-                        })
-                    
+                        all_docs.append(
+                            {
+                                "id": raw_all["ids"][i],
+                                "content": doc,
+                                "metadata": meta,
+                                "timestamp": ts,
+                            }
+                        )
+
                     # Sort chronologically by timestamp
                     all_docs.sort(key=lambda x: x["timestamp"])
-                    
+
                     # For each match result, try to find it in chronological list
                     for res in results:
                         match_idx = None
@@ -311,17 +330,23 @@ class ChromaMemoryStore:
                             if item["content"] == res_content:
                                 match_idx = idx
                                 break
-                        
+
                         if match_idx is not None:
                             start_idx = max(0, match_idx - window_size)
                             end_idx = min(len(all_docs), match_idx + window_size + 1)
                             window_items = all_docs[start_idx:end_idx]
-                            
+
                             # Format nicely
                             context_lines = []
                             for item in window_items:
                                 m_type = item["metadata"].get("type", "message")
-                                prefix = "User: " if m_type == "user_message" else "AI: " if m_type == "assistant_response" else ""
+                                prefix = (
+                                    "User: "
+                                    if m_type == "user_message"
+                                    else "AI: "
+                                    if m_type == "assistant_response"
+                                    else ""
+                                )
                                 context_lines.append(f"{prefix}{item['content']}")
                             res["window_context"] = "\n".join(context_lines)
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
@@ -336,16 +361,22 @@ class ChromaMemoryStore:
                     if entry.get("content") == res_content:
                         match_idx = idx
                         break
-                
+
                 if match_idx is not None:
                     start_idx = max(0, match_idx - window_size)
                     end_idx = min(len(self._fallback_data), match_idx + window_size + 1)
                     window_items = self._fallback_data[start_idx:end_idx]
-                    
+
                     context_lines = []
                     for item in window_items:
                         m_type = item.get("metadata", {}).get("type", "message")
-                        prefix = "User: " if m_type == "user_message" else "AI: " if m_type == "assistant_response" else ""
+                        prefix = (
+                            "User: "
+                            if m_type == "user_message"
+                            else "AI: "
+                            if m_type == "assistant_response"
+                            else ""
+                        )
                         context_lines.append(f"{prefix}{item.get('content')}")
                     res["window_context"] = "\n".join(context_lines)
 
@@ -368,10 +399,12 @@ class ChromaMemoryStore:
                     metadatas = raw.get("metadatas") or []
                     for i, doc in enumerate(raw["documents"]):
                         meta = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
-                        entries.append({
-                            "content": doc,
-                            "metadata": meta,
-                        })
+                        entries.append(
+                            {
+                                "content": doc,
+                                "metadata": meta,
+                            }
+                        )
                 return entries
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB get_recent failed: {e} — using fallback")
@@ -380,10 +413,12 @@ class ChromaMemoryStore:
         for entry in reversed(self._fallback_data):
             meta = entry.get("metadata", {})
             if memory_type is None or meta.get("memory_type") == memory_type:
-                entries.append({
-                    "content": entry.get("content", ""),
-                    "metadata": meta,
-                })
+                entries.append(
+                    {
+                        "content": entry.get("content", ""),
+                        "metadata": meta,
+                    }
+                )
                 if len(entries) >= limit:
                     break
         return entries

@@ -36,39 +36,32 @@ class SessionMemory:
             "user_id": user_id,
             "session_id": self.session_id,
             "started_at": datetime.now(timezone.utc).isoformat(),
-
             # Current conversation context
             "current_topic": None,
             "current_stress_level": 5,
             "current_energy_level": 5,
             "current_mood": "neutral",
             "recent_emotions": [],
-
             # Active interventions
             "active_interventions": [],
             "intervention_results": [],
-
             # Task tracking
             "current_tasks": [],
             "completed_tasks": [],
             "struggling_with": None,
-
             # Focus tracking
             "focus_sessions": [],
             "current_focus_task": None,
-
             # Conversation turn tracking
             "turn_count": 0,
             "last_user_message": None,
             "last_assistant_message": None,
             "last_interaction_type": None,  # check-in, question, venting, planning, etc.
-
             # Context flags
             "overwhelm_detected": False,
             "task_paralysis_detected": False,
             "hyperfocus_detected": False,
             "burnout_warning": False,
-
             # Memory of recent context (for prompt building)
             "recent_context": [],
         }
@@ -121,7 +114,9 @@ class SessionMemory:
 
     # ---------- Convenience methods ----------
 
-    def record_turn(self, user_message: str, assistant_message: str, interaction_type: str = "chat"):
+    def record_turn(
+        self, user_message: str, assistant_message: str, interaction_type: str = "chat"
+    ):
         """Record a conversation turn."""
         self._state["turn_count"] += 1
         self._state["last_user_message"] = user_message
@@ -129,13 +124,15 @@ class SessionMemory:
         self._state["last_interaction_type"] = interaction_type
 
         # Keep recent context for prompt building
-        self._state["recent_context"].append({
-            "turn": self._state["turn_count"],
-            "user": user_message[:200],
-            "assistant": assistant_message[:200],
-            "type": interaction_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._state["recent_context"].append(
+            {
+                "turn": self._state["turn_count"],
+                "user": user_message[:200],
+                "assistant": assistant_message[:200],
+                "type": interaction_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         # Keep last 5 interactions
         if len(self._state["recent_context"]) > 5:
@@ -146,11 +143,13 @@ class SessionMemory:
     def record_emotion(self, emotion: str):
         """Record an emotion detected in this session."""
         emotions = self._state["recent_emotions"]
-        emotions.append({
-            "emotion": emotion,
-            "turn": self._state["turn_count"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        emotions.append(
+            {
+                "emotion": emotion,
+                "turn": self._state["turn_count"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         if len(emotions) > 20:
             self._state["recent_emotions"] = emotions[-20:]
         self._state["current_mood"] = emotion
@@ -165,12 +164,14 @@ class SessionMemory:
 
     def add_task(self, task: str, source: str = "ai"):
         """Add a task to current session."""
-        self._state["current_tasks"].append({
-            "task": task,
-            "source": source,
-            "added_at": datetime.now(timezone.utc).isoformat(),
-            "completed": False,
-        })
+        self._state["current_tasks"].append(
+            {
+                "task": task,
+                "source": source,
+                "added_at": datetime.now(timezone.utc).isoformat(),
+                "completed": False,
+            }
+        )
 
     def complete_task(self, task_index: int):
         """Mark a task as completed."""
@@ -190,11 +191,13 @@ class SessionMemory:
 
     def add_intervention(self, intervention: str):
         """Track an active intervention."""
-        self._state["active_interventions"].append({
-            "intervention": intervention,
-            "applied_at": datetime.now(timezone.utc).isoformat(),
-            "effective": None,  # Will be set later
-        })
+        self._state["active_interventions"].append(
+            {
+                "intervention": intervention,
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "effective": None,  # Will be set later
+            }
+        )
 
     def mark_intervention_result(self, intervention: str, effective: bool):
         """Mark whether an intervention was effective."""
@@ -202,11 +205,13 @@ class SessionMemory:
             if inv["intervention"] == intervention:
                 inv["effective"] = effective
                 break
-        self._state["intervention_results"].append({
-            "intervention": intervention,
-            "effective": effective,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._state["intervention_results"].append(
+            {
+                "intervention": intervention,
+                "effective": effective,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     def get_context_summary(self) -> dict:
         """
@@ -221,8 +226,7 @@ class SessionMemory:
             "task_paralysis_detected": self._state["task_paralysis_detected"],
             "hyperfocus_detected": self._state["hyperfocus_detected"],
             "active_tasks": [
-                t["task"] for t in self._state["current_tasks"]
-                if not t.get("completed")
+                t["task"] for t in self._state["current_tasks"] if not t.get("completed")
             ],
             "completed_tasks_count": len(self._state["completed_tasks"]),
             "recent_context": self._state["recent_context"][-3:],

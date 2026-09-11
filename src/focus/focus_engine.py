@@ -17,12 +17,14 @@ logger = logging.getLogger(__name__)
 
 # ==================== Data Classes ====================
 
+
 @dataclass
 class FocusMode:
     """
     ADHD-specific focus mode configuration.
     Each mode serves a different neurocognitive need.
     """
+
     id: str
     name: str
     emoji: str
@@ -37,11 +39,11 @@ class FocusMode:
     suggested_activities: list[str] = field(default_factory=list)
 
     @classmethod
-    def get_all_modes(cls) -> dict[str, 'FocusMode']:
+    def get_all_modes(cls) -> dict[str, "FocusMode"]:
         return {m.id: m for m in cls.get_modes_list()}
 
     @classmethod
-    def get_modes_list(cls) -> list['FocusMode']:
+    def get_modes_list(cls) -> list["FocusMode"]:
         return [
             cls(
                 id="deep_focus",
@@ -149,6 +151,7 @@ class FocusMode:
 @dataclass
 class FocusSessionResult:
     """Result of a completed or analyzed focus session."""
+
     mode: str
     duration_minutes: int
     completed: bool
@@ -162,6 +165,7 @@ class FocusSessionResult:
 
 
 # ==================== Adaptive Pomodoro ====================
+
 
 class AdaptivePomodoro:
     """
@@ -319,6 +323,7 @@ class AdaptivePomodoro:
 
 # ==================== Main Focus Engine ====================
 
+
 class FocusEngine:
     """
     Main focus management engine.
@@ -401,8 +406,13 @@ class FocusEngine:
             "can_extend": mode.allow_extensions,
         }
 
-    def log_distraction(self, username: str, distraction: str, category: str = "other",
-                        energy_level: int | None = None):
+    def log_distraction(
+        self,
+        username: str,
+        distraction: str,
+        category: str = "other",
+        energy_level: int | None = None,
+    ):
         """Log a distraction event for pattern analysis."""
         entry = {
             "username": username,

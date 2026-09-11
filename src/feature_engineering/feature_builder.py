@@ -6,14 +6,14 @@ def build_features(df):
     """
     Enhanced feature engineering for ADHD productivity assessment.
     Creates domain-specific features for better model performance.
-    
+
     Args:
         df: pandas DataFrame or dict with user data
-        
+
     Returns:
         pandas DataFrame with engineered features
     """
-    
+
     # Convert dict to DataFrame if needed
     if isinstance(df, dict):
         df = pd.DataFrame([df])
@@ -35,7 +35,7 @@ def build_features(df):
         "age",
         "gender",
         "task_completion_rate",
-        "mood_log_score"
+        "mood_log_score",
     ]
 
     for col in required_cols:
@@ -51,19 +51,16 @@ def build_features(df):
 
     # 2️⃣ Screen Time & Digital Habits
     df["total_screen_time"] = (
-        df["phone_usage_hours"] +
-        df["social_media_hours"] +
-        df["youtube_hours"] +
-        df["gaming_hours"]
+        df["phone_usage_hours"]
+        + df["social_media_hours"]
+        + df["youtube_hours"]
+        + df["gaming_hours"]
     )
     df["screen_study_ratio"] = df["total_screen_time"] / (df["study_hours_per_day"] + 1)
     df["digital_distraction_index"] = df["total_screen_time"] / (df["sleep_hours"] + 1)
 
     # 3️⃣ Health & Wellness Features
-    df["health_score"] = (
-        df["sleep_hours"] +
-        df["exercise_minutes"] / 60
-    )
+    df["health_score"] = df["sleep_hours"] + df["exercise_minutes"] / 60
     df["health_productivity"] = df["health_score"] / (df["stress_level"] + 1)
     df["caffeine_stress"] = df["coffee_intake_mg"] * df["stress_level"]
     df["caffeine_efficiency"] = df["coffee_intake_mg"] / (df["sleep_hours"] + 1)
@@ -82,16 +79,15 @@ def build_features(df):
 
     # 6️⃣ Composite Risk Scores
     df["adhd_risk_screen"] = (
-        df["phone_usage_hours"] +
-        df["social_media_hours"] +
-        df["youtube_hours"] +
-        df["gaming_hours"]
+        df["phone_usage_hours"]
+        + df["social_media_hours"]
+        + df["youtube_hours"]
+        + df["gaming_hours"]
     ) / (df["study_hours_per_day"] + 1)
 
-    df["adhd_risk_health"] = (
-        df["stress_level"] +
-        df["caffeine_stress"]
-    ) / (df["sleep_hours"] + df["exercise_minutes"]/60 + 1)
+    df["adhd_risk_health"] = (df["stress_level"] + df["caffeine_stress"]) / (
+        df["sleep_hours"] + df["exercise_minutes"] / 60 + 1
+    )
 
     # 7️⃣ Polynomial Features (for non-linear relationships)
     df["stress_squared"] = df["stress_level"] ** 2

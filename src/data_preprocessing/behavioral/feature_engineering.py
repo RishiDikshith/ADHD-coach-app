@@ -3,34 +3,20 @@ import pandas as pd
 df = pd.read_csv("data/cleaned/behavioral_data.csv")
 
 # Screen time
-df["total_screen_time"] = (
-    df["social_media_hours"] +
-    df["youtube_hours"] +
-    df["gaming_hours"]
-)
+df["total_screen_time"] = df["social_media_hours"] + df["youtube_hours"] + df["gaming_hours"]
 
 # Health score
-df["health_score"] = (
-    df["sleep_hours"] +
-    df["exercise_minutes"] / 60
-)
+df["health_score"] = df["sleep_hours"] + df["exercise_minutes"] / 60
 
 # Study efficiency
-df["study_efficiency"] = (
-    df["assignments_completed"] /
-    (df["study_hours_per_day"] + 0.1)
-)
+df["study_efficiency"] = df["assignments_completed"] / (df["study_hours_per_day"] + 0.1)
 
 # Stress load
-df["stress_load"] = (
-    df["stress_level"] /
-    (df["sleep_hours"] + 0.1)
-)
+df["stress_load"] = df["stress_level"] / (df["sleep_hours"] + 0.1)
 
 # Work life balance
-df["work_life_balance"] = (
-    df["study_hours_per_day"] /
-    (df["total_screen_time"] + df["study_hours_per_day"] + 0.1)
+df["work_life_balance"] = df["study_hours_per_day"] / (
+    df["total_screen_time"] + df["study_hours_per_day"] + 0.1
 )
 
 # New powerful features

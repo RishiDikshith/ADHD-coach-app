@@ -13,7 +13,7 @@ df = pd.read_csv("data/featured/behavioral_data.csv")
 # Correlation matrix
 corr = df.corr(numeric_only=True)
 
-plt.figure(figsize=(12,8))
+plt.figure(figsize=(12, 8))
 sns.heatmap(corr, cmap="coolwarm")
 plt.title("Correlation Matrix")
 output_dir = Path("results")

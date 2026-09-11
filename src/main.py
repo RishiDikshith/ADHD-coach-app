@@ -41,18 +41,19 @@ def chatbot_response(text, scores, user_data):
     from unittest.mock import MagicMock
 
     from agents.orchestrator import AgentOrchestrator
-    
+
     mock_memory = MagicMock()
     mock_memory.store = MagicMock()
     mock_memory.store.get_recent.return_value = []
-    
+
     orchestrator = AgentOrchestrator(mock_memory)
     handoff = orchestrator.detect_handoff_suggestion(text, "productivity-coach")
     agent_id = handoff["agent_id"] if handoff else "productivity-coach"
-    
+
     from agents.chatbot_registry import AGENT_CONFIGS
+
     agent_config = AGENT_CONFIGS.get(agent_id, AGENT_CONFIGS["productivity-coach"])
-    
+
     reply = f"Hey! As your dedicated {agent_config['name']}, I've tuned into your needs. "
     if agent_id == "burnout-support":
         reply += "Please let your shoulders drop and take a slow, deep breath. We will take it one gentle moment at a time. 🌿"
@@ -62,7 +63,7 @@ def chatbot_response(text, scores, user_data):
         reply += "Let's build a quiet focus bubble. How about starting a 25-minute Pomodoro timer together right now? 🎯"
     else:
         reply += f"Let's build a customized structure for your brain today. Your calculated productivity score is {scores.get('productivity', 50)}/100. ⚡"
-        
+
     return f"\n[{agent_config['emoji']} Active Chatbot: {agent_config['name']}]\nREPLY:\n{reply}\n\nTASKS:\n- Focus on one micro-step\n- Log your energy level"
 
 
@@ -72,11 +73,14 @@ def heuristic_depression_prediction(user_data):
     return int(stress_level >= 8 and sleep_hours < 6)
 
 
-
 # Load models
-productivity_model = prepare_model_for_inference(joblib.load(BASE_DIR / "models" / "productivity_model.pkl"))
+productivity_model = prepare_model_for_inference(
+    joblib.load(BASE_DIR / "models" / "productivity_model.pkl")
+)
 adhd_model = prepare_model_for_inference(joblib.load(BASE_DIR / "models" / "adhd_risk_model.pkl"))
-mental_health_model = prepare_model_for_inference(joblib.load(BASE_DIR / "models" / "mental_health_nlp_pipeline.pkl"))
+mental_health_model = prepare_model_for_inference(
+    joblib.load(BASE_DIR / "models" / "mental_health_nlp_pipeline.pkl")
+)
 student_model = prepare_model_for_inference(joblib.load(BASE_DIR / "models" / "student_model.pkl"))
 
 # -------------------------
@@ -94,7 +98,7 @@ user_data = {
     "breaks_per_day": 3,
     "coffee_intake_mg": 100,
     "exercise_minutes": 20,
-    "stress_level": 8
+    "stress_level": 8,
 }
 
 adhd_answers = ["Often", "Sometimes", "Rarely", "Often", "Very Often"]
@@ -126,12 +130,7 @@ adhd_health, final_adhd_risk = combined_adhd_score(q_score, adhd_risk)
 mh_score = mental_health_score(mh_pred)
 dep_score = depression_score(dep_pred)
 
-final, level, description, weights = final_score(
-    prod_score,
-    adhd_health,
-    mh_score,
-    dep_score
-)
+final, level, description, weights = final_score(prod_score, adhd_health, mh_score, dep_score)
 
 # Recommendations
 rec = generate_interventions(
@@ -140,8 +139,8 @@ rec = generate_interventions(
         "productivity": prod_score,
         "adhd_risk": final_adhd_risk,
         "mental_health": mh_score,
-        "depression": dep_score
-    }
+        "depression": dep_score,
+    },
 )
 
 # Chatbot
@@ -151,9 +150,9 @@ chat = chatbot_response(
         "productivity": prod_score,
         "adhd_risk": final_adhd_risk,
         "mental_health": mh_score,
-        "depression": dep_score
+        "depression": dep_score,
     },
-    user_data=user_data
+    user_data=user_data,
 )
 
 # -------------------------
@@ -175,4 +174,4 @@ print("\nRecommendations:")
 for r in rec:
     print(f"- [{r['priority'].upper()}] {r['title']}: {r['action']}")
 
-print("\nChatbot:", chat.encode('ascii', errors='ignore').decode('ascii'))
+print("\nChatbot:", chat.encode("ascii", errors="ignore").decode("ascii"))

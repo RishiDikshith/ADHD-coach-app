@@ -58,10 +58,7 @@ from gamification import GamificationEngine
 from intervention.adaptive_coach import AdaptiveCoach
 from intervention.intervention_engine import generate_interventions
 from memory.memory_manager import MemoryManager
-from ml_models.efficient_inference import (
-    EfficientInference,
-    load_model_cached,
-)
+from ml_models.efficient_inference import EfficientInference, load_model_cached
 from scoring.adhd_questionnaire_score import calculate_adhd_score
 from scoring.adhd_scoring import combined_adhd_score
 from scoring.final_score import final_score
@@ -70,10 +67,7 @@ from scoring.productivity_scoring import productivity_score
 from scoring.student_scoring import depression_score
 from task_paralysis.recovery_engine import TaskParalysisRecoveryEngine
 from task_paralysis.state_detector import ADHDStateDetector
-from utils.helpers import (
-    align_features_to_model,
-    prepare_model_for_inference,
-)
+from utils.helpers import align_features_to_model, prepare_model_for_inference
 
 # Global analytics engine instances (lazy initialized per user)
 _insight_engines = {}
@@ -84,6 +78,7 @@ EAGER_TASK_RESULTS = {}
 
 # Logging is now configured at the application entry point (frontend/app.py)
 # to ensure it's set up correctly for the cloud environment.
+
 
 def bootstrap_admin(db_manager):
     """
@@ -98,9 +93,13 @@ def bootstrap_admin(db_manager):
 
     admin_user = os.getenv("ADMIN_USERNAME")
     admin_pass = os.getenv("ADMIN_PASSWORD")
-    
+
     env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+    is_prod = (
+        env in ("production", "prod", "staging")
+        or os.getenv("RENDER", "false").lower() == "true"
+        or os.getenv("NODE_ENV", "development").lower() == "production"
+    )
 
     if not admin_user or not admin_pass:
         msg = "ADMIN_USERNAME or ADMIN_PASSWORD not configured in environment variables."
@@ -111,7 +110,7 @@ def bootstrap_admin(db_manager):
                 action="admin_bootstrap",
                 status="FAILED",
                 details={"reason": "missing_env_vars", "is_prod": True},
-                severity="CRITICAL"
+                severity="CRITICAL",
             )
             raise RuntimeError(f"Production admin bootstrapping failed: {msg}")
         else:
@@ -147,7 +146,7 @@ def bootstrap_admin(db_manager):
                 action="admin_bootstrap",
                 status="FAILED",
                 details={"reason": "weak_password", "reasons": reasons},
-                severity="CRITICAL"
+                severity="CRITICAL",
             )
             raise RuntimeError(msg)
 
@@ -179,7 +178,7 @@ def bootstrap_admin(db_manager):
                 username=sanitized_admin,
                 action="admin_bootstrap_promotion",
                 status="SUCCESS",
-                details={"message": "Existing user promoted to admin role"}
+                details={"message": "Existing user promoted to admin role"},
             )
         else:
             logger.info(f"Admin user '{sanitized_admin}' already exists. Skipping initialization.")
@@ -188,15 +187,18 @@ def bootstrap_admin(db_manager):
     # Create administrative user
     hashed_pass = get_password_hash(admin_pass)
     from database.models import User
+
     try:
         new_admin = User(
             username=sanitized_admin,
             password_hash=hashed_pass,
             role="admin",
             settings={
-                "theme": "dark", "language": "en",
-                "notifications_enabled": True, "coach_tone": "encouraging",
-            }
+                "theme": "dark",
+                "language": "en",
+                "notifications_enabled": True,
+                "coach_tone": "encouraging",
+            },
         )
         db_manager.db.add(new_admin)
         db_manager.db.commit()
@@ -205,7 +207,7 @@ def bootstrap_admin(db_manager):
             username=sanitized_admin,
             action="admin_bootstrap_creation",
             status="SUCCESS",
-            details={"message": "Admin user created successfully"}
+            details={"message": "Admin user created successfully"},
         )
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Error bootstrapping admin user: {e}")
@@ -217,8 +219,12 @@ async def lifespan(app: FastAPI):
     """Initialize database and other resources on startup."""
     # Validate environment variables
     env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
-    
+    is_prod = (
+        env in ("production", "prod", "staging")
+        or os.getenv("RENDER", "false").lower() == "true"
+        or os.getenv("NODE_ENV", "development").lower() == "production"
+    )
+
     missing_vars = []
     for var in ["DATABASE_URL", "GROQ_API_KEY", "JWT_SECRET_KEY"]:
         if not os.getenv(var, "").strip():
@@ -232,7 +238,9 @@ async def lifespan(app: FastAPI):
             logger.warning(f"WARNING: {msg} (Proceeding in development mode)")
 
     if is_prod and not os.getenv("DATABASE_URL", "").startswith(("postgresql://", "postgres://")):
-        raise RuntimeError("Production requires DATABASE_URL to reference PostgreSQL; refusing SQLite fallback.")
+        raise RuntimeError(
+            "Production requires DATABASE_URL to reference PostgreSQL; refusing SQLite fallback."
+        )
 
     global _db_manager, _state_detector, _adaptive_coach, _focus_engine, _gamification, _rag_engine
     logger.info("Initializing database...")
@@ -275,25 +283,31 @@ async def lifespan(app: FastAPI):
         _focus_engine = FocusEngine(None)
         _gamification = GamificationEngine(None)
         _rag_engine = RAGEngine(None, None)
-        
+
     yield
     # Cleanup
     if _db_manager:
         _db_manager.close()
 
+
 app = FastAPI(title="ADHD Productivity API", lifespan=lifespan)
+
 
 @app.get("/health")
 def health():
     """Cheap liveness probe; intentionally does not touch the database or ML models."""
     return {"status": "ok"}
 
+
 # CORS middleware — required for frontend (localhost:3000) to access backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000", "http://localhost:3001",
-        "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
         os.getenv("FRONTEND_URL", "").rstrip("/"),
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
@@ -302,9 +316,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/healthz")
 def healthz(db: Annotated[Any, Depends(get_db)]):
     from sqlalchemy import text
+
     try:
         # Test DB connection
         db.execute(text("SELECT 1"))
@@ -312,24 +328,27 @@ def healthz(db: Annotated[Any, Depends(get_db)]):
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {e}")
 
+
 @app.get("/admin/health")
 def get_admin_health(current_admin: str = Depends(require_admin)):
     """Protected health check for admins."""
     from datetime import datetime, timezone
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=current_admin,
         action="admin_health_check",
         status="SUCCESS",
-        details={"message": "Admin health check accessed successfully"}
+        details={"message": "Admin health check accessed successfully"},
     )
     return {
         "status": "healthy",
         "role": "admin",
         "username": current_admin,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
 
 # Register real-time WebSocket routes for co-working, accountability, and low-latency chat
 from realtime.websocket_handlers import router as websocket_router
@@ -340,21 +359,70 @@ app.include_router(websocket_router)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models"
 STRESS_KEYWORDS = {
-    "stress", "stressed", "overwhelm", "overwhelmed", "anxious", "panic",
-    "too much", "hard", "stuck", "tired", "sad", "depressed", "burned out",
-    "tension", "tense", "cant focus", "can't focus", "cant understand", "can't understand"
+    "stress",
+    "stressed",
+    "overwhelm",
+    "overwhelmed",
+    "anxious",
+    "panic",
+    "too much",
+    "hard",
+    "stuck",
+    "tired",
+    "sad",
+    "depressed",
+    "burned out",
+    "tension",
+    "tense",
+    "cant focus",
+    "can't focus",
+    "cant understand",
+    "can't understand",
 }
 POSITIVE_KEYWORDS = {
-    "happy", "great", "good", "awesome", "fantastic", "amazing", "productive",
-    "done", "finished", "excited", "glad", "joy", "better", "calm", "relaxed"
+    "happy",
+    "great",
+    "good",
+    "awesome",
+    "fantastic",
+    "amazing",
+    "productive",
+    "done",
+    "finished",
+    "excited",
+    "glad",
+    "joy",
+    "better",
+    "calm",
+    "relaxed",
 }
 PRODUCTIVE_KEYWORDS = {
-    "productive", "done", "finished", "completed", "focused", "progress",
-    "did it", "working", "achieved", "accomplished", "on track", "next"
+    "productive",
+    "done",
+    "finished",
+    "completed",
+    "focused",
+    "progress",
+    "did it",
+    "working",
+    "achieved",
+    "accomplished",
+    "on track",
+    "next",
 }
 UNPRODUCTIVE_KEYWORDS = {
-    "distracted", "procrastinating", "lazy", "unproductive", "cant focus",
-    "can't focus", "behind", "stuck", "failing", "off track", "cant understand", "can't understand"
+    "distracted",
+    "procrastinating",
+    "lazy",
+    "unproductive",
+    "cant focus",
+    "can't focus",
+    "behind",
+    "stuck",
+    "failing",
+    "off track",
+    "cant understand",
+    "can't understand",
 }
 
 # -------- AUTH HANDLER (lazily initialized in lifespan) --------
@@ -377,14 +445,18 @@ except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) 
     adhd_inference = None
 
 try:
-    productivity_inference = EfficientInference(str(MODELS_DIR / "productivity_model.pkl"), "Productivity Model")
+    productivity_inference = EfficientInference(
+        str(MODELS_DIR / "productivity_model.pkl"), "Productivity Model"
+    )
     logger.info("✅ Productivity Model loaded with optimization")
 except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     logger.error(f"Failed to load Productivity model: {e}")
     productivity_inference = None
 
 try:
-    student_inference = EfficientInference(str(MODELS_DIR / "student_model.pkl"), "Student Depression Model")
+    student_inference = EfficientInference(
+        str(MODELS_DIR / "student_model.pkl"), "Student Depression Model"
+    )
     logger.info("✅ Student Depression Model loaded with optimization")
 except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     logger.error(f"Failed to load Student model: {e}")
@@ -450,6 +522,7 @@ TASKS:
 
 # ==================== Request Models ====================
 
+
 class ChatRequest(BaseModel):
     text: str
     history: list[Any] = Field(default_factory=list)
@@ -467,9 +540,11 @@ class ScoreRequest(BaseModel):
     text: str = ""
     username: str | None = None
 
+
 class InterventionRequest(BaseModel):
     user_data: dict[str, Any] = Field(default_factory=dict)
     scores: dict[str, Any] = Field(default_factory=dict)
+
 
 import re
 
@@ -491,8 +566,11 @@ class AuthRequest(BaseModel):
                 raise ValueError("Invalid email format")
         else:
             if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-                raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+                raise ValueError(
+                    "Username can only contain alphanumeric characters, underscores, hyphens, and dots"
+                )
         return v
+
 
 class PinLoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
@@ -509,8 +587,11 @@ class PinLoginRequest(BaseModel):
     @classmethod
     def validate_username(cls, v):
         if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+            raise ValueError(
+                "Username can only contain alphanumeric characters, underscores, hyphens, and dots"
+            )
         return v
+
 
 class SetPinRequest(BaseModel):
     pin: str = Field(..., min_length=4, max_length=4)
@@ -524,8 +605,10 @@ class SetPinRequest(BaseModel):
             raise ValueError("PIN must be exactly 4 digits")
         return v
 
+
 class RemoveDeviceRequest(BaseModel):
     device_id: str = Field(...)
+
 
 class TrustedDevicePinLoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
@@ -536,7 +619,9 @@ class TrustedDevicePinLoginRequest(BaseModel):
     @classmethod
     def validate_username(cls, v):
         if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+            raise ValueError(
+                "Username can only contain alphanumeric characters, underscores, hyphens, and dots"
+            )
         return v
 
     @field_validator("pin")
@@ -546,6 +631,7 @@ class TrustedDevicePinLoginRequest(BaseModel):
             raise ValueError("PIN must be exactly 4 digits")
         return v
 
+
 class AdminPinLoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     pin: str = Field(..., min_length=4)
@@ -554,8 +640,11 @@ class AdminPinLoginRequest(BaseModel):
     @classmethod
     def validate_username(cls, v):
         if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+            raise ValueError(
+                "Username can only contain alphanumeric characters, underscores, hyphens, and dots"
+            )
         return v
+
 
 class RegisterRequest(BaseModel):
     username: str = Field(..., max_length=50)
@@ -566,7 +655,9 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_username(cls, v):
         if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+            raise ValueError(
+                "Username can only contain alphanumeric characters, underscores, hyphens, and dots"
+            )
         return v
 
     @field_validator("password")
@@ -583,6 +674,7 @@ class RegisterRequest(BaseModel):
             raise ValueError("Invalid email format")
         return v
 
+
 class ResetPasswordRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: str = Field(..., max_length=255)
@@ -594,6 +686,7 @@ class ResetPasswordRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
         return v
+
 
 class SettingsUpdateRequest(BaseModel):
     theme: str = "dark"
@@ -615,13 +708,16 @@ class SettingsUpdateRequest(BaseModel):
     voice_pitch: float = 1.0
     voice_accent: str = "auto"
 
+
 class AgentAnalyzeRequest(BaseModel):
     agent_type: str
     context: dict[str, Any] = Field(default_factory=dict)
 
+
 class TaskParalysisRequest(BaseModel):
     task: str
     user_data: dict[str, Any] = Field(default_factory=dict)
+
 
 class FocusRecommendRequest(BaseModel):
     mode_id: str = "standard"
@@ -635,10 +731,12 @@ class FocusRecommendRequest(BaseModel):
 
 # ==================== Helper Functions ====================
 
+
 def select_features(df: pd.DataFrame, model):
     if model is None:
         return df
     return align_features_to_model(df, model)
+
 
 def predict_mental_health_probability(text: str):
     if not text:
@@ -662,6 +760,7 @@ def predict_mental_health_probability(text: str):
             logger.debug("ML mental health prediction failed, using text analysis")
             ml_probability = None
     from scoring.mental_health_scoring import analyze_stress_text
+
     stress_probability = analyze_stress_text(text)
     if ml_probability is not None:
         combined_probability = (ml_probability * 0.6) + (stress_probability * 0.4)
@@ -669,13 +768,17 @@ def predict_mental_health_probability(text: str):
     else:
         return float(stress_probability)
 
+
 def student_model_has_usable_inputs(df: pd.DataFrame) -> bool:
     if student_inference is None:
         return False
     feature_count = student_inference.get_feature_count()
     return feature_count > 0 and len(df.columns) >= feature_count * 0.8
 
-def estimate_depression_health_score(user_data: dict[str, Any], engineered_df: pd.DataFrame) -> float:
+
+def estimate_depression_health_score(
+    user_data: dict[str, Any], engineered_df: pd.DataFrame
+) -> float:
     if student_inference is not None and student_model_has_usable_inputs(engineered_df):
         try:
             predicted_label = student_inference.predict(engineered_df)[0]
@@ -687,7 +790,13 @@ def estimate_depression_health_score(user_data: dict[str, Any], engineered_df: p
     estimated_risk = min(1.0, max(0.0, (stress_level / 10) * 0.7 + max(0, 7 - sleep_hours) * 0.08))
     return float(max(20, min(85, (1 - estimated_risk) * 100)))
 
-def build_user_scores(user_data: dict[str, Any], text: str = "", adhd_answers: list[str] | None = None, analysis: dict[str, str] | None = None) -> dict[str, Any]:
+
+def build_user_scores(
+    user_data: dict[str, Any],
+    text: str = "",
+    adhd_answers: list[str] | None = None,
+    analysis: dict[str, str] | None = None,
+) -> dict[str, Any]:
     if not user_data:
         return {}
     adhd_answers = adhd_answers or []
@@ -747,7 +856,13 @@ def build_user_scores(user_data: dict[str, Any], text: str = "", adhd_answers: l
     final, level, description, weights = final_score(
         productivity_pct, float(adhd_health_pct), mental_health_pct, depression_pct
     )
-    focus_risk = "high" if final_adhd_risk >= 0.7 or user_snapshot.get("stress_level", 0) >= 8 else "low" if final_adhd_risk < 0.3 and user_snapshot.get("stress_level", 0) <= 4 else "medium"
+    focus_risk = (
+        "high"
+        if final_adhd_risk >= 0.7 or user_snapshot.get("stress_level", 0) >= 8
+        else "low"
+        if final_adhd_risk < 0.3 and user_snapshot.get("stress_level", 0) <= 4
+        else "medium"
+    )
     return {
         "productivity_score": float(round(productivity_pct, 1)),
         "adhd_risk": float(round(final_adhd_risk, 2)),
@@ -757,7 +872,8 @@ def build_user_scores(user_data: dict[str, Any], text: str = "", adhd_answers: l
         "mental_health_score": float(round(mental_health_pct, 1)),
         "depression_score": float(round(depression_pct, 1)),
         "final_score": float(round(final, 1)),
-        "level": level, "description": description,
+        "level": level,
+        "description": description,
         "weights": {key: float(round(value, 3)) for key, value in weights.items()},
         "focus_risk": focus_risk,
         "summary": {
@@ -765,22 +881,29 @@ def build_user_scores(user_data: dict[str, Any], text: str = "", adhd_answers: l
             "stress_level": user_snapshot.get("stress_level", 0),
             "phone_distractions": user_snapshot.get("phone_distractions", 0),
             "study_hours": user_snapshot.get("study_hours_per_day", 0),
-            "total_screen_time": float(engineered_df.get("total_screen_time", pd.Series([0])).iloc[0])
-        }
+            "total_screen_time": float(
+                engineered_df.get("total_screen_time", pd.Series([0])).iloc[0]
+            ),
+        },
     }
+
 
 def analyze(text):
     if not text or not str(text).strip():
         return {"emotion": "neutral", "productivity": "medium"}
     import json
     import re
+
     try:
         prompt = f"""Analyze the following text from a user seeking productivity and mental health coaching. Classify the user's emotion as exactly one of: 'positive', 'neutral', or 'stress'. Classify their productivity status as exactly one of: 'high', 'medium', or 'low'. Respond with ONLY a valid JSON object in this format: {{"emotion": "...", "productivity": "..."}}. Do not include any other text. Text to analyze: '{text}'"""
         raw_response = get_ai_reply(prompt)
-        match = re.search(r'\{.*\}', raw_response.replace('\n', ' '), re.DOTALL)
+        match = re.search(r"\{.*\}", raw_response.replace("\n", " "), re.DOTALL)
         if match:
             result = json.loads(match.group())
-            return {"emotion": result.get("emotion", "neutral").lower(), "productivity": result.get("productivity", "medium").lower()}
+            return {
+                "emotion": result.get("emotion", "neutral").lower(),
+                "productivity": result.get("productivity", "medium").lower(),
+            }
     except Exception as e:  # noqa: BLE001
         logger.debug(f"LLM analysis failed, falling back to heuristics: {e}")
     try:
@@ -789,9 +912,18 @@ def analyze(text):
         if any(keyword in prompt_lower for keyword in POSITIVE_KEYWORDS):
             emotion_label = "positive"
         elif predicted_probability is None:
-            emotion_label = "stress" if any(keyword in prompt_lower for keyword in STRESS_KEYWORDS) else "neutral"
+            emotion_label = (
+                "stress"
+                if any(keyword in prompt_lower for keyword in STRESS_KEYWORDS)
+                else "neutral"
+            )
         else:
-            emotion_label = "stress" if predicted_probability >= 0.25 or any(keyword in prompt_lower for keyword in STRESS_KEYWORDS) else "neutral"
+            emotion_label = (
+                "stress"
+                if predicted_probability >= 0.25
+                or any(keyword in prompt_lower for keyword in STRESS_KEYWORDS)
+                else "neutral"
+            )
         if any(keyword in prompt_lower for keyword in PRODUCTIVE_KEYWORDS):
             productivity = "high"
         elif any(keyword in prompt_lower for keyword in UNPRODUCTIVE_KEYWORDS):
@@ -802,6 +934,7 @@ def analyze(text):
     except Exception as exc:  # noqa: BLE001
         logger.error("Analysis error: %s", exc)
         return {"emotion": "neutral", "productivity": "medium"}
+
 
 def format_history(history):
     if not history:
@@ -814,7 +947,17 @@ def format_history(history):
             formatted.append(str(item))
     return " ".join(formatted)
 
-def build_prompt(user_input, english_translation, analysis, history, scores=None, language="en", language_name="English", memory_context=""):
+
+def build_prompt(
+    user_input,
+    english_translation,
+    analysis,
+    history,
+    scores=None,
+    language="en",
+    language_name="English",
+    memory_context="",
+):
     history_text = format_history(history)
     scores = scores or {}
     score_summary = ""
@@ -837,7 +980,11 @@ User's selected language: {language_name} ({language})
 {score_summary}
 {memory_context}
 """
-    instruction = "Start by warmly welcoming the user and responding directly to their input." if not history else "Respond to the user as a supportive, dynamic friend."
+    instruction = (
+        "Start by warmly welcoming the user and responding directly to their input."
+        if not history
+        else "Respond to the user as a supportive, dynamic friend."
+    )
     if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
         instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
     prompt = f"""
@@ -865,16 +1012,28 @@ TASKS:
 """
     return prompt
 
+
 def translate_to_english(text: str) -> str:
     if not text or len(text.strip()) < 2:
         return text
     try:
         from deep_translator import GoogleTranslator
+
         translated = GoogleTranslator(source="auto", target="en").translate(text)
         return translated if translated else text
-    except (AttributeError, KeyError, ModuleNotFoundError, ImportError, OSError, RuntimeError, TypeError, ValueError) as e:
+    except (
+        AttributeError,
+        KeyError,
+        ModuleNotFoundError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as e:
         logger.debug(f"Translation to English failed: {e}")
         return text
+
 
 def translate_reply_if_needed(reply: str, language: str):
     target_language = (language or "en").split("-")[0]
@@ -882,13 +1041,27 @@ def translate_reply_if_needed(reply: str, language: str):
         return reply
     try:
         from deep_translator import GoogleTranslator
+
         return GoogleTranslator(source="auto", target=target_language).translate(reply)
-    except (AttributeError, KeyError, ModuleNotFoundError, ImportError, OSError, RuntimeError, TypeError, ValueError):
+    except (
+        AttributeError,
+        KeyError,
+        ModuleNotFoundError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
         return reply
+
 
 def generate_offline_reply(prompt):
     prompt_lower = prompt.lower()
-    if any(kw in prompt_lower for kw in ["focus", "distract", "attention", "overwhelm", "concentration"]):
+    if any(
+        kw in prompt_lower
+        for kw in ["focus", "distract", "attention", "overwhelm", "concentration"]
+    ):
         reply = """REPLY:
 Hey there! It sounds like you're feeling pretty overwhelmed right now, which makes focusing incredibly difficult. That's completely normal and okay! 🌬️
 
@@ -938,6 +1111,7 @@ TASKS:
 - Start the first step"""
     return reply
 
+
 MAX_CONCURRENT_AI_REQUESTS = int(os.getenv("MAX_CONCURRENT_AI_REQUESTS", "4"))
 ai_queue_semaphore = threading.Semaphore(MAX_CONCURRENT_AI_REQUESTS)
 
@@ -960,14 +1134,19 @@ def get_ai_reply(prompt, language: str = "en"):
     try:
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key or _should_use_offline_ai():
-            logger.warning("GROQ_API_KEY not set or test mode enabled; falling back to offline reply")
+            logger.warning(
+                "GROQ_API_KEY not set or test mode enabled; falling back to offline reply"
+            )
             return generate_offline_reply(prompt)
         from groq import Groq
+
         client = Groq(api_key=groq_api_key)
         model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=model, temperature=0.7, max_tokens=1024,
+            model=model,
+            temperature=0.7,
+            max_tokens=1024,
         )
         return chat_completion.choices[0].message.content
     except Exception as exc:  # noqa: BLE001
@@ -976,8 +1155,10 @@ def get_ai_reply(prompt, language: str = "en"):
     finally:
         ai_queue_semaphore.release()
 
+
 def format_reply(reply):
     return reply.strip()
+
 
 # ==================== Validation Error Handler for Auth ====================
 from fastapi.exceptions import RequestValidationError
@@ -993,12 +1174,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             field = loc[-1] if loc else "field"
             msg = errors[0].get("msg", "invalid value")
             err_msg = f"Invalid {field}: {msg}"
-        return JSONResponse(
-            status_code=422,
-            content={"success": False, "error": err_msg}
-        )
+        return JSONResponse(status_code=422, content={"success": False, "error": err_msg})
     # Default behavior for other endpoints
     from fastapi.exception_handlers import request_validation_exception_handler
+
     return await request_validation_exception_handler(request, exc)
 
 
@@ -1026,7 +1205,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         headers=headers,
     )
 
+
 # ==================== Rate Limiting Middleware ====================
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -1037,7 +1218,7 @@ async def rate_limit_middleware(request: Request, call_next):
     started_at = time.perf_counter()
     client_ip = request.client.host if request.client else "unknown"
     path = request.url.path
-    
+
     # 1. Classify endpoint category and set limits
     if path in ("/auth/login", "/auth/login-pin", "/auth/register"):
         max_req = 5
@@ -1051,21 +1232,22 @@ async def rate_limit_middleware(request: Request, call_next):
         max_req = 100
         window = 60
         category = "general"
-        
+
     # Create a unique key combining client IP and the category
     rate_key = f"{client_ip}:{category}"
-    
+
     allowed, remaining = rate_limiter.check(rate_key, max_requests=max_req, window_seconds=window)
     if not allowed:
         # Structured log of rate limit blocking
         from utils.audit_logger import audit_log
+
         audit_log(
             username="anonymous",
             action="rate_limit_blocked",
             status="BLOCKED",
             ip_address=client_ip,
             details={"path": path, "category": category},
-            severity="WARN"
+            severity="WARN",
         )
         allowed_origins = [
             "http://localhost:3000",
@@ -1083,16 +1265,16 @@ async def rate_limit_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Too many requests. Please try again later."},
-            headers=cors_headers
+            headers=cors_headers,
         )
-        
+
     # Call the next handler
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     if elapsed_ms >= 1000:
         # Safe production timing diagnostic: no credentials, request bodies, or tokens.
         logger.warning("[API] %s %s completed in %.0fms", request.method, path, elapsed_ms)
-    
+
     # Inject RateLimit headers into response for transparency
     response.headers["X-RateLimit-Limit"] = str(max_req)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
@@ -1100,6 +1282,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 
 # ==================== AUTH ENDPOINTS (JWT + bcrypt) ====================
+
 
 def _set_auth_cookies(
     response: Response,
@@ -1109,7 +1292,11 @@ def _set_auth_cookies(
 ):
     """Set secure authentication cookies with environment-aware security flags."""
     env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+    is_prod = (
+        env in ("production", "prod", "staging")
+        or os.getenv("RENDER", "false").lower() == "true"
+        or os.getenv("NODE_ENV", "development").lower() == "production"
+    )
 
     cookie_secure = is_prod
     cookie_samesite = "none" if is_prod else "lax"
@@ -1150,28 +1337,40 @@ def _set_auth_cookies(
 def auth_register(request: RegisterRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
-        return JSONResponse(status_code=200, content={"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."})
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "error": "Invalid username. Use 3-50 alphanumeric characters.",
+            },
+        )
     if len(request.password) < 8:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Password must be at least 8 characters"})
-    
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "error": "Password must be at least 8 characters"},
+        )
+
     result = auth_handler.register_user(sanitized_username, request.password, request.email)
     if not result.get("success"):
         return JSONResponse(status_code=result.pop("status_code", 400), content=result)
-        
+
     _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
     return result
+
 
 @app.post("/auth/login")
 def auth_login(request: AuthRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Invalid username format"})
-        
+        return JSONResponse(
+            status_code=422, content={"success": False, "error": "Invalid username format"}
+        )
+
     if _db_manager:
         result = auth_handler.login_user(sanitized_username, request.password)
         if result.get("success"):
             _db_manager.update_streak(sanitized_username, "daily")
-            
+
             # Register trusted device if device_id is provided
             if request.device_id:
                 user = _db_manager.get_user(sanitized_username)
@@ -1179,22 +1378,29 @@ def auth_login(request: AuthRequest, response: Response):
                     _db_manager.save_trusted_device(
                         user_id=user.id,
                         device_id=request.device_id,
-                        device_name=request.device_name or "Unknown Device"
+                        device_name=request.device_name or "Unknown Device",
                     )
                     from utils.audit_logger import audit_log
+
                     audit_log(
                         username=sanitized_username,
                         action="trusted_device_registered",
                         status="SUCCESS",
-                        details={"device_id": request.device_id, "device_name": request.device_name}
+                        details={
+                            "device_id": request.device_id,
+                            "device_name": request.device_name,
+                        },
                     )
-            
+
             # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
             _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
         if not result.get("success"):
             return JSONResponse(status_code=result.pop("status_code", 401), content=result)
         return result
-    return JSONResponse(status_code=503, content={"success": False, "error": "Database not initialized"})
+    return JSONResponse(
+        status_code=503, content={"success": False, "error": "Database not initialized"}
+    )
+
 
 @app.post("/auth/refresh")
 async def auth_refresh(request: Request, response: Response, payload: dict | None = None):
@@ -1210,14 +1416,15 @@ async def auth_refresh(request: Request, response: Response, payload: dict | Non
             pass
     if not refresh_token:
         refresh_token = request.cookies.get("refresh_token")
-        
+
     if not refresh_token:
         return {"success": False, "error": "Refresh token required"}
-        
+
     result = auth_handler.refresh_token(refresh_token)
     if result.get("success"):
         _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
     return result
+
 
 @app.post("/auth/logout")
 def auth_logout(request: Request, response: Response):
@@ -1227,10 +1434,12 @@ def auth_logout(request: Request, response: Response):
     raw_device_token = request.cookies.get("trusted_device_token")
     if raw_device_token and _db_manager:
         from auth.oauth_service import hash_device_token
+
         h = hash_device_token(raw_device_token)
         _db_manager.revoke_trusted_device_by_hash(h)
     response.delete_cookie(key="trusted_device_token", path="/")
     return {"success": True, "message": "Successfully logged out"}
+
 
 @app.get("/auth/me")
 def auth_me(request: Request, response: Response):
@@ -1253,6 +1462,7 @@ def auth_me(request: Request, response: Response):
         raw_device_token = request.cookies.get("trusted_device_token")
         if raw_device_token:
             from auth.oauth_service import resume_trusted_device_session
+
             res = resume_trusted_device_session(_db_manager, raw_device_token)
             if res:
                 u, new_raw_token = res
@@ -1279,6 +1489,7 @@ def auth_me(request: Request, response: Response):
 
 # ==================== OAUTH 2.0 & OPENID CONNECT ENDPOINTS ====================
 
+
 @app.get("/auth/oauth/{provider}/login")
 def oauth_login(provider: str, remember_device: bool = False):
     """Initiate OAuth 2.0 / OpenID Connect flow with session-bound CSRF state and PKCE."""
@@ -1287,10 +1498,17 @@ def oauth_login(provider: str, remember_device: bool = False):
         raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
 
     from auth.oauth_service import create_oauth_session
-    auth_url, _state, cookie_value = create_oauth_session(provider=provider_clean, remember_device=remember_device)
+
+    auth_url, _state, cookie_value = create_oauth_session(
+        provider=provider_clean, remember_device=remember_device
+    )
 
     env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+    is_prod = (
+        env in ("production", "prod", "staging")
+        or os.getenv("RENDER", "false").lower() == "true"
+        or os.getenv("NODE_ENV", "development").lower() == "production"
+    )
 
     resp = RedirectResponse(url=auth_url, status_code=302)
     resp.set_cookie(
@@ -1317,20 +1535,27 @@ async def oauth_callback(
 ):
     """Handle OAuth 2.0 / OpenID Connect authorization callback from Google."""
     from auth.oauth_service import _get_base_urls
+
     _, frontend_url = _get_base_urls()
     provider_clean = provider.lower()
 
     if provider_clean != "google":
-        return RedirectResponse(url=f"{frontend_url}/login?error=unsupported_provider", status_code=303)
+        return RedirectResponse(
+            url=f"{frontend_url}/login?error=unsupported_provider", status_code=303
+        )
 
     if error:
         err_msg = error_description or error
         logger.warning(f"[OAUTH CALLBACK ERROR] {provider}: {err_msg}")
-        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_access_denied", status_code=303)
+        return RedirectResponse(
+            url=f"{frontend_url}/login?error=oauth_access_denied", status_code=303
+        )
 
     if not code or not state:
         logger.warning(f"[OAUTH CALLBACK] Missing code or state from {provider}")
-        return RedirectResponse(url=f"{frontend_url}/login?error=missing_oauth_parameters", status_code=303)
+        return RedirectResponse(
+            url=f"{frontend_url}/login?error=missing_oauth_parameters", status_code=303
+        )
 
     from auth.oauth_service import (
         AccountLinkingRequiredError,
@@ -1344,7 +1569,9 @@ async def oauth_callback(
 
     # 1. Verify session-bound CSRF state (cookie match + PKCE)
     cookie_value = request.cookies.get("oauth_state")
-    session_data = verify_oauth_session_cookie(cookie_value, state, expected_provider=provider_clean)
+    session_data = verify_oauth_session_cookie(
+        cookie_value, state, expected_provider=provider_clean
+    )
 
     # Fallback to direct state verification if cookie absent (e.g., test runners)
     if not session_data:
@@ -1358,30 +1585,43 @@ async def oauth_callback(
 
     if not session_data:
         logger.warning(f"[OAUTH CALLBACK] Session state validation failed for {provider}")
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=invalid_or_expired_oauth_state", status_code=303)
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=invalid_or_expired_oauth_state", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
 
     remember_device = session_data.get("remember_device", False)
     nonce = session_data.get("nonce")
     code_verifier = session_data.get("code_verifier")
-    logger.info("[OAUTH STAGE 1] Session state validated successfully for provider=%s", provider_clean)
+    logger.info(
+        "[OAUTH STAGE 1] Session state validated successfully for provider=%s", provider_clean
+    )
 
     # 2. Code exchange & identity verification using standard OIDC
     try:
         token_data = await exchange_google_code(code, code_verifier=code_verifier)
         identity = await verify_google_identity(token_data, expected_nonce=nonce)
-        logger.info("[OAUTH STAGE 2] Code exchange and identity verification succeeded for provider=%s", provider_clean)
+        logger.info(
+            "[OAUTH STAGE 2] Code exchange and identity verification succeeded for provider=%s",
+            provider_clean,
+        )
     except Exception:
-        logger.exception("[OAUTH VERIFICATION FAILED] Stage 2 verification failed for %s", provider_clean)
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=verification_failed", status_code=303)
+        logger.exception(
+            "[OAUTH VERIFICATION FAILED] Stage 2 verification failed for %s", provider_clean
+        )
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=verification_failed", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
 
     # 3. User lookup / safe account linking / user provisioning
     if not _db_manager:
         logger.error("[OAUTH STAGE 3] Database manager is not initialized")
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=database_unavailable", status_code=303)
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=database_unavailable", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
 
@@ -1393,28 +1633,39 @@ async def oauth_callback(
             email=identity["email"],
             name=identity.get("name", ""),
         )
-        logger.info("[OAUTH STAGE 3] User resolution succeeded (username=%s, is_new=%s)", user.username, is_new_user)
+        logger.info(
+            "[OAUTH STAGE 3] User resolution succeeded (username=%s, is_new=%s)",
+            user.username,
+            is_new_user,
+        )
     except AccountLinkingRequiredError as exc:
         logger.warning("[OAUTH STAGE 3] Account linking required: %s", exc)
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=account_linking_required", status_code=303)
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=account_linking_required", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
     except Exception:
         logger.exception("[OAUTH USER RESOLUTION FAILED] Stage 3 error")
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=authentication_failed", status_code=303)
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=authentication_failed", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
 
     if not user.is_active:
         from utils.audit_logger import audit_log
+
         audit_log(
             username=user.username,
             action="oauth_login",
             status="BLOCKED",
             details={"reason": "account_inactive", "provider": provider_clean},
-            severity="WARN"
+            severity="WARN",
         )
-        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=account_inactive", status_code=303)
+        redirect_err = RedirectResponse(
+            url=f"{frontend_url}/login?error=account_inactive", status_code=303
+        )
         redirect_err.delete_cookie(key="oauth_state", path="/")
         return redirect_err
 
@@ -1446,10 +1697,14 @@ async def oauth_callback(
             expires_at=expires_at,
         )
 
-    logger.info("[OAUTH STAGE 4] Tokens and session cookies generated for username=%s", user.username)
+    logger.info(
+        "[OAUTH STAGE 4] Tokens and session cookies generated for username=%s", user.username
+    )
 
     # 6. Redirect to frontend with secure HttpOnly cookies attached and state cookie cleared
-    redirect_target = f"{frontend_url}/register?step=focus" if is_new_user else f"{frontend_url}/dashboard"
+    redirect_target = (
+        f"{frontend_url}/register?step=focus" if is_new_user else f"{frontend_url}/dashboard"
+    )
     redirect_resp = RedirectResponse(url=redirect_target, status_code=303)
     redirect_resp.delete_cookie(key="oauth_state", path="/")
     _set_auth_cookies(
@@ -1460,6 +1715,7 @@ async def oauth_callback(
     )
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=user.username,
         action="oauth_login",
@@ -1468,7 +1724,7 @@ async def oauth_callback(
             "provider": provider_clean,
             "is_new_user": is_new_user,
             "remember_device": remember_device,
-        }
+        },
     )
 
     return redirect_resp
@@ -1486,6 +1742,7 @@ def resume_trusted_device(request: Request, response: Response, payload: dict | 
         raise HTTPException(status_code=401, detail="No trusted device token provided")
 
     from auth.oauth_service import resume_trusted_device_session
+
     res = resume_trusted_device_session(_db_manager, raw_token)
     if not res:
         response.delete_cookie(key="trusted_device_token", path="/")
@@ -1521,7 +1778,9 @@ def get_connected_accounts(current_user: str = Depends(require_user)):
             "name": "Google",
             "connected": "google" in connected,
             "email": connected["google"].email if "google" in connected else None,
-            "linked_at": connected["google"].created_at.isoformat() if "google" in connected else None,
+            "linked_at": connected["google"].created_at.isoformat()
+            if "google" in connected
+            else None,
         },
     ]
 
@@ -1539,6 +1798,7 @@ def get_trusted_devices_v2(request: Request, current_user: str = Depends(require
     current_hash = None
     if raw_token:
         from auth.oauth_service import hash_device_token
+
         current_hash = hash_device_token(raw_token)
 
     devices = _db_manager.get_active_trusted_devices(current_user)
@@ -1546,7 +1806,9 @@ def get_trusted_devices_v2(request: Request, current_user: str = Depends(require
         {
             "device_id": d.device_id,
             "device_name": d.device_name,
-            "is_current": (d.token_hash == current_hash) if (current_hash and d.token_hash) else False,
+            "is_current": (d.token_hash == current_hash)
+            if (current_hash and d.token_hash)
+            else False,
             "created_at": d.created_at.isoformat() if d.created_at else None,
             "last_used": d.last_used.isoformat() if d.last_used else None,
             "expires_at": d.expires_at.isoformat() if getattr(d, "expires_at", None) else None,
@@ -1577,11 +1839,12 @@ def revoke_trusted_device_v2(device_id: str, current_user: str = Depends(require
         raise HTTPException(status_code=404, detail="Device not found")
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=current_user,
         action="trusted_device_revoked",
         status="SUCCESS",
-        details={"device_id": device_id}
+        details={"device_id": device_id},
     )
     return {"success": True, "message": "Device revoked successfully"}
 
@@ -1599,13 +1862,19 @@ def revoke_all_trusted_devices_v2(response: Response, current_user: str = Depend
     response.delete_cookie(key="trusted_device_token", path="/")
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=current_user,
         action="all_trusted_devices_revoked",
         status="SUCCESS",
-        details={"revoked_count": count}
+        details={"revoked_count": count},
     )
-    return {"success": True, "revoked_count": count, "message": f"Successfully revoked {count} devices"}
+    return {
+        "success": True,
+        "revoked_count": count,
+        "message": f"Successfully revoked {count} devices",
+    }
+
 
 @app.post("/auth/reset-password")
 def auth_reset_password(request: ResetPasswordRequest):
@@ -1626,6 +1895,7 @@ def auth_reset_password(request: ResetPasswordRequest):
     db.commit()
     return {"success": True, "message": "Password reset successfully"}
 
+
 @app.post("/auth/login-pin")
 def auth_login_pin(request: PinLoginRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
@@ -1642,6 +1912,7 @@ def auth_login_pin(request: PinLoginRequest, response: Response):
         return result
     return {"success": False, "error": "Database not initialized"}
 
+
 @app.get("/auth/has-pin")
 def auth_has_pin(current_user: str = Depends(require_user)):
     """Return PIN state for the JWT subject, never for an arbitrary path username."""
@@ -1651,6 +1922,7 @@ def auth_has_pin(current_user: str = Depends(require_user)):
             return {"has_pin": True}
     return {"has_pin": False}
 
+
 @app.get("/auth/has-pin/{username}", deprecated=True)
 def auth_has_pin_legacy(username: str, current_user: str = Depends(require_user)):
     # Keep older clients working without allowing account-state enumeration.
@@ -1658,37 +1930,41 @@ def auth_has_pin_legacy(username: str, current_user: str = Depends(require_user)
         raise HTTPException(status_code=403, detail="Cannot access another user's PIN status")
     return auth_has_pin(current_user)
 
+
 @app.post("/auth/set-pin")
 def auth_set_pin(request: SetPinRequest, current_user: str = Depends(require_user)):
     if _db_manager:
         user = _db_manager.get_user(current_user)
         if user:
             from auth.auth_handler import get_password_hash
+
             hashed_pin = get_password_hash(request.pin)
-            
+
             # User model update
             user.security_pin_hash = hashed_pin
             user.has_pin_enabled = True
-            
+
             # Device model update if device_id is provided
             if request.device_id:
                 _db_manager.save_trusted_device(
                     user_id=user.id,
                     device_id=request.device_id,
                     device_name=request.device_name or "Unknown Device",
-                    pin_hash=hashed_pin
+                    pin_hash=hashed_pin,
                 )
                 from utils.audit_logger import audit_log
+
                 audit_log(
                     username=current_user,
                     action="trusted_device_pin_set",
                     status="SUCCESS",
-                    details={"device_id": request.device_id}
+                    details={"device_id": request.device_id},
                 )
-            
+
             _db_manager.db.commit()
             return {"success": True, "message": "Security PIN set successfully"}
     return {"success": False, "error": "Database not available"}
+
 
 @app.post("/auth/remove-pin")
 def auth_remove_pin(current_user: str = Depends(require_user)):
@@ -1701,9 +1977,11 @@ def auth_remove_pin(current_user: str = Depends(require_user)):
             return {"success": True, "message": "Security PIN removed successfully"}
     return {"success": False, "error": "Database not available"}
 
+
 @app.post("/auth/pin-login")
 def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     from datetime import datetime, timedelta, timezone
+
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
         return {"success": False, "error": "Invalid username format"}
@@ -1718,32 +1996,35 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     device = _db_manager.get_trusted_device(user.id, request.device_id)
     if not device or not device.is_active:
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="trusted_device_pin_login",
             status="FAILED",
             details={"reason": "device_not_trusted", "device_id": request.device_id},
-            severity="WARN"
+            severity="WARN",
         )
         return {"success": False, "error": "Device not trusted"}
 
     if device.locked_until and device.locked_until > datetime.now(timezone.utc):
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="trusted_device_pin_login",
             status="LOCKED",
             details={"device_id": request.device_id},
-            severity="WARN"
+            severity="WARN",
         )
         remaining = int((device.locked_until - datetime.now(timezone.utc)).total_seconds())
         return {
             "success": False,
-            "error": f"Device temporarily locked. Try again in {remaining // 60 + 1} minutes."
+            "error": f"Device temporarily locked. Try again in {remaining // 60 + 1} minutes.",
         }
 
     pin_hash = device.pin_hash or user.security_pin_hash
     from auth.auth_handler import verify_password
+
     if not pin_hash or not verify_password(request.pin, pin_hash):
         device.failed_attempts += 1
         if device.failed_attempts >= 5:
@@ -1755,12 +2036,17 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
         _db_manager.db.commit()
 
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="trusted_device_pin_login",
             status="FAILED",
-            details={"reason": "incorrect_pin", "device_id": request.device_id, "failed_attempts": device.failed_attempts},
-            severity="WARN"
+            details={
+                "reason": "incorrect_pin",
+                "device_id": request.device_id,
+                "failed_attempts": device.failed_attempts,
+            },
+            severity="WARN",
         )
         return {"success": False, "error": msg}
 
@@ -1771,11 +2057,8 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     _db_manager.update_streak(sanitized_username, "daily")
     _db_manager.db.commit()
 
-    from auth.auth_handler import (
-        create_access_token,
-        create_refresh_token,
-        verify_token,
-    )
+    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+
     access_token = create_access_token({"sub": sanitized_username})
     refresh_token = create_refresh_token({"sub": sanitized_username})
 
@@ -1790,11 +2073,12 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     _set_auth_cookies(response, access_token, refresh_token)
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=sanitized_username,
         action="trusted_device_pin_login",
         status="SUCCESS",
-        details={"device_id": request.device_id, "role": getattr(user, "role", "user")}
+        details={"device_id": request.device_id, "role": getattr(user, "role", "user")},
     )
 
     return {
@@ -1806,6 +2090,7 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
         "role": getattr(user, "role", "user"),
     }
 
+
 @app.post("/auth/admin-pin-login")
 def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
@@ -1815,12 +2100,13 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
     admin_pin = os.getenv("ADMIN_PIN")
     if not admin_pin:
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="admin_pin_login",
             status="FAILED",
             details={"reason": "admin_pin_not_configured"},
-            severity="CRITICAL"
+            severity="CRITICAL",
         )
         return {"success": False, "error": "Admin login is not configured on the server"}
 
@@ -1834,35 +2120,35 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
     is_user_admin = getattr(user, "is_admin", False) or getattr(user, "role", "user") == "admin"
     if not is_user_admin:
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="admin_pin_login",
             status="FAILED",
             details={"reason": "not_an_admin"},
-            severity="WARN"
+            severity="WARN",
         )
         return {"success": False, "error": "Access denied. Not an admin."}
 
     if request.pin != admin_pin:
         from utils.audit_logger import audit_log
+
         audit_log(
             username=sanitized_username,
             action="admin_pin_login",
             status="FAILED",
             details={"reason": "incorrect_pin"},
-            severity="WARN"
+            severity="WARN",
         )
         return {"success": False, "error": "Invalid username or admin PIN"}
 
     from datetime import datetime, timezone
+
     _db_manager.update_last_login(sanitized_username)
     _db_manager.update_streak(sanitized_username, "daily")
 
-    from auth.auth_handler import (
-        create_access_token,
-        create_refresh_token,
-        verify_token,
-    )
+    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+
     access_token = create_access_token({"sub": sanitized_username})
     refresh_token = create_refresh_token({"sub": sanitized_username})
 
@@ -1877,11 +2163,12 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
     _set_auth_cookies(response, access_token, refresh_token)
 
     from utils.audit_logger import audit_log
+
     audit_log(
         username=sanitized_username,
         action="admin_pin_login",
         status="SUCCESS",
-        details={"message": "Admin logged in successfully with PIN"}
+        details={"message": "Admin logged in successfully with PIN"},
     )
 
     return {
@@ -1892,6 +2179,7 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
         "username": sanitized_username,
         "role": "admin",
     }
+
 
 @app.get("/auth/trusted-device")
 def auth_get_trusted_device(device_id: str):
@@ -1907,12 +2195,21 @@ def auth_get_trusted_device(device_id: str):
                     "is_trusted": True,
                     "username": user.username,
                     "device_name": device.device_name,
-                    "has_pin": device.pin_hash is not None or user.security_pin_hash is not None
+                    "has_pin": device.pin_hash is not None or user.security_pin_hash is not None,
                 }
-    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+    except (
+        AttributeError,
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        SQLAlchemyError,
+    ) as e:
         logger.warning(f"Error checking trusted device '{device_id}': {e}")
 
     return {"is_trusted": False}
+
 
 @app.post("/auth/remove-device")
 def auth_remove_device(request: RemoveDeviceRequest, current_user: str = Depends(require_user)):
@@ -1929,31 +2226,34 @@ def auth_remove_device(request: RemoveDeviceRequest, current_user: str = Depends
         _db_manager.db.commit()
 
         from utils.audit_logger import audit_log
+
         audit_log(
             username=current_user,
             action="trusted_device_removed",
             status="SUCCESS",
-            details={"device_id": request.device_id}
+            details={"device_id": request.device_id},
         )
         return {"success": True, "message": "Device removed successfully"}
-    
+
     return {"success": False, "error": "Device not found"}
+
 
 @app.get("/auth/devices")
 def auth_get_devices(current_user: str = Depends(require_user)):
     if not _db_manager:
         return []
-    
+
     devices = _db_manager.get_active_trusted_devices(current_user)
     return [
         {
             "device_id": d.device_id,
             "device_name": d.device_name,
             "created_at": d.created_at.isoformat(),
-            "last_used": d.last_used.isoformat()
+            "last_used": d.last_used.isoformat(),
         }
         for d in devices
     ]
+
 
 @app.get("/settings/{username}")
 def get_settings(username: str, active_user: str | None = Depends(optional_user)):
@@ -1970,15 +2270,18 @@ def get_settings(username: str, active_user: str | None = Depends(optional_user)
         return {"theme": "dark", "language": "en", "notifications_enabled": True}
     return user.settings
 
+
 @app.put("/settings/{username}")
-def update_settings(username: str, settings: SettingsUpdateRequest, current_user: str = Depends(require_user)):
+def update_settings(
+    username: str, settings: SettingsUpdateRequest, current_user: str = Depends(require_user)
+):
     # Security: Ensure user can only update their own settings, or is an admin!
     if current_user != username and _db_manager:
         curr_db_user = _db_manager.get_user(current_user)
         if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied. You can only update your own settings."
+                detail="Permission denied. You can only update your own settings.",
             )
 
     if not _db_manager:
@@ -1986,20 +2289,22 @@ def update_settings(username: str, settings: SettingsUpdateRequest, current_user
     updated = _db_manager.update_user_settings(username, settings.model_dump())
     if not updated:
         return {"success": False, "error": "User not found"}
-        
+
     # Transaction Audit Log
     from utils.audit_logger import audit_log
+
     audit_log(
         username=username,
         action="update_settings",
         status="SUCCESS",
-        details={"updated_fields": list(settings.model_dump().keys())}
+        details={"updated_fields": list(settings.model_dump().keys())},
     )
-    
+
     return {"success": True, "settings": updated.settings}
 
 
 # ==================== CHAT ENDPOINT (with RAG + Fact Extraction) ====================
+
 
 @app.post("/chat")
 def chat(data: ChatRequest):
@@ -2008,6 +2313,7 @@ def chat(data: ChatRequest):
         if data.text and len(data.text.strip()) > 1:
             try:
                 import langdetect
+
                 detected = langdetect.detect(data.text)
                 if detected and len(detected) == 2:
                     data.language = detected
@@ -2027,7 +2333,7 @@ def chat(data: ChatRequest):
 
         # === ROUTE TO AGENT PERSONALITY ===
         agent_id = data.agent_id or "productivity-coach"
-        current_streak = data.session_data.get('current_streak', 0) if data.session_data else 0
+        current_streak = data.session_data.get("current_streak", 0) if data.session_data else 0
 
         # === RAG: Retrieve rich context from all memory sources ===
         rag_context = _rag_engine.retrieve_context(
@@ -2046,11 +2352,14 @@ def chat(data: ChatRequest):
         agent_insights = agent_context.get("agent_insights", "")
 
         # === ADHD State Detection ===
-        state_result = _state_detector.analyze(data.text, {
-            "current_stress": data.user_data.get("stress_level", 5),
-            "current_energy": data.user_data.get("energy_level", 5),
-            "text": data.text,
-        })
+        state_result = _state_detector.analyze(
+            data.text,
+            {
+                "current_stress": data.user_data.get("stress_level", 5),
+                "current_energy": data.user_data.get("energy_level", 5),
+                "text": data.text,
+            },
+        )
         state_prompt_ext = _state_detector.get_system_prompt_extension(data.text)
 
         # === Adaptive Coaching ===
@@ -2076,12 +2385,23 @@ def chat(data: ChatRequest):
             paralysis_prompt_ext = ""
 
         # === Combine all context ===
-        all_context_parts = [rag_context, agent_insights, state_prompt_ext, coach_extension, paralysis_prompt_ext, route_instruction]
+        all_context_parts = [
+            rag_context,
+            agent_insights,
+            state_prompt_ext,
+            coach_extension,
+            paralysis_prompt_ext,
+            route_instruction,
+        ]
         all_context = "\n\n".join([p for p in all_context_parts if p])
 
         english_text = translate_to_english(data.text)
         analysis_result = analyze(english_text)
-        scores = build_user_scores(data.user_data, text=english_text, analysis=analysis_result) if data.user_data else {}
+        scores = (
+            build_user_scores(data.user_data, text=english_text, analysis=analysis_result)
+            if data.user_data
+            else {}
+        )
 
         # === ROUTE PROMPT TO SPECIFIC CHATBOT PERSONALITY ===
         agent_system_prompt = orchestrator.build_agent_specific_prompt(
@@ -2089,7 +2409,11 @@ def chat(data: ChatRequest):
         )
 
         # Inject standard instructions
-        instruction = "Start by warmly welcoming the user and responding directly to their input." if not data.history else f"Respond to the user as the supportive {agent_id} companion."
+        instruction = (
+            "Start by warmly welcoming the user and responding directly to their input."
+            if not data.history
+            else f"Respond to the user as the supportive {agent_id} companion."
+        )
         if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
             instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
 
@@ -2124,23 +2448,24 @@ TASKS:
         reply_part = raw
         dynamic_tasks = []
         import re
-        if re.search(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE):
-            parts = re.split(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE)
-            reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', parts[0], flags=re.IGNORECASE).strip()
+
+        if re.search(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE):
+            parts = re.split(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE)
+            reply_part = re.sub(r"^REPLY\s*[\-:]*\s*", "", parts[0], flags=re.IGNORECASE).strip()
             tasks_part = parts[1].strip()
-            for line in tasks_part.split('\n'):
+            for line in tasks_part.split("\n"):
                 line = line.strip()
                 if line.startswith(("-", "*", "☐")):
-                    clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
+                    clean_task = re.sub(r"^[\-\*☐]\s*", "", line).strip()
                     if clean_task:
                         dynamic_tasks.append(clean_task)
                 else:
-                    clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                    clean_line = re.sub(r"^\d+[\.\)]\s*", "", line).strip()
                     if clean_line and len(clean_line) > 2:
                         dynamic_tasks.append(clean_line)
             reply_part = f"{reply_part}\n\n**Tasks:**\n{tasks_part}"
         else:
-            reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', raw, flags=re.IGNORECASE).strip()
+            reply_part = re.sub(r"^REPLY\s*[\-:]*\s*", "", raw, flags=re.IGNORECASE).strip()
 
         reply = format_reply(translate_reply_if_needed(reply_part, data.language))
 
@@ -2152,7 +2477,7 @@ TASKS:
             user_message=data.text,
             assistant_message=reply[:500],
             interaction_type="chat",
-            metadata={"language": data.language, "agent_id": agent_id}
+            metadata={"language": data.language, "agent_id": agent_id},
         )
         memory.record_emotion(
             emotion=analysis_result.get("emotion", "neutral"),
@@ -2162,7 +2487,9 @@ TASKS:
         # Persist chat to database
         if _db_manager:
             try:
-                _db_manager.save_chat_message(username, "user", data.text, analysis_result.get("emotion"))
+                _db_manager.save_chat_message(
+                    username, "user", data.text, analysis_result.get("emotion")
+                )
                 _db_manager.save_chat_message(username, "assistant", reply[:1000])
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Chat persistence error: {e}")
@@ -2178,23 +2505,44 @@ TASKS:
         if dynamic_tasks:
             for task in dynamic_tasks[:3]:
                 emoji = "✓"
-                if "breath" in task.lower(): emoji = "🧘"
-                elif "water" in task.lower(): emoji = "💧"
-                elif "timer" in task.lower(): emoji = "⏱️"
-                elif "desk" in task.lower(): emoji = "🧹"
-                elif "priority" in task.lower(): emoji = "📋"
-                elif "goal" in task.lower(): emoji = "🎯"
-                interventions.append({"priority": "high", "category": "task", "title": task, "action": task, "emoji": emoji})
+                if "breath" in task.lower():
+                    emoji = "🧘"
+                elif "water" in task.lower():
+                    emoji = "💧"
+                elif "timer" in task.lower():
+                    emoji = "⏱️"
+                elif "desk" in task.lower():
+                    emoji = "🧹"
+                elif "priority" in task.lower():
+                    emoji = "📋"
+                elif "goal" in task.lower():
+                    emoji = "🎯"
+                interventions.append(
+                    {
+                        "priority": "high",
+                        "category": "task",
+                        "title": task,
+                        "action": task,
+                        "emoji": emoji,
+                    }
+                )
 
-        rule_based_interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+        rule_based_interventions = (
+            generate_interventions(data.user_data, scores) if data.user_data else []
+        )
         if not dynamic_tasks and rule_based_interventions:
-            tasks_list = "\n".join([f"- {inv.get('action', inv.get('title', 'Task'))}" for inv in rule_based_interventions[:3]])
+            tasks_list = "\n".join(
+                [
+                    f"- {inv.get('action', inv.get('title', 'Task'))}"
+                    for inv in rule_based_interventions[:3]
+                ]
+            )
             reply += f"\n\n**Tasks:**\n{tasks_list}"
         interventions.extend(rule_based_interventions)
         interventions = interventions[:5]
 
         for inv in interventions:
-            memory.record_intervention(inv.get('title', ''))
+            memory.record_intervention(inv.get("title", ""))
 
         # Award XP for task completion suggestions
         if _db_manager and interventions:
@@ -2225,9 +2573,15 @@ TASKS:
         }
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         import traceback
+
         logger.exception("Error in /chat endpoint")
         traceback.print_exc()
-        return {"reply": f"ERROR: {e!s}", "analysis": {"emotion": "normal", "productivity": "medium"}, "scores": {}, "interventions": []}
+        return {
+            "reply": f"ERROR: {e!s}",
+            "analysis": {"emotion": "normal", "productivity": "medium"},
+            "scores": {},
+            "interventions": [],
+        }
 
 
 @app.post("/chat/stream")
@@ -2237,6 +2591,7 @@ def chat_stream(data: ChatRequest):
     if data.text and len(data.text.strip()) > 1:
         try:
             import langdetect
+
             detected = langdetect.detect(data.text)
             if detected and len(detected) == 2:
                 data.language = detected
@@ -2258,7 +2613,7 @@ def chat_stream(data: ChatRequest):
         memory.set_db_manager(_db_manager)
         _rag_engine.memory = memory
 
-    current_streak = data.session_data.get('current_streak', 0) if data.session_data else 0
+    current_streak = data.session_data.get("current_streak", 0) if data.session_data else 0
 
     async def event_generator():
         # === ROUTE TO AGENT PERSONALITY ===
@@ -2278,11 +2633,14 @@ def chat_stream(data: ChatRequest):
         agent_context = orchestrator.get_context_for_prompt(data.text, current_streak, agent_id)
         agent_insights = agent_context.get("agent_insights", "")
 
-        state_result = _state_detector.analyze(data.text, {
-            "current_stress": data.user_data.get("stress_level", 5),
-            "current_energy": data.user_data.get("energy_level", 5),
-            "text": data.text,
-        })
+        state_result = _state_detector.analyze(
+            data.text,
+            {
+                "current_stress": data.user_data.get("stress_level", 5),
+                "current_energy": data.user_data.get("energy_level", 5),
+                "text": data.text,
+            },
+        )
         state_prompt_ext = _state_detector.get_system_prompt_extension(data.text)
 
         coach_extension = _adaptive_coach.get_system_prompt_extension(
@@ -2305,19 +2663,34 @@ def chat_stream(data: ChatRequest):
             coach_extension = ""
             paralysis_prompt_ext = ""
 
-        all_context_parts = [rag_context, agent_insights, state_prompt_ext, coach_extension, paralysis_prompt_ext, route_instruction]
+        all_context_parts = [
+            rag_context,
+            agent_insights,
+            state_prompt_ext,
+            coach_extension,
+            paralysis_prompt_ext,
+            route_instruction,
+        ]
         all_context = "\n\n".join([p for p in all_context_parts if p])
 
         english_text = translate_to_english(data.text)
         analysis_result = analyze(english_text)
-        scores = build_user_scores(data.user_data, text=english_text, analysis=analysis_result) if data.user_data else {}
+        scores = (
+            build_user_scores(data.user_data, text=english_text, analysis=analysis_result)
+            if data.user_data
+            else {}
+        )
 
         # ROUTE TO AGENT PERSONALITY
         agent_system_prompt = orchestrator.build_agent_specific_prompt(
             agent_id, data.text, agent_context, current_streak
         )
 
-        instruction = "Start by warmly welcoming the user and responding directly to their input." if not data.history else f"Respond to the user as the supportive {agent_id} companion."
+        instruction = (
+            "Start by warmly welcoming the user and responding directly to their input."
+            if not data.history
+            else f"Respond to the user as the supportive {agent_id} companion."
+        )
         if scores and scores.get("summary", {}).get("stress_level", 0) >= 8:
             instruction += "\nCRITICAL: The user has HIGH STRESS. Be extremely gentle, warm, and deeply empathetic."
 
@@ -2360,6 +2733,7 @@ TASKS:
         else:
             try:
                 from groq import AsyncGroq
+
                 client = AsyncGroq(api_key=groq_api_key)
                 model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 completion_stream = await client.chat.completions.create(
@@ -2388,23 +2762,26 @@ TASKS:
             reply_part = raw
             dynamic_tasks = []
             import re
-            if re.search(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE):
-                parts = re.split(r'\bTASKS\s*[\-:]', raw, flags=re.IGNORECASE)
-                reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', parts[0], flags=re.IGNORECASE).strip()
+
+            if re.search(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE):
+                parts = re.split(r"\bTASKS\s*[\-:]", raw, flags=re.IGNORECASE)
+                reply_part = re.sub(
+                    r"^REPLY\s*[\-:]*\s*", "", parts[0], flags=re.IGNORECASE
+                ).strip()
                 tasks_part = parts[1].strip()
-                for line in tasks_part.split('\n'):
+                for line in tasks_part.split("\n"):
                     line = line.strip()
                     if line.startswith(("-", "*", "☐")):
-                        clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
+                        clean_task = re.sub(r"^[\-\*☐]\s*", "", line).strip()
                         if clean_task:
                             dynamic_tasks.append(clean_task)
                     else:
-                        clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                        clean_line = re.sub(r"^\d+[\.\)]\s*", "", line).strip()
                         if clean_line and len(clean_line) > 2:
                             dynamic_tasks.append(clean_line)
                 reply_part = f"{reply_part}\n\n**Tasks:**\n{tasks_part}"
             else:
-                reply_part = re.sub(r'^REPLY\s*[\-:]*\s*', '', raw, flags=re.IGNORECASE).strip()
+                reply_part = re.sub(r"^REPLY\s*[\-:]*\s*", "", raw, flags=re.IGNORECASE).strip()
 
             reply = format_reply(translate_reply_if_needed(reply_part, data.language))
             handoff_suggestion = orchestrator.detect_handoff_suggestion(data.text, agent_id)
@@ -2414,7 +2791,7 @@ TASKS:
                 user_message=data.text,
                 assistant_message=reply[:500],
                 interaction_type="chat",
-                metadata={"language": data.language, "agent_id": agent_id}
+                metadata={"language": data.language, "agent_id": agent_id},
             )
             memory.record_emotion(
                 emotion=analysis_result.get("emotion", "neutral"),
@@ -2424,30 +2801,55 @@ TASKS:
             # Database persistence
             if _db_manager:
                 try:
-                    _db_manager.save_chat_message(username, "user", data.text, analysis_result.get("emotion"))
+                    _db_manager.save_chat_message(
+                        username, "user", data.text, analysis_result.get("emotion")
+                    )
                     _db_manager.save_chat_message(username, "assistant", reply[:1000])
                     _gamification.award_xp(username, "mood_checkin")
-                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
+                except (
+                    AttributeError,
+                    KeyError,
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                ) as db_err:
                     logger.warning(f"Async stream DB error: {db_err}")
 
             interventions = []
             if dynamic_tasks:
                 for task in dynamic_tasks[:3]:
                     emoji = "✓"
-                    if "breath" in task.lower(): emoji = "🧘"
-                    elif "water" in task.lower(): emoji = "💧"
-                    elif "timer" in task.lower(): emoji = "⏱️"
-                    elif "desk" in task.lower(): emoji = "🧹"
-                    elif "priority" in task.lower(): emoji = "📋"
-                    elif "goal" in task.lower(): emoji = "🎯"
-                    interventions.append({"priority": "high", "category": "task", "title": task, "action": task, "emoji": emoji})
+                    if "breath" in task.lower():
+                        emoji = "🧘"
+                    elif "water" in task.lower():
+                        emoji = "💧"
+                    elif "timer" in task.lower():
+                        emoji = "⏱️"
+                    elif "desk" in task.lower():
+                        emoji = "🧹"
+                    elif "priority" in task.lower():
+                        emoji = "📋"
+                    elif "goal" in task.lower():
+                        emoji = "🎯"
+                    interventions.append(
+                        {
+                            "priority": "high",
+                            "category": "task",
+                            "title": task,
+                            "action": task,
+                            "emoji": emoji,
+                        }
+                    )
 
-            rule_based_interventions = generate_interventions(data.user_data, scores) if data.user_data else []
+            rule_based_interventions = (
+                generate_interventions(data.user_data, scores) if data.user_data else []
+            )
             interventions.extend(rule_based_interventions)
             interventions = interventions[:5]
 
             for inv in interventions:
-                memory.record_intervention(inv.get('title', ''))
+                memory.record_intervention(inv.get("title", ""))
 
             if _db_manager and interventions:
                 try:
@@ -2474,25 +2876,41 @@ TASKS:
                     "task_paralysis_severity": paralysis_result.get("severity", "none"),
                     "microtasks": paralysis_result.get("microtasks"),
                     "just_begin_offer": paralysis_result.get("just_begin_offer"),
-                }
+                },
             }
             yield f"data: {json.dumps({'metadata': metadata})}\n\n"
 
-        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as async_err:
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as async_err:
             logger.error(f"Error in stream post-processing: {async_err}")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-
 # ==================== EXISTING ENDPOINTS ====================
+
 
 @app.post("/calculate_scores")
 def calculate_scores(request: ScoreRequest):
     try:
         english_text = translate_to_english(request.text) if request.text else ""
-        analysis_result = analyze(english_text) if english_text else {"emotion": "neutral", "productivity": "medium"}
-        scores = build_user_scores(request.user_data, text=english_text, adhd_answers=request.adhd_answers, analysis=analysis_result)
+        analysis_result = (
+            analyze(english_text)
+            if english_text
+            else {"emotion": "neutral", "productivity": "medium"}
+        )
+        scores = build_user_scores(
+            request.user_data,
+            text=english_text,
+            adhd_answers=request.adhd_answers,
+            analysis=analysis_result,
+        )
         interventions = generate_interventions(request.user_data, scores)
         return {"scores": scores, "interventions": interventions}
     except Exception:
@@ -2501,6 +2919,7 @@ def calculate_scores(request: ScoreRequest):
         interventions = generate_interventions(request.user_data, scores)
         return {"scores": scores, "interventions": interventions}
 
+
 @app.post("/get_interventions")
 def get_interventions_endpoint(request: InterventionRequest):
     interventions = generate_interventions(request.user_data, request.scores)
@@ -2508,6 +2927,7 @@ def get_interventions_endpoint(request: InterventionRequest):
 
 
 # ==================== ANALYTICS ENDPOINTS ====================
+
 
 @app.post("/analytics")
 def get_analytics(data: dict):
@@ -2523,12 +2943,22 @@ def get_analytics(data: dict):
                 for fact in facts:
                     if fact.key == "precompiled_analytics":
                         import json
+
                         cached_data = json.loads(fact.value)
                         # Add a flag to show this is cached
                         cached_data["cached"] = True
-                        logger.info(f"Analytics: Returned cached analytics compilation for '{username}'")
+                        logger.info(
+                            f"Analytics: Returned cached analytics compilation for '{username}'"
+                        )
                         return cached_data
-            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as cache_err:
+            except (
+                AttributeError,
+                KeyError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as cache_err:
                 logger.warning(f"Analytics: Failed to fetch precompiled cache: {cache_err}")
 
         if username not in _insight_engines:
@@ -2540,7 +2970,7 @@ def get_analytics(data: dict):
         pattern_analyzer = _pattern_analyzers[username]
         rec_engine = _recommendation_engines[username]
         memory = MemoryManager(user_id=username)
-        user_profile = memory.profile.data if hasattr(memory, 'profile') else {}
+        user_profile = memory.profile.data if hasattr(memory, "profile") else {}
         insights = insight_engine.generate_insights(user_profile)
         focus_data = user_profile.get("focus_patterns", {}).get("focus_quality_trend", [])
         mood_data = user_profile.get("emotional_patterns", {}).get("mood_trend", [])
@@ -2548,7 +2978,14 @@ def get_analytics(data: dict):
         mood_patterns = pattern_analyzer.analyze_mood_patterns(mood_data)
         correlations = pattern_analyzer.analyze_productivity_correlations(user_data)
         temporal = pattern_analyzer.analyze_temporal_patterns(user_data.get("activity_log", []))
-        context = {"user": user_data, "session": {"current_stress": user_data.get("stress_level", 5), "current_energy": user_data.get("energy_level", 5), "current_mood": user_data.get("mood", "neutral")}}
+        context = {
+            "user": user_data,
+            "session": {
+                "current_stress": user_data.get("stress_level", 5),
+                "current_energy": user_data.get("energy_level", 5),
+                "current_mood": user_data.get("mood", "neutral"),
+            },
+        }
         recommendations = rec_engine.generate_recommendations(context, user_profile)
         priority_recs = rec_engine.get_priority_recommendations(context, user_profile)
         formatted_recs = rec_engine.format_for_display(recommendations)
@@ -2582,17 +3019,37 @@ def get_analytics(data: dict):
         if _db_manager:
             try:
                 from utils.celery_tasks import generate_analytics_task
+
                 generate_analytics_task.delay(username, user_data)
-            except (AttributeError, CeleryOperationalError, KeyError, OSError, RuntimeError, TypeError, ValueError) as task_err:
+            except (
+                AttributeError,
+                CeleryOperationalError,
+                KeyError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as task_err:
                 logger.debug(f"Failed to queue background analytics cache refresh: {task_err}")
 
         return results
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
         logger.exception("Analytics generation error")
-        return {"insights": [], "insight_summary": "Analytics temporarily unavailable.", "focus_patterns": {}, "mood_patterns": {}, "correlations": [], "temporal_patterns": {}, "recommendations": [], "priority_recommendations": [], "formatted_recommendations": ""}
+        return {
+            "insights": [],
+            "insight_summary": "Analytics temporarily unavailable.",
+            "focus_patterns": {},
+            "mood_patterns": {},
+            "correlations": [],
+            "temporal_patterns": {},
+            "recommendations": [],
+            "priority_recommendations": [],
+            "formatted_recommendations": "",
+        }
 
 
 # ==================== AGENT SYSTEM ENDPOINTS ====================
+
 
 @app.post("/agents/analyze")
 def analyze_with_agent(request: AgentAnalyzeRequest):
@@ -2602,14 +3059,24 @@ def analyze_with_agent(request: AgentAnalyzeRequest):
         orchestrator = AgentOrchestrator(memory)
         agent = orchestrator.get_agent(request.agent_type)
         if not agent:
-            return {"success": False, "error": f"Agent '{request.agent_type}' not found", "agents_available": list(orchestrator.agents.keys())}
-        context = orchestrator.get_context_for_prompt(request.context.get("message", ""), request.context.get("current_streak", 0), request.agent_type)
+            return {
+                "success": False,
+                "error": f"Agent '{request.agent_type}' not found",
+                "agents_available": list(orchestrator.agents.keys()),
+            }
+        context = orchestrator.get_context_for_prompt(
+            request.context.get("message", ""),
+            request.context.get("current_streak", 0),
+            request.agent_type,
+        )
         if hasattr(agent, "analyze"):
             analysis = agent.analyze(context, request.context)
         elif hasattr(agent, "get_suggestion"):
             analysis = agent.get_suggestion(context)
         elif hasattr(agent, "suggest_breakdown"):
-            analysis = agent.suggest_breakdown(request.context.get("task", request.context.get("message", "")), context)
+            analysis = agent.suggest_breakdown(
+                request.context.get("task", request.context.get("message", "")), context
+            )
         elif hasattr(agent, "detect_intervention_needed"):
             analysis = agent.detect_intervention_needed(request.context.get("message", ""), context)
         elif hasattr(agent, "detect_burnout_risk"):
@@ -2620,12 +3087,19 @@ def analyze_with_agent(request: AgentAnalyzeRequest):
             analysis = agent.get_study_recommendation(context)
         else:
             analysis = {"agent": getattr(agent, "name", request.agent_type), "status": "active"}
-        return {"success": True, "agent_type": request.agent_type, "analysis": analysis, "suggestions": context.get("agent_suggestions", []), "intervention": context.get("intervention")}
+        return {
+            "success": True,
+            "agent_type": request.agent_type,
+            "analysis": analysis,
+            "suggestions": context.get("agent_suggestions", []),
+            "intervention": context.get("intervention"),
+        }
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
 
 
 # ==================== TASK PARALYSIS ENDPOINTS ====================
+
 
 @app.post("/task-paralysis/analyze")
 def analyze_task_paralysis(request: TaskParalysisRequest):
@@ -2636,21 +3110,37 @@ def analyze_task_paralysis(request: TaskParalysisRequest):
         context = memory.build_context_for_prompt()
         result = paralysis_engine.process_user_message(request.task, context)
         from task_paralysis.microtasks import MicroTaskGenerator
+
         micro_gen = MicroTaskGenerator()
-        microtasks = micro_gen.generate_microtasks(request.task, count=5, energy_level=request.user_data.get("energy_level", 5))
+        microtasks = micro_gen.generate_microtasks(
+            request.task, count=5, energy_level=request.user_data.get("energy_level", 5)
+        )
         two_minute_starter = micro_gen.get_two_minute_starter(request.task)
         return {
-            "task": request.task, "paralysis_detected": result["paralysis_detected"],
-            "severity": result["severity"], "recovery_priority": (result.get("recovery_suggestions") or {}).get("priority", "normal"),
+            "task": request.task,
+            "paralysis_detected": result["paralysis_detected"],
+            "severity": result["severity"],
+            "recovery_priority": (result.get("recovery_suggestions") or {}).get(
+                "priority", "normal"
+            ),
             "recovery_steps": (result.get("recovery_suggestions") or {}).get("steps", []),
-            "microtasks": microtasks, "two_minute_starter": two_minute_starter,
-            "just_begin": result.get("just_begin_offer"), "message": (result.get("recovery_suggestions") or {}).get("message", ""),
+            "microtasks": microtasks,
+            "two_minute_starter": two_minute_starter,
+            "just_begin": result.get("just_begin_offer"),
+            "message": (result.get("recovery_suggestions") or {}).get("message", ""),
         }
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
-        return {"task": request.task, "paralysis_detected": False, "error": str(e), "microtasks": [], "two_minute_starter": None}
+        return {
+            "task": request.task,
+            "paralysis_detected": False,
+            "error": str(e),
+            "microtasks": [],
+            "two_minute_starter": None,
+        }
 
 
 # ==================== NEW: STATE DETECTION ENDPOINT ====================
+
 
 class StateDetectionRequest(BaseModel):
     text: str
@@ -2658,11 +3148,16 @@ class StateDetectionRequest(BaseModel):
     stress_level: int = 5
     energy_level: int = 5
 
+
 @app.post("/state/detect")
 def detect_state(request: StateDetectionRequest):
     """Detect the user's current ADHD cognitive state."""
     try:
-        context = {"current_stress": request.stress_level, "current_energy": request.energy_level, "text": request.text}
+        context = {
+            "current_stress": request.stress_level,
+            "current_energy": request.energy_level,
+            "text": request.text,
+        }
         result = _state_detector.analyze(request.text, context)
         return {
             "state": result.get("state"),
@@ -2683,19 +3178,23 @@ def detect_state(request: StateDetectionRequest):
 
 # ==================== NEW: FOCUS ENGINE ENDPOINTS ====================
 
+
 @app.post("/focus/recommend")
 def recommend_focus(request: FocusRecommendRequest):
     """Get a personalized focus session recommendation."""
     try:
         result = _focus_engine.recommend_session(
-            mode_id=request.mode_id, focus_score=request.focus_score,
+            mode_id=request.mode_id,
+            focus_score=request.focus_score,
             sessions_completed_today=request.sessions_completed_today,
-            stress_level=request.stress_level, energy_level=request.energy_level,
+            stress_level=request.stress_level,
+            energy_level=request.energy_level,
             fatigue=request.fatigue,
         )
         return result
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
+
 
 @app.post("/focus/distraction-log")
 def log_distraction(data: dict):
@@ -2715,6 +3214,7 @@ def log_distraction(data: dict):
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
+
 @app.post("/focus/complete")
 def complete_focus_session(data: dict):
     """Record a completed focus session and award XP."""
@@ -2731,6 +3231,7 @@ def complete_focus_session(data: dict):
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
+
 @app.post("/focus/distraction-patterns")
 def get_distraction_patterns(data: dict):
     """Get distraction pattern analysis."""
@@ -2745,6 +3246,7 @@ def get_distraction_patterns(data: dict):
 
 # ==================== NEW: GAMIFICATION ENDPOINTS ====================
 
+
 @app.get("/gamification/{username}")
 def get_gamification_state(username: str):
     """Get complete gamification state for a user."""
@@ -2755,6 +3257,7 @@ def get_gamification_state(username: str):
         return state
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
+
 
 @app.post("/gamification/award-xp")
 def award_xp_endpoint(data: dict):
@@ -2771,6 +3274,7 @@ def award_xp_endpoint(data: dict):
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
+
 @app.get("/gamification/{username}/achievements")
 def get_achievements(username: str):
     """Get all achievements for a user."""
@@ -2780,6 +3284,7 @@ def get_achievements(username: str):
         return {"achievements": _db_manager.get_achievements(username)}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
+
 
 @app.get("/gamification/{username}/skills")
 def get_skills(username: str):
@@ -2794,6 +3299,7 @@ def get_skills(username: str):
 
 # ==================== NEW: MOOD TRACKING ENDPOINTS ====================
 
+
 class MoodLogRequest(BaseModel):
     username: str
     mood: str
@@ -2805,15 +3311,22 @@ class MoodLogRequest(BaseModel):
     productivity: int = 5
     note: str = ""
 
+
 @app.post("/mood/log")
 def log_mood(request: MoodLogRequest):
     """Log a mood entry and award XP."""
     try:
         if _db_manager:
             entry = _db_manager.save_mood(
-                request.username, request.mood, request.emoji,
-                request.energy, request.focus, request.burnout,
-                request.anxiety, request.productivity, request.note,
+                request.username,
+                request.mood,
+                request.emoji,
+                request.energy,
+                request.focus,
+                request.burnout,
+                request.anxiety,
+                request.productivity,
+                request.note,
             )
             if entry:
                 _gamification.award_xp(request.username, "mood_checkin")
@@ -2821,6 +3334,7 @@ def log_mood(request: MoodLogRequest):
         return {"success": True}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
+
 
 @app.get("/mood/{username}")
 def get_mood_history(username: str, days: int = 30):
@@ -2832,7 +3346,19 @@ def get_mood_history(username: str, days: int = 30):
         summary = _db_manager.get_mood_summary(username, days)
         burnout_alert = _db_manager.detect_burnout_alert(username)
         return {
-            "entries": [{"mood": e.mood, "emoji": e.emoji, "energy": e.energy, "focus": e.focus, "burnout": e.burnout, "anxiety": e.anxiety, "note": e.note, "created_at": e.created_at.isoformat()} for e in entries],
+            "entries": [
+                {
+                    "mood": e.mood,
+                    "emoji": e.emoji,
+                    "energy": e.energy,
+                    "focus": e.focus,
+                    "burnout": e.burnout,
+                    "anxiety": e.anxiety,
+                    "note": e.note,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in entries
+            ],
             "summary": summary,
             "burnout_alert": burnout_alert,
         }
@@ -2841,6 +3367,7 @@ def get_mood_history(username: str, days: int = 30):
 
 
 # ==================== NEW: INTERVENTION LOGGING ====================
+
 
 @app.post("/interventions/complete")
 def complete_intervention(data: dict):
@@ -2860,6 +3387,7 @@ def complete_intervention(data: dict):
 
 # ==================== NEW: WEEKLY REPORT ====================
 
+
 @app.get("/report/weekly/{username}")
 def get_weekly_report(username: str):
     """Get comprehensive weekly report."""
@@ -2877,11 +3405,19 @@ def get_weekly_report(username: str):
 
 # ==================== NEW: DASHBOARD SUMMARY ====================
 
+
 @app.get("/dashboard/{username}")
 def get_dashboard(username: str):
     """Get comprehensive dashboard data."""
     try:
-        result = {"scores": {}, "mood": {}, "focus": {}, "streaks": {}, "gamification": {}, "state": {}}
+        result = {
+            "scores": {},
+            "mood": {},
+            "focus": {},
+            "streaks": {},
+            "gamification": {},
+            "state": {},
+        }
         if _db_manager:
             daily = _db_manager.get_daily_summary(username)
             result["daily"] = daily
@@ -2901,6 +3437,7 @@ def get_dashboard(username: str):
 
 # ==================== MEMORY ENDPOINTS ====================
 
+
 @app.get("/memory/{username}")
 def get_memory_context(username: str):
     try:
@@ -2908,9 +3445,21 @@ def get_memory_context(username: str):
         context = memory.build_context_for_prompt()
         stats = memory.get_stats()
         prompt_context = memory.get_context_for_prompt_text()
-        return {"username": username, "context": context, "stats": stats, "prompt_context": prompt_context}
+        return {
+            "username": username,
+            "context": context,
+            "stats": stats,
+            "prompt_context": prompt_context,
+        }
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
-        return {"username": username, "error": str(e), "context": {}, "stats": {}, "prompt_context": "Memory temporarily unavailable."}
+        return {
+            "username": username,
+            "error": str(e),
+            "context": {},
+            "stats": {},
+            "prompt_context": "Memory temporarily unavailable.",
+        }
+
 
 @app.post("/memory/{username}/search")
 def search_memory(username: str, request: dict):
@@ -2923,6 +3472,7 @@ def search_memory(username: str, request: dict):
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e), "results": []}
 
+
 @app.post("/memory/{username}/record")
 def record_memory_event(username: str, request: dict):
     try:
@@ -2931,9 +3481,17 @@ def record_memory_event(username: str, request: dict):
         content = request.get("content", "")
         metadata = request.get("metadata", {})
         if event_type == "emotion":
-            memory.record_emotion(emotion=metadata.get("emotion", "neutral"), stress=metadata.get("stress", 5), energy=metadata.get("energy"))
+            memory.record_emotion(
+                emotion=metadata.get("emotion", "neutral"),
+                stress=metadata.get("stress", 5),
+                energy=metadata.get("energy"),
+            )
         elif event_type == "focus":
-            memory.record_focus_session(duration_minutes=metadata.get("duration", 25), quality=metadata.get("quality", 5), hour=metadata.get("hour", 12))
+            memory.record_focus_session(
+                duration_minutes=metadata.get("duration", 25),
+                quality=metadata.get("quality", 5),
+                hour=metadata.get("hour", 12),
+            )
         elif event_type == "task":
             memory.record_task_added(content, source=metadata.get("source", "manual"))
         elif event_type == "task_completed":
@@ -2946,6 +3504,7 @@ def record_memory_event(username: str, request: dict):
 
 
 # ==================== HEALTH CHECK ====================
+
 
 @app.get("/health")
 def health_check():
@@ -2971,11 +3530,13 @@ def health_check():
 
 # ==================== FEEDBACK & SUPPORT ====================
 
+
 class FeedbackRequest(BaseModel):
     username: str
     rating: int
     category: str
     feedback_text: str | None = None
+
 
 class SupportTicketRequest(BaseModel):
     username: str
@@ -2983,24 +3544,25 @@ class SupportTicketRequest(BaseModel):
     subject: str
     description: str
 
+
 @app.post("/feedback")
 def submit_feedback(request: FeedbackRequest):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     # Save feedback
     feedback = _db_manager.save_feedback(
         username=request.username,
         rating=request.rating,
         category=request.category,
-        feedback_text=request.feedback_text
+        feedback_text=request.feedback_text,
     )
     if not feedback:
         raise HTTPException(status_code=400, detail="Failed to save feedback. User not found.")
-    
+
     # Award 15 XP to consistency skill
     xp_result = _db_manager.add_xp(request.username, 15, "consistency")
-    
+
     # Check if achievements unlocked
     new_achievements = _db_manager.check_and_award_achievements(request.username)
     new_ach_list = [
@@ -3008,33 +3570,34 @@ def submit_feedback(request: FeedbackRequest):
             "id": a.achievement_id,
             "title": a.title,
             "description": a.description,
-            "xp_reward": a.xp_reward
+            "xp_reward": a.xp_reward,
         }
         for a in new_achievements
     ]
-    
+
     return {
         "success": True,
         "message": "Feedback submitted successfully!",
         "xp_awarded": 15,
         "skill_status": xp_result,
-        "new_achievements": new_ach_list
+        "new_achievements": new_ach_list,
     }
+
 
 @app.post("/support/ticket")
 def submit_support_ticket(request: SupportTicketRequest):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     ticket = _db_manager.save_support_ticket(
         username=request.username,
         type=request.type,
         subject=request.subject,
-        description=request.description
+        description=request.description,
     )
     if not ticket:
         raise HTTPException(status_code=400, detail="Failed to save ticket. User not found.")
-        
+
     return {
         "success": True,
         "message": "Support ticket created successfully!",
@@ -3044,9 +3607,10 @@ def submit_support_ticket(request: SupportTicketRequest):
             "subject": ticket.subject,
             "description": ticket.description,
             "status": ticket.status,
-            "created_at": ticket.created_at.isoformat()
-        }
+            "created_at": ticket.created_at.isoformat(),
+        },
     }
+
 
 @app.get("/support/faqs")
 def get_support_faqs():
@@ -3055,28 +3619,28 @@ def get_support_faqs():
         {
             "id": "faq-paralysis",
             "question": "🌪️ How do I overcome sudden task paralysis?",
-            "answer": "When task paralysis strikes, your brain is treating the threat of starting a task like a literal physical danger. Don't fight it! Give yourself absolute permission to do the task badly or do just *one single detail* for 2 minutes. Start a micro-timer, and if you want to stop after 2 minutes, you have fully succeeded."
+            "answer": "When task paralysis strikes, your brain is treating the threat of starting a task like a literal physical danger. Don't fight it! Give yourself absolute permission to do the task badly or do just *one single detail* for 2 minutes. Start a micro-timer, and if you want to stop after 2 minutes, you have fully succeeded.",
         },
         {
             "id": "faq-hyperfocus",
             "question": "🌀 Help, I am stuck in an intense hyperfocus spiral!",
-            "answer": "Hyperfocus is a powerful ADHD gift, but it can drain your body. Transitioning out is hard. Use a transitional bridge: instead of stopping immediately, tell yourself you will stop in 5 minutes, stand up and stretch without looking away, then grab a glass of water. A change of physical state helps reset the brain."
+            "answer": "Hyperfocus is a powerful ADHD gift, but it can drain your body. Transitioning out is hard. Use a transitional bridge: instead of stopping immediately, tell yourself you will stop in 5 minutes, stand up and stretch without looking away, then grab a glass of water. A change of physical state helps reset the brain.",
         },
         {
             "id": "faq-blindness",
             "question": "⏳ How can I handle time blindness during work?",
-            "answer": "ADHD brains perceive time as 'Now' or 'Not Now'. To make time visible, use visual timers (like the standard countdown visual arc in our Focus page) rather than digital numbers. Set soft, chime-based alarms 5 minutes *before* you actually need to transition to prevent jump-scares."
+            "answer": "ADHD brains perceive time as 'Now' or 'Not Now'. To make time visible, use visual timers (like the standard countdown visual arc in our Focus page) rather than digital numbers. Set soft, chime-based alarms 5 minutes *before* you actually need to transition to prevent jump-scares.",
         },
         {
             "id": "faq-burnout",
             "question": "🔋 What is an ADHD shutdown, and how do I recover?",
-            "answer": "When you have overstimulated or pushed your brain too hard, it goes into a power-saving mode (shutdown/burnout). This is a physical necessity. Rest shame-free. Lie down in a dark or quiet room, drink some hydration, and avoid complex decision-making for at least 1-2 hours."
+            "answer": "When you have overstimulated or pushed your brain too hard, it goes into a power-saving mode (shutdown/burnout). This is a physical necessity. Rest shame-free. Lie down in a dark or quiet room, drink some hydration, and avoid complex decision-making for at least 1-2 hours.",
         },
         {
             "id": "faq-glitch",
             "question": "🐛 What if the coach or the app glitches?",
-            "answer": "No worries! This is a shame-free technical zone. Simply submit a glitch report on the left panel. Include a tiny description of what happened. Our support bots will log it, clean up the SQLite files, and restart the cache to get you focused again."
-        }
+            "answer": "No worries! This is a shame-free technical zone. Simply submit a glitch report on the left panel. Include a tiny description of what happened. Our support bots will log it, clean up the SQLite files, and restart the cache to get you focused again.",
+        },
     ]
 
 
@@ -3098,10 +3662,10 @@ def get_user_tickets(username: str):
                 "subject": t.subject,
                 "description": t.description,
                 "status": t.status,
-                "created_at": t.created_at.isoformat()
+                "created_at": t.created_at.isoformat(),
             }
             for t in tickets
-        ]
+        ],
     }
 
 
@@ -3110,27 +3674,32 @@ def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from database.models import User, UserFeedback
+
     db = _db_manager.db
-    results = db.query(UserFeedback, User.username).join(User, UserFeedback.user_id == User.id).order_by(UserFeedback.created_at.desc()).all()
+    results = (
+        db.query(UserFeedback, User.username)
+        .join(User, UserFeedback.user_id == User.id)
+        .order_by(UserFeedback.created_at.desc())
+        .all()
+    )
     feedbacks = []
     for fb, username in results:
-        feedbacks.append({
-            "id": fb.id,
-            "username": username,
-            "rating": fb.rating,
-            "category": fb.category,
-            "feedback_text": fb.feedback_text,
-            "created_at": fb.created_at.isoformat()
-        })
-        
+        feedbacks.append(
+            {
+                "id": fb.id,
+                "username": username,
+                "rating": fb.rating,
+                "category": fb.category,
+                "feedback_text": fb.feedback_text,
+                "created_at": fb.created_at.isoformat(),
+            }
+        )
+
     # Security Audit Log
     from utils.audit_logger import audit_log
-    audit_log(
-        username=current_admin,
-        action="view_admin_feedbacks",
-        status="SUCCESS"
-    )
-    
+
+    audit_log(username=current_admin, action="view_admin_feedbacks", status="SUCCESS")
+
     return {"success": True, "feedbacks": feedbacks}
 
 
@@ -3139,64 +3708,72 @@ def get_admin_tickets(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from database.models import SupportTicket, User
+
     db = _db_manager.db
-    results = db.query(SupportTicket, User.username).join(User, SupportTicket.user_id == User.id).order_by(SupportTicket.created_at.desc()).all()
+    results = (
+        db.query(SupportTicket, User.username)
+        .join(User, SupportTicket.user_id == User.id)
+        .order_by(SupportTicket.created_at.desc())
+        .all()
+    )
     tickets = []
     for t, username in results:
-        tickets.append({
-            "id": t.id,
-            "username": username,
-            "type": t.type,
-            "subject": t.subject,
-            "description": t.description,
-            "status": t.status,
-            "created_at": t.created_at.isoformat()
-        })
-        
+        tickets.append(
+            {
+                "id": t.id,
+                "username": username,
+                "type": t.type,
+                "subject": t.subject,
+                "description": t.description,
+                "status": t.status,
+                "created_at": t.created_at.isoformat(),
+            }
+        )
+
     # Security Audit Log
     from utils.audit_logger import audit_log
-    audit_log(
-        username=current_admin,
-        action="view_admin_tickets",
-        status="SUCCESS"
-    )
-    
+
+    audit_log(username=current_admin, action="view_admin_tickets", status="SUCCESS")
+
     return {"success": True, "tickets": tickets}
 
 
 @app.put("/admin/tickets/{ticket_id}/status")
-def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest, current_admin: str = Depends(require_admin)):
+def update_ticket_status(
+    ticket_id: int, request: TicketStatusUpdateRequest, current_admin: str = Depends(require_admin)
+):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
     from database.models import SupportTicket
+
     db = _db_manager.db
     ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    
+
     old_status = ticket.status
     ticket.status = request.status
     db.commit()
-    
+
     # Transaction Audit Log
     from utils.audit_logger import audit_log
+
     audit_log(
         username=current_admin,
         action="update_ticket_status",
         status="SUCCESS",
-        details={"ticket_id": ticket_id, "old_status": old_status, "new_status": request.status}
+        details={"ticket_id": ticket_id, "old_status": old_status, "new_status": request.status},
     )
-    
+
     return {
         "success": True,
         "message": f"Ticket status successfully updated to {request.status}",
-        "ticket": {
-            "id": ticket.id,
-            "status": ticket.status
-        }
+        "ticket": {"id": ticket.id, "status": ticket.status},
     }
 
+
 # ==================== BACKGROUND TASK SYSTEM ENDPOINTS ====================
+
 
 class TaskStatusResponse(BaseModel):
     task_id: str
@@ -3204,8 +3781,11 @@ class TaskStatusResponse(BaseModel):
     result: Any | None = None
     error: str | None = None
 
+
 @app.post("/tasks/calculate_scores")
-def calculate_scores_async(request: ScoreRequest, async_task: bool = True, username: str = "default"):
+def calculate_scores_async(
+    request: ScoreRequest, async_task: bool = True, username: str = "default"
+):
     """
     Triggers heavy ML model inference asynchronously in Celery.
     If async_task=False, runs synchronously and returns results immediately.
@@ -3213,16 +3793,15 @@ def calculate_scores_async(request: ScoreRequest, async_task: bool = True, usern
     if not async_task:
         # Run synchronously for backward compatibility and tests
         return calculate_scores(request)
-        
+
     try:
         from utils.celery_tasks import calculate_ml_scores_task
+
         task = calculate_ml_scores_task.delay(
-            request.user_data,
-            request.text,
-            request.adhd_answers,
-            username
+            request.user_data, request.text, request.adhd_answers, username
         )
         from utils.celery_app import celery_app
+
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
@@ -3230,6 +3809,7 @@ def calculate_scores_async(request: ScoreRequest, async_task: bool = True, usern
         # Fallback to sync if Celery fails to queue
         logger.warning(f"Failed to queue task, running synchronously: {e}")
         return calculate_scores(request)
+
 
 @app.post("/tasks/analytics")
 def generate_analytics_async(request: dict):
@@ -3240,13 +3820,16 @@ def generate_analytics_async(request: dict):
     user_data = request.get("user_data", {})
     try:
         from utils.celery_tasks import generate_analytics_task
+
         task = generate_analytics_task.delay(username, user_data)
         from utils.celery_app import celery_app
+
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
+
 
 @app.post("/tasks/synthesize_personality")
 def synthesize_personality_async(request: dict):
@@ -3256,13 +3839,16 @@ def synthesize_personality_async(request: dict):
     username = request.get("username", "default")
     try:
         from utils.celery_tasks import synthesize_personality_task
+
         task = synthesize_personality_task.delay(username)
         from utils.celery_app import celery_app
+
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
+
 
 @app.post("/tasks/compile_context")
 def compile_context_async(request: dict):
@@ -3272,13 +3858,16 @@ def compile_context_async(request: dict):
     username = request.get("username", "default")
     try:
         from utils.celery_tasks import compile_context_task
+
         task = compile_context_task.delay(username)
         from utils.celery_app import celery_app
+
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
+
 
 @app.get("/tasks/status/{task_id}")
 def get_task_status(task_id: str):
@@ -3290,24 +3879,20 @@ def get_task_status(task_id: str):
             "task_id": task_id,
             "status": "SUCCESS",
             "result": EAGER_TASK_RESULTS[task_id],
-            "error": None
+            "error": None,
         }
     try:
         from utils.celery_app import celery_app
+
         res = celery_app.AsyncResult(task_id)
-        
-        response = {
-            "task_id": task_id,
-            "status": res.status,
-            "result": None,
-            "error": None
-        }
-        
+
+        response = {"task_id": task_id, "status": res.status, "result": None, "error": None}
+
         if res.status == "SUCCESS":
             response["result"] = res.result
         elif res.status == "FAILURE":
             response["error"] = str(res.result)
-            
+
         return response
     except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch task status: {e!s}")
@@ -3315,6 +3900,5 @@ def get_task_status(task_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("src.api.main_api:app", host="0.0.0.0", port=8000, reload=True)
-
-
