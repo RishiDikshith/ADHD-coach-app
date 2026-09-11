@@ -80,7 +80,7 @@ jobs:
             espeak \
             portaudio19-dev \
             libasound2-dev \
-            libasound2
+            libasound2t64
 
       - name: Install Python Dependencies
         run: |
