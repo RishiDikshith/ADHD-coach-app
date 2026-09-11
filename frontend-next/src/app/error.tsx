@@ -25,9 +25,7 @@ export default function Error({
         >
           🌿
         </motion.div>
-        <h1 className="text-3xl font-bold text-foreground mb-3">
-          Something went off track
-        </h1>
+        <h1 className="text-3xl font-bold text-foreground mb-3">Something went off track</h1>
         <p className="text-muted mb-2">
           Don&apos;t worry — it&apos;s not you, it&apos;s us. Let&apos;s try that again.
         </p>
@@ -38,10 +36,7 @@ export default function Error({
           <Button onClick={reset} variant="calm">
             🔄 Try again
           </Button>
-          <Button
-            onClick={() => (window.location.href = "/dashboard")}
-            variant="ghost"
-          >
+          <Button onClick={() => (window.location.href = "/dashboard")} variant="ghost">
             ← Go to Dashboard
           </Button>
         </div>

@@ -39,27 +39,24 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = "Card";
 
 function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return (
-    <h3 className={cn("text-lg font-semibold text-foreground", className)} {...props} />
-  );
+  return <h3 className={cn("text-lg font-semibold text-foreground", className)} {...props} />;
 }
 
 function CardValue({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
-  return (
-    <span className={cn("text-3xl font-bold text-calm-400", className)} {...props} />
-  );
+  return <span className={cn("text-3xl font-bold text-calm-400", className)} {...props} />;
 }
 
 function CardLabel({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
   return (
-    <span className={cn("text-xs uppercase tracking-wider text-muted font-semibold", className)} {...props} />
+    <span
+      className={cn("text-xs uppercase tracking-wider text-muted font-semibold", className)}
+      {...props}
+    />
   );
 }
 
 function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return (
-    <p className={cn("text-sm text-muted", className)} {...props} />
-  );
+  return <p className={cn("text-sm text-muted", className)} {...props} />;
 }
 
 export { Card, CardTitle, CardValue, CardLabel, CardDescription };

@@ -13,30 +13,46 @@ import { formatTime } from "@/lib/utils";
 // ADHD Focus Modes
 const focusModes = [
   {
-    id: "deep", name: "Deep Focus", emoji: "🎯",
+    id: "deep",
+    name: "Deep Focus",
+    emoji: "🎯",
     description: "Distraction-free deep work. Full screen, no interruptions.",
-    defaultDuration: 25, durations: [15, 25, 30, 45, 60],
+    defaultDuration: 25,
+    durations: [15, 25, 30, 45, 60],
     color: "#6ee7b7",
-    tips: ["Put phone in another room", "Close all unrelated tabs", "Use noise-canceling headphones"],
+    tips: [
+      "Put phone in another room",
+      "Close all unrelated tabs",
+      "Use noise-canceling headphones",
+    ],
   },
   {
-    id: "gentle", name: "Gentle Start", emoji: "🌱",
+    id: "gentle",
+    name: "Gentle Start",
+    emoji: "🌱",
     description: "Anti-overwhelm mode. Short, low-pressure sessions.",
-    defaultDuration: 8, durations: [3, 5, 8, 10, 15],
+    defaultDuration: 8,
+    durations: [3, 5, 8, 10, 15],
     color: "#667eea",
     tips: ["No pressure — just start", "Even 3 minutes counts", "You can stop anytime"],
   },
   {
-    id: "recovery", name: "Recovery", emoji: "😌",
+    id: "recovery",
+    name: "Recovery",
+    emoji: "😌",
     description: "Burnout recovery. Gentle rest with breathing guide.",
-    defaultDuration: 10, durations: [5, 10, 15, 20],
+    defaultDuration: 10,
+    durations: [5, 10, 15, 20],
     color: "#c084fc",
     tips: ["Rest is productive", "Let your brain wander", "Hydrate and breathe"],
   },
   {
-    id: "sprint", name: "Sprint Mode", emoji: "⚡",
+    id: "sprint",
+    name: "Sprint Mode",
+    emoji: "⚡",
     description: "High-energy dopamine bursts. Short, intense sessions.",
-    defaultDuration: 15, durations: [5, 10, 15, 20, 25],
+    defaultDuration: 15,
+    durations: [5, 10, 15, 20, 25],
     color: "#fbbf24",
     tips: ["Go all in for the sprint", "Reward yourself after", "Channel hyperfocus productively"],
   },
@@ -58,15 +74,51 @@ const focusQuotes = [
 ];
 
 const ambientThemes = [
-  { name: "Ocean", gradient: "from-blue-900/30 via-cyan-800/20 to-blue-950/30", accent: "#06b6d4", glow: "rgba(6,182,212,0.15)" },
-  { name: "Forest", gradient: "from-emerald-900/30 via-green-800/20 to-emerald-950/30", accent: "#10b981", glow: "rgba(16,185,129,0.15)" },
-  { name: "Sunset", gradient: "from-orange-900/30 via-rose-800/20 to-purple-950/30", accent: "#f97316", glow: "rgba(249,115,22,0.15)" },
-  { name: "Night", gradient: "from-indigo-950/30 via-purple-900/20 to-slate-950/30", accent: "#8b5cf6", glow: "rgba(139,92,246,0.15)" },
-  { name: "Aurora", gradient: "from-teal-900/30 via-cyan-800/20 to-indigo-950/30", accent: "#2dd4bf", glow: "rgba(45,212,191,0.15)" },
-  { name: "Warmth", gradient: "from-amber-900/30 via-yellow-800/20 to-orange-950/30", accent: "#f59e0b", glow: "rgba(245,158,11,0.15)" },
+  {
+    name: "Ocean",
+    gradient: "from-blue-900/30 via-cyan-800/20 to-blue-950/30",
+    accent: "#06b6d4",
+    glow: "rgba(6,182,212,0.15)",
+  },
+  {
+    name: "Forest",
+    gradient: "from-emerald-900/30 via-green-800/20 to-emerald-950/30",
+    accent: "#10b981",
+    glow: "rgba(16,185,129,0.15)",
+  },
+  {
+    name: "Sunset",
+    gradient: "from-orange-900/30 via-rose-800/20 to-purple-950/30",
+    accent: "#f97316",
+    glow: "rgba(249,115,22,0.15)",
+  },
+  {
+    name: "Night",
+    gradient: "from-indigo-950/30 via-purple-900/20 to-slate-950/30",
+    accent: "#8b5cf6",
+    glow: "rgba(139,92,246,0.15)",
+  },
+  {
+    name: "Aurora",
+    gradient: "from-teal-900/30 via-cyan-800/20 to-indigo-950/30",
+    accent: "#2dd4bf",
+    glow: "rgba(45,212,191,0.15)",
+  },
+  {
+    name: "Warmth",
+    gradient: "from-amber-900/30 via-yellow-800/20 to-orange-950/30",
+    accent: "#f59e0b",
+    glow: "rgba(245,158,11,0.15)",
+  },
 ];
 
-function BreathingGuide({ isActive, theme }: { isActive: boolean; theme: typeof ambientThemes[0] }) {
+function BreathingGuide({
+  isActive,
+  theme,
+}: {
+  isActive: boolean;
+  theme: (typeof ambientThemes)[0];
+}) {
   const [phase, setPhase] = useState<"inhale" | "hold" | "exhale" | "rest">("inhale");
   const [progress, setProgress] = useState(0);
 
@@ -79,15 +131,17 @@ function BreathingGuide({ isActive, theme }: { isActive: boolean; theme: typeof 
       const int1 = setInterval(() => {
         const p = (Date.now() - start1) / 4000;
         setProgress(Math.min(1, p));
-        if (p >= 1) { clearInterval(int1); }
+        if (p >= 1) {
+          clearInterval(int1);
+        }
       }, 50);
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise((r) => setTimeout(r, 4000));
       clearInterval(int1);
 
       // Hold 4s
       setPhase("hold");
       setProgress(1);
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise((r) => setTimeout(r, 4000));
 
       // Exhale 6s
       setPhase("exhale");
@@ -95,15 +149,17 @@ function BreathingGuide({ isActive, theme }: { isActive: boolean; theme: typeof 
       const int2 = setInterval(() => {
         const p = (Date.now() - start2) / 6000;
         setProgress(Math.max(0, 1 - p));
-        if (p >= 1) { clearInterval(int2); }
+        if (p >= 1) {
+          clearInterval(int2);
+        }
       }, 50);
-      await new Promise(r => setTimeout(r, 6000));
+      await new Promise((r) => setTimeout(r, 6000));
       clearInterval(int2);
 
       // Rest 2s
       setPhase("rest");
       setProgress(0);
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
     };
     cycle();
   }, [isActive]);
@@ -125,17 +181,36 @@ function BreathingGuide({ isActive, theme }: { isActive: boolean; theme: typeof 
             boxShadow: `0 0 20px ${theme.glow}`,
           }}
           animate={{
-            scale: phase === "inhale" ? [1, 1.4] : phase === "exhale" ? [1.4, 1] : phase === "hold" ? 1.4 : 1,
+            scale:
+              phase === "inhale"
+                ? [1, 1.4]
+                : phase === "exhale"
+                  ? [1.4, 1]
+                  : phase === "hold"
+                    ? 1.4
+                    : 1,
             opacity: phase === "rest" ? 0.5 : 1,
           }}
           transition={{ duration: 0.3 }}
         />
         <div>
           <p className="text-xs font-medium text-foreground" style={{ color: theme.accent }}>
-            {phase === "inhale" ? "Breathe In" : phase === "hold" ? "Hold" : phase === "exhale" ? "Breathe Out" : "Rest"}
+            {phase === "inhale"
+              ? "Breathe In"
+              : phase === "hold"
+                ? "Hold"
+                : phase === "exhale"
+                  ? "Breathe Out"
+                  : "Rest"}
           </p>
           <p className="text-[10px] text-muted">
-            {phase === "inhale" ? "4 seconds" : phase === "hold" ? "4 seconds" : phase === "exhale" ? "6 seconds" : "2 seconds"}
+            {phase === "inhale"
+              ? "4 seconds"
+              : phase === "hold"
+                ? "4 seconds"
+                : phase === "exhale"
+                  ? "6 seconds"
+                  : "2 seconds"}
           </p>
         </div>
       </div>
@@ -154,7 +229,9 @@ export default function FocusPage() {
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [showQuote, setShowQuote] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationType, setCelebrationType] = useState<"confetti" | "levelUp" | "sparkle">("confetti");
+  const [celebrationType, setCelebrationType] = useState<"confetti" | "levelUp" | "sparkle">(
+    "confetti"
+  );
   const [sessionsToday, setSessionsToday] = useState(0);
   const [isBreak, setIsBreak] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -163,14 +240,18 @@ export default function FocusPage() {
   const [focusMode, setFocusMode] = useState(focusModes[0]);
   const [showModePicker, setShowModePicker] = useState(false);
   const [showDistractionLog, setShowDistractionLog] = useState(false);
-  const [distractionLog, setDistractionLog] = useState<{id: string; label: string; time: number}[]>([]);
+  const [distractionLog, setDistractionLog] = useState<
+    { id: string; label: string; time: number }[]
+  >([]);
   const [recentDistractionsCount, setRecentDistractionsCount] = useState(0);
   const [sessionQuality, setSessionQuality] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [particles, setParticles] = useState<{ id: number; x: number; y: number; yOffset: number; duration: number; delay: number }[]>([]);
+  const [particles, setParticles] = useState<
+    { id: number; x: number; y: number; yOffset: number; duration: number; delay: number }[]
+  >([]);
 
   // Asynchronously generate random positions in useEffect to keep render phase 100% pure
   useEffect(() => {
@@ -260,9 +341,15 @@ export default function FocusPage() {
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      document.documentElement
+        .requestFullscreen()
+        .then(() => setIsFullscreen(true))
+        .catch(() => {});
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      document
+        .exitFullscreen()
+        .then(() => setIsFullscreen(false))
+        .catch(() => {});
     }
   }, []);
 
@@ -287,12 +374,18 @@ export default function FocusPage() {
       animate={{ opacity: 1 }}
       className={`min-h-screen flex flex-col relative overflow-hidden ${isFullscreen ? "fixed inset-0 z-50" : ""}`}
     >
-      <Celebration type={celebrationType} show={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <Celebration
+        type={celebrationType}
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+      />
 
       {/* Animated ambient background with particles */}
-      <div className={`absolute inset-0 bg-gradient-to-b ${theme.gradient} transition-all duration-1000`}>
+      <div
+        className={`absolute inset-0 bg-gradient-to-b ${theme.gradient} transition-all duration-1000`}
+      >
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)]" />
-        
+
         {/* Floating gradient orbs */}
         <motion.div
           className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-3xl"
@@ -314,27 +407,28 @@ export default function FocusPage() {
         />
 
         {/* Ambient particle dots */}
-        {isActive && particles.map((p) => (
-          <motion.div
-            key={p.id}
-            className="absolute w-1 h-1 rounded-full"
-            style={{ backgroundColor: theme.accent, opacity: 0.2 }}
-            initial={{
-              x: p.x,
-              y: p.y,
-            }}
-            animate={{
-              y: [0, p.yOffset],
-              opacity: [0.1, 0.3, 0.1],
-            }}
-            transition={{
-              duration: p.duration,
-              repeat: Infinity,
-              delay: p.delay,
-              ease: "easeInOut",
-            }}
-          />
-        ))}
+        {isActive &&
+          particles.map((p) => (
+            <motion.div
+              key={p.id}
+              className="absolute w-1 h-1 rounded-full"
+              style={{ backgroundColor: theme.accent, opacity: 0.2 }}
+              initial={{
+                x: p.x,
+                y: p.y,
+              }}
+              animate={{
+                y: [0, p.yOffset],
+                opacity: [0.1, 0.3, 0.1],
+              }}
+              transition={{
+                duration: p.duration,
+                repeat: Infinity,
+                delay: p.delay,
+                ease: "easeInOut",
+              }}
+            />
+          ))}
       </div>
 
       {/* Breathing Guide */}
@@ -345,7 +439,7 @@ export default function FocusPage() {
         {/* Top bar */}
         <div className="flex items-center justify-between p-4 md:p-6">
           <button
-            onClick={() => isFullscreen ? toggleFullscreen() : router.push("/dashboard")}
+            onClick={() => (isFullscreen ? toggleFullscreen() : router.push("/dashboard"))}
             className="px-3 py-1.5 rounded-xl glass text-sm text-muted hover:text-foreground transition-all"
           >
             {isFullscreen ? "⛶ Exit Fullscreen" : "← Back"}
@@ -393,16 +487,22 @@ export default function FocusPage() {
                 transition={{ duration: 3, repeat: Infinity }}
               />
             )}
-            
+
             <svg width="300" height="300" className="transform -rotate-90 relative z-10">
               {/* Background ring */}
               <circle
-                cx="150" cy="150" r="130"
-                fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"
+                cx="150"
+                cy="150"
+                r="130"
+                fill="none"
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth="4"
               />
               {/* Progress ring */}
               <motion.circle
-                cx="150" cy="150" r="130"
+                cx="150"
+                cy="150"
+                r="130"
                 fill="none"
                 stroke={theme.accent}
                 strokeWidth="6"
@@ -413,16 +513,17 @@ export default function FocusPage() {
                 style={{ filter: `drop-shadow(0 0 12px ${theme.accent}60)` }}
               />
               {/* Inner decorative dots */}
-              {isActive && Array.from({ length: 12 }).map((_, i) => (
-                <circle
-                  key={i}
-                  cx={150 + 115 * Math.cos((i * 30 * Math.PI) / 180)}
-                  cy={150 + 115 * Math.sin((i * 30 * Math.PI) / 180)}
-                  r="2"
-                  fill={theme.accent}
-                  opacity={0.3}
-                />
-              ))}
+              {isActive &&
+                Array.from({ length: 12 }).map((_, i) => (
+                  <circle
+                    key={i}
+                    cx={150 + 115 * Math.cos((i * 30 * Math.PI) / 180)}
+                    cy={150 + 115 * Math.sin((i * 30 * Math.PI) / 180)}
+                    r="2"
+                    fill={theme.accent}
+                    opacity={0.3}
+                  />
+                ))}
             </svg>
 
             {/* Center content */}
@@ -437,9 +538,15 @@ export default function FocusPage() {
                   {formatTime(remaining)}
                 </motion.p>
                 <p className="text-sm text-muted mt-2">
-                  {isActive ? (isBreak ? "☕ Break Time — Rest & Recharge" : "🎯 Focus Mode — You've Got This")
-                  : isBreak ? "☕ Break over? Ready for another round?"
-                  : isActive ? "🎯 Stay in the flow" : "⏸️ Ready when you are"}
+                  {isActive
+                    ? isBreak
+                      ? "☕ Break Time — Rest & Recharge"
+                      : "🎯 Focus Mode — You've Got This"
+                    : isBreak
+                      ? "☕ Break over? Ready for another round?"
+                      : isActive
+                        ? "🎯 Stay in the flow"
+                        : "⏸️ Ready when you are"}
                 </p>
               </div>
             </div>
@@ -483,13 +590,26 @@ export default function FocusPage() {
                     <Button variant="calm" size="lg" onClick={startBreak} className="text-lg px-10">
                       ☕ Start Break
                     </Button>
-                    <Button variant="primary" size="lg" onClick={() => { setIsBreak(false); startFocus(); }} className="text-lg px-10">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={() => {
+                        setIsBreak(false);
+                        startFocus();
+                      }}
+                      className="text-lg px-10"
+                    >
                       🎯 Next Session
                     </Button>
                   </>
                 ) : (
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <Button variant="primary" size="lg" onClick={startFocus} className="text-lg px-12 py-4 text-xl">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={startFocus}
+                      className="text-lg px-12 py-4 text-xl"
+                    >
                       ▶ Start Focus Session
                     </Button>
                   </motion.div>
@@ -551,7 +671,7 @@ export default function FocusPage() {
                   animate={{ opacity: 1 }}
                   className="text-[10px] text-muted text-center mb-3"
                 >
-                  {focusModes.find(m => m.id === focusMode.id)?.description}
+                  {focusModes.find((m) => m.id === focusMode.id)?.description}
                 </motion.p>
               )}
 
@@ -580,7 +700,12 @@ export default function FocusPage() {
                   className="mt-2 flex gap-1.5 justify-center"
                 >
                   {focusMode.tips.map((tip, i) => (
-                    <span key={i} className="px-2 py-1 rounded-md bg-white/5 text-[10px] text-muted">{tip}</span>
+                    <span
+                      key={i}
+                      className="px-2 py-1 rounded-md bg-white/5 text-[10px] text-muted"
+                    >
+                      {tip}
+                    </span>
                   ))}
                 </motion.div>
               )}
@@ -607,7 +732,9 @@ export default function FocusPage() {
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
-              <p className="font-bold text-foreground text-lg">{Math.floor(game.total_focus_minutes / 60)}h {game.total_focus_minutes % 60}m</p>
+              <p className="font-bold text-foreground text-lg">
+                {Math.floor(game.total_focus_minutes / 60)}h {game.total_focus_minutes % 60}m
+              </p>
               <p className="text-xs">Total</p>
             </div>
             <div className="w-px h-8 bg-border" />
@@ -640,7 +767,9 @@ export default function FocusPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-bold text-foreground mb-1">🤔 Distraction Log</h3>
-              <p className="text-xs text-muted mb-4">Track what pulled your focus to help you improve.</p>
+              <p className="text-xs text-muted mb-4">
+                Track what pulled your focus to help you improve.
+              </p>
 
               {isActive && (
                 <div className="mb-4">
@@ -662,7 +791,10 @@ export default function FocusPage() {
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           const now = Date.now();
-                          setDistractionLog((prev) => [...prev, { id: d.id, label: d.label, time: now }]);
+                          setDistractionLog((prev) => [
+                            ...prev,
+                            { id: d.id, label: d.label, time: now },
+                          ]);
                           setRecentDistractionsCount((prev) => prev + 1);
                           setTimeout(() => {
                             setRecentDistractionsCount((prev) => Math.max(0, prev - 1));
@@ -680,7 +812,8 @@ export default function FocusPage() {
                       animate={{ opacity: 1 }}
                       className="text-[10px] text-calm-400"
                     >
-                      Logged {recentDistractionsCount} distraction{recentDistractionsCount > 1 ? "s" : ""} this session
+                      Logged {recentDistractionsCount} distraction
+                      {recentDistractionsCount > 1 ? "s" : ""} this session
                     </motion.p>
                   )}
                 </div>
@@ -690,19 +823,27 @@ export default function FocusPage() {
               {distractionLog.length > 0 && (
                 <div className="max-h-40 overflow-y-auto space-y-1 mb-3">
                   <p className="text-xs text-muted mb-1">Recent distractions:</p>
-                  {[...distractionLog].reverse().slice(0, 10).map((d, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="text-foreground">{d.label}</span>
-                      <span className="text-muted">
-                        {new Date(d.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-                  ))}
+                  {[...distractionLog]
+                    .reverse()
+                    .slice(0, 10)
+                    .map((d, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-foreground">{d.label}</span>
+                        <span className="text-muted">
+                          {new Date(d.time).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               )}
 
               {distractionLog.length === 0 && (
-                <p className="text-xs text-muted/50 text-center py-3">No distractions logged yet. That&apos;s great!</p>
+                <p className="text-xs text-muted/50 text-center py-3">
+                  No distractions logged yet. That&apos;s great!
+                </p>
               )}
 
               {/* Session Quality Rating */}

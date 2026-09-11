@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,13 +23,16 @@ interface Feedback {
   username: string;
   rating: number;
   category: string;
-  feedback_text: string;
+  feedback_text?: string;
   created_at: string;
 }
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
 };
 
 const itemVariants = {
@@ -39,26 +42,27 @@ const itemVariants = {
 
 export default function AdminDashboardPage() {
   const { role } = useUserStore();
-  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"tickets" | "feedbacks">("tickets");
-  
+
   // Data States
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingTicketId, setUpdatingTicketId] = useState<number | null>(null);
-  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
+  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "in_progress" | "resolved">(
+    "all"
+  );
   const [feedbackFilter, setFeedbackFilter] = useState<number | "all">("all");
 
-  // Prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   // Fetch data
   const fetchData = async () => {
     if (role !== "admin") return;
-    setLoading(true);
     try {
       const [ticketsRes, feedbacksRes] = await Promise.all([
         api.getAdminTickets(),
@@ -74,10 +78,25 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    if (mounted && role === "admin") {
-      fetchData();
+    if (role === "admin") {
+      let active = true;
+      Promise.all([api.getAdminTickets(), api.getAdminFeedbacks()])
+        .then(([ticketsRes, feedbacksRes]) => {
+          if (active) {
+            if (ticketsRes.success) setTickets(ticketsRes.tickets);
+            if (feedbacksRes.success) setFeedbacks(feedbacksRes.feedbacks);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load admin data:", err);
+          if (active) setLoading(false);
+        });
+      return () => {
+        active = false;
+      };
     }
-  }, [mounted, role]);
+  }, [role]);
 
   const handleUpdateStatus = async (ticketId: number, newStatus: string) => {
     setUpdatingTicketId(ticketId);
@@ -117,7 +136,8 @@ export default function AdminDashboardPage() {
             <span className="text-6xl block mb-4">🛡️</span>
             <CardTitle className="text-2xl font-bold text-foreground mb-2">Access Denied</CardTitle>
             <CardDescription className="text-muted-foreground mb-6">
-              Shame-free boundary here! Only ADHD Coach administrators can view this dashboard. Let's redirect you back to safety.
+              Shame-free boundary here! Only ADHD Coach administrators can view this dashboard.
+              Let&apos;s redirect you back to safety.
             </CardDescription>
             <Link href="/dashboard">
               <Button variant="primary" className="w-full">
@@ -145,7 +165,7 @@ export default function AdminDashboardPage() {
   const openCount = tickets.filter((t) => t.status === "open").length;
   const inProgressCount = tickets.filter((t) => t.status === "in_progress").length;
   const resolvedCount = tickets.filter((t) => t.status === "resolved").length;
-  
+
   const avgRating =
     feedbacks.length > 0
       ? (feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length).toFixed(1)
@@ -153,10 +173,7 @@ export default function AdminDashboardPage() {
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, i) => (
-      <span
-        key={i}
-        className={`text-lg ${i < rating ? "text-amber-400" : "text-border"}`}
-      >
+      <span key={i} className={`text-lg ${i < rating ? "text-amber-400" : "text-border"}`}>
         ★
       </span>
     ));
@@ -196,7 +213,10 @@ export default function AdminDashboardPage() {
       className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto"
     >
       {/* Title Header */}
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+      >
         <div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
             <span>🛡️</span> Admin Dashboard
@@ -205,7 +225,13 @@ export default function AdminDashboardPage() {
             Review user feedback, manage support tickets, and keep the coach app running flawlessly.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchData} loading={loading} className="self-start md:self-auto">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchData}
+          loading={loading}
+          className="self-start md:self-auto"
+        >
           🔄 Refresh Data
         </Button>
       </motion.div>
@@ -254,19 +280,27 @@ export default function AdminDashboardPage() {
             {/* Tickets Analytics Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Total Tickets</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Total Tickets
+                </span>
                 <span className="text-3xl font-extrabold text-foreground">{tickets.length}</span>
               </Card>
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Open 🟡</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Open 🟡
+                </span>
                 <span className="text-3xl font-extrabold text-amber-400">{openCount}</span>
               </Card>
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">In Progress 🔵</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  In Progress 🔵
+                </span>
                 <span className="text-3xl font-extrabold text-sky-400">{inProgressCount}</span>
               </Card>
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Resolved 🟢</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Resolved 🟢
+                </span>
                 <span className="text-3xl font-extrabold text-emerald-400">{resolvedCount}</span>
               </Card>
             </div>
@@ -300,7 +334,9 @@ export default function AdminDashboardPage() {
               <Card variant="glass" className="p-8 text-center border-dashed border-border">
                 <span className="text-4xl block mb-2">🥳</span>
                 <p className="font-semibold text-foreground">All clear!</p>
-                <p className="text-muted text-sm mt-1">No support tickets found matching this status.</p>
+                <p className="text-muted text-sm mt-1">
+                  No support tickets found matching this status.
+                </p>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -319,10 +355,14 @@ export default function AdminDashboardPage() {
                             {/* Type badge */}
                             <span className="px-2 py-0.5 rounded text-xs font-bold bg-border/40 text-foreground flex items-center gap-1">
                               <span>{getTicketTypeEmoji(ticket.type)}</span>
-                              <span className="uppercase text-[10px] tracking-wide">{ticket.type}</span>
+                              <span className="uppercase text-[10px] tracking-wide">
+                                {ticket.type}
+                              </span>
                             </span>
                             {/* Status badge */}
-                            <span className={`px-2 py-0.5 rounded border text-[10px] uppercase tracking-wider font-bold ${getStatusColor(ticket.status)}`}>
+                            <span
+                              className={`px-2 py-0.5 rounded border text-[10px] uppercase tracking-wider font-bold ${getStatusColor(ticket.status)}`}
+                            >
                               {ticket.status.replace("_", " ")}
                             </span>
                             <span className="text-xs text-muted-foreground ml-2">
@@ -333,15 +373,25 @@ export default function AdminDashboardPage() {
                           <h2 className="text-lg font-bold text-foreground leading-tight">
                             {ticket.subject}
                           </h2>
-                          
+
                           <p className="text-sm text-foreground/80 leading-relaxed max-w-3xl whitespace-pre-wrap">
                             {ticket.description}
                           </p>
 
                           <div className="flex items-center gap-4 text-xs text-muted mt-4 pt-2 border-t border-border/40">
-                            <div>User: <span className="font-semibold text-foreground">{ticket.username}</span></div>
+                            <div>
+                              User:{" "}
+                              <span className="font-semibold text-foreground">
+                                {ticket.username}
+                              </span>
+                            </div>
                             <div>•</div>
-                            <div>Submitted: <span className="font-semibold">{new Date(ticket.created_at).toLocaleDateString()}</span></div>
+                            <div>
+                              Submitted:{" "}
+                              <span className="font-semibold">
+                                {new Date(ticket.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -363,7 +413,9 @@ export default function AdminDashboardPage() {
                             <Button
                               variant="glass"
                               size="xs"
-                              disabled={ticket.status === "in_progress" || updatingTicketId === ticket.id}
+                              disabled={
+                                ticket.status === "in_progress" || updatingTicketId === ticket.id
+                              }
                               onClick={() => handleUpdateStatus(ticket.id, "in_progress")}
                               className="flex-1 text-sky-500 hover:text-sky-400 hover:bg-sky-500/10 border border-sky-500/20"
                             >
@@ -372,7 +424,9 @@ export default function AdminDashboardPage() {
                             <Button
                               variant="glass"
                               size="xs"
-                              disabled={ticket.status === "resolved" || updatingTicketId === ticket.id}
+                              disabled={
+                                ticket.status === "resolved" || updatingTicketId === ticket.id
+                              }
                               onClick={() => handleUpdateStatus(ticket.id, "resolved")}
                               className="flex-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20"
                             >
@@ -398,17 +452,23 @@ export default function AdminDashboardPage() {
             {/* Feedbacks Analytics Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Total Feedbacks</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Total Feedbacks
+                </span>
                 <span className="text-3xl font-extrabold text-foreground">{feedbacks.length}</span>
               </Card>
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Average Rating</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Average Rating
+                </span>
                 <span className="text-3xl font-extrabold text-amber-400 flex items-center justify-center gap-1.5">
                   ⭐ {avgRating}
                 </span>
               </Card>
               <Card variant="glass" hover={false} className="text-center p-4">
-                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">Dopamine Awarded</span>
+                <span className="text-xs uppercase tracking-wider text-muted font-bold block mb-1">
+                  Dopamine Awarded
+                </span>
                 <span className="text-3xl font-extrabold text-pink-400">100% Shame-Free</span>
               </Card>
             </div>
@@ -464,24 +524,27 @@ export default function AdminDashboardPage() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    <Card variant="glass" className="h-full hover:border-calm-500/20 flex flex-col justify-between p-5 space-y-4">
+                    <Card
+                      variant="glass"
+                      className="h-full hover:border-calm-500/20 flex flex-col justify-between p-5 space-y-4"
+                    >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            {renderStars(fb.rating)}
-                          </div>
+                          <div className="flex items-center gap-1.5">{renderStars(fb.rating)}</div>
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-500/10 border border-pink-500/25 text-pink-400 uppercase tracking-wider">
                             {fb.category || "General"}
                           </span>
                         </div>
-                        
+
                         <p className="text-sm text-foreground/95 leading-relaxed italic">
                           &ldquo;{fb.feedback_text}&rdquo;
                         </p>
                       </div>
 
                       <div className="flex items-center justify-between text-xs text-muted pt-3 border-t border-border/40">
-                        <div>User: <span className="font-semibold text-foreground">{fb.username}</span></div>
+                        <div>
+                          User: <span className="font-semibold text-foreground">{fb.username}</span>
+                        </div>
                         <div>{new Date(fb.created_at).toLocaleDateString()}</div>
                       </div>
                     </Card>

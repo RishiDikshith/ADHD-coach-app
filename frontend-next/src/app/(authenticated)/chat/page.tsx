@@ -10,20 +10,57 @@ import { Celebration } from "@/components/shared/celebration";
 import { useChatStore } from "@/stores/chat-store";
 import { useUserStore } from "@/stores/user-store";
 import { useAnalyticsStore } from "@/stores/analytics-store";
-import { api } from "@/services/api";
+import { api, type UserTicket } from "@/services/api";
+
+interface SpeechRecognitionEventResult {
+  transcript: string;
+}
+
+interface SpeechRecognitionEvent {
+  results: {
+    [key: number]: {
+      [key: number]: SpeechRecognitionEventResult;
+    };
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface ISpeechRecognition {
+  continuous: boolean;
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface WindowWithSpeech extends Window {
+  SpeechRecognition?: new () => ISpeechRecognition;
+  webkitSpeechRecognition?: new () => ISpeechRecognition;
+}
 
 // Rich theme registry for all 8 specialized chatbots
-const agentThemes: Record<string, {
-  name: string;
-  emoji: string;
-  gradient: string;
-  bubbleStyle: string;
-  glow: string;
-  bgGlow: string;
-  tagline: string;
-  avatarBg: string;
-  quickActions: string[];
-}> = {
+const agentThemes: Record<
+  string,
+  {
+    name: string;
+    emoji: string;
+    gradient: string;
+    bubbleStyle: string;
+    glow: string;
+    bgGlow: string;
+    tagline: string;
+    avatarBg: string;
+    quickActions: string[];
+  }
+> = {
   "productivity-coach": {
     name: "Productivity Coach",
     emoji: "⚡",
@@ -33,7 +70,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-emerald-500/5",
     tagline: "Let's find a realistic, shame-free rhythm together.",
     avatarBg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-    quickActions: [" Smart Plan my day", " Pick top 3 wins", " Give me motivation", " Keep it simple today"],
+    quickActions: [
+      " Smart Plan my day",
+      " Pick top 3 wins",
+      " Give me motivation",
+      " Keep it simple today",
+    ],
   },
   "task-breakdown": {
     name: "Task Breakdown",
@@ -44,7 +86,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-indigo-500/5",
     tagline: "Breaking heavy tasks down into tiny, concrete micro-steps.",
     avatarBg: "bg-indigo-500/10 border-indigo-500/30 text-indigo-400",
-    quickActions: [" Break down a task", " Give me a 2-minute starter", " Overwhelm rescue!", " Simplify a complex goal"],
+    quickActions: [
+      " Break down a task",
+      " Give me a 2-minute starter",
+      " Overwhelm rescue!",
+      " Simplify a complex goal",
+    ],
   },
   "focus-coach": {
     name: "Focus Coach",
@@ -55,7 +102,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-amber-500/5",
     tagline: "Shielding focus & building a quiet flow space.",
     avatarBg: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-    quickActions: [" Start a Pomodoro timer", " Help! I got distracted", " Get into flow state", " Review focus peaks"],
+    quickActions: [
+      " Start a Pomodoro timer",
+      " Help! I got distracted",
+      " Get into flow state",
+      " Review focus peaks",
+    ],
   },
   "burnout-support": {
     name: "Burnout Support",
@@ -66,7 +118,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-rose-500/5",
     tagline: "A safe, warm space to rest and recover without guilt.",
     avatarBg: "bg-rose-500/10 border-rose-500/30 text-rose-400",
-    quickActions: [" Quick breathing grounding", " Relieve resting guilt", " Help me slow down", " Make a recovery plan"],
+    quickActions: [
+      " Quick breathing grounding",
+      " Relieve resting guilt",
+      " Help me slow down",
+      " Make a recovery plan",
+    ],
   },
   "accountability-coach": {
     name: "Accountability Coach",
@@ -77,7 +134,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-purple-500/5",
     tagline: "Zero judgment, positive checks, and momentum building.",
     avatarBg: "bg-purple-500/10 border-purple-500/30 text-purple-400",
-    quickActions: [" 5-minute progress check", " Set accountability goal", " Review consistency", " Celebrate a small win"],
+    quickActions: [
+      " 5-minute progress check",
+      " Set accountability goal",
+      " Review consistency",
+      " Celebrate a small win",
+    ],
   },
   "mood-support": {
     name: "Mood Support",
@@ -88,7 +150,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-sky-500/5",
     tagline: "Checking in with emotions and stress reflections.",
     avatarBg: "bg-sky-500/10 border-sky-500/30 text-sky-400",
-    quickActions: [" Guided emotional journal", " Check my mood trends", " Process high stress", " Journaling prompt"],
+    quickActions: [
+      " Guided emotional journal",
+      " Check my mood trends",
+      " Process high stress",
+      " Journaling prompt",
+    ],
   },
   "habit-builder": {
     name: "Habit Builder",
@@ -99,7 +166,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-violet-500/5",
     tagline: "Dopamine-friendly routine building & consistency hacks.",
     avatarBg: "bg-violet-500/10 border-violet-500/30 text-violet-400",
-    quickActions: [" Optimize morning routine", " Set routine habit trigger", " Streak milestones", " ADHD routine hacks"],
+    quickActions: [
+      " Optimize morning routine",
+      " Set routine habit trigger",
+      " Streak milestones",
+      " ADHD routine hacks",
+    ],
   },
   "study-assistant": {
     name: "Study Assistant",
@@ -110,7 +182,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-cyan-500/5",
     tagline: "Academic revision scheduling without the burnout.",
     avatarBg: "bg-cyan-500/10 border-cyan-500/30 text-cyan-400",
-    quickActions: [" Break down a study topic", " Schedule study blocks", " Spaced repetition triggers", " Feynman method guide"],
+    quickActions: [
+      " Break down a study topic",
+      " Schedule study blocks",
+      " Spaced repetition triggers",
+      " Feynman method guide",
+    ],
   },
   "support-agent": {
     name: "AI Support Agent",
@@ -121,7 +198,12 @@ const agentThemes: Record<string, {
     bgGlow: "bg-pink-500/5",
     tagline: "Shame-free tech support, glitches logging, & ADHD FAQs.",
     avatarBg: "bg-pink-500/10 border-pink-500/30 text-pink-400",
-    quickActions: ["🐞 Report a glitch", "🎫 Check my tickets", "❓ View ADHD FAQs", "📣 Log app suggestion"],
+    quickActions: [
+      "🐞 Report a glitch",
+      "🎫 Check my tickets",
+      "❓ View ADHD FAQs",
+      "📣 Log app suggestion",
+    ],
   },
 };
 
@@ -149,11 +231,13 @@ export default function ChatPage() {
 
   const [input, setInput] = useState("");
   const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationType, setCelebrationType] = useState<"confetti" | "sparkle" | "levelUp">("confetti");
+  const [celebrationType, setCelebrationType] = useState<"confetti" | "sparkle" | "levelUp">(
+    "confetti"
+  );
   const [celebrationMessage, setCelebrationMessage] = useState("");
 
   // Support Agent state
-  const [tickets, setTickets] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [ticketType, setTicketType] = useState("glitch");
   const [ticketSubject, setTicketSubject] = useState("");
@@ -167,7 +251,7 @@ export default function ChatPage() {
   const [autoSpeak, setAutoSpeak] = useState(settings.voice_autospeak ?? false);
   const [isRecording, setIsRecording] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
 
   const supportedLanguages = [
     { code: "auto", name: "Auto-Detect 🔍" },
@@ -189,7 +273,8 @@ export default function ChatPage() {
 
   const toggleSpeechInput = () => {
     if (typeof window === "undefined") return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWin = window as unknown as WindowWithSpeech;
+    const SpeechRecognition = speechWin.SpeechRecognition || speechWin.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
       return;
@@ -214,14 +299,14 @@ export default function ChatPage() {
       setIsRecording(true);
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       if (transcript) {
-        setInput(prev => prev ? `${prev} ${transcript}` : transcript);
+        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
       }
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error("Speech recognition error:", event.error);
       setIsRecording(false);
     };
@@ -233,69 +318,83 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  const speakText = (text: string, msgIndex: number) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const speakText = useCallback(
+    (text: string, msgIndex: number) => {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
 
-    if (speakingMessageId === msgIndex) {
+      if (speakingMessageId === msgIndex) {
+        window.speechSynthesis.cancel();
+        setSpeakingMessageId(null);
+        return;
+      }
+
       window.speechSynthesis.cancel();
-      setSpeakingMessageId(null);
-      return;
-    }
 
-    window.speechSynthesis.cancel();
+      const cleanText = text
+        .replace(/[*#_~`\[\]\(\)]/g, "")
+        .replace(/REPLY:\s*/gi, "")
+        .replace(/TASKS:\s*/gi, "")
+        .trim();
 
-    const cleanText = text
-      .replace(/[*#_~`\[\]\(\)]/g, "")
-      .replace(/REPLY:\s*/gi, "")
-      .replace(/TASKS:\s*/gi, "")
-      .trim();
+      const utterance = new SpeechSynthesisUtterance(cleanText);
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Connect user customization speed & pitch
-    utterance.rate = settings.voice_speed ?? 1.0;
-    utterance.pitch = settings.voice_pitch ?? 1.0;
+      // Connect user customization speed & pitch
+      utterance.rate = settings.voice_speed ?? 1.0;
+      utterance.pitch = settings.voice_pitch ?? 1.0;
 
-    let speechLang = selectedLanguage;
-    if (speechLang === "auto") {
-      speechLang = settings.language || "en";
-    }
-    utterance.lang = speechLang;
+      let speechLang = selectedLanguage;
+      if (speechLang === "auto") {
+        speechLang = settings.language || "en";
+      }
+      utterance.lang = speechLang;
 
-    const voices = window.speechSynthesis.getVoices();
-    let matchedVoice = null;
-    
-    if (settings.voice_accent && settings.voice_accent !== "auto") {
-      matchedVoice = voices.find(v => v.lang.startsWith(settings.voice_accent!));
-    }
-    
-    if (!matchedVoice) {
-      matchedVoice = voices.find(v => v.lang.startsWith(speechLang.split("-")[0]));
-    }
-    
-    if (matchedVoice) {
-      utterance.voice = matchedVoice;
-    }
+      const voices = window.speechSynthesis.getVoices();
+      let matchedVoice = null;
 
-    utterance.onend = () => {
-      setSpeakingMessageId(null);
-    };
-    utterance.onerror = () => {
-      setSpeakingMessageId(null);
-    };
+      const voiceAccent = settings.voice_accent;
+      if (voiceAccent && voiceAccent !== "auto") {
+        matchedVoice = voices.find((v) => v.lang.startsWith(voiceAccent));
+      }
 
-    setSpeakingMessageId(msgIndex);
-    window.speechSynthesis.speak(utterance);
-  };
+      if (!matchedVoice) {
+        matchedVoice = voices.find((v) => v.lang.startsWith(speechLang.split("-")[0]));
+      }
+
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
+
+      utterance.onend = () => {
+        setSpeakingMessageId(null);
+      };
+      utterance.onerror = () => {
+        setSpeakingMessageId(null);
+      };
+
+      setSpeakingMessageId(msgIndex);
+      window.speechSynthesis.speak(utterance);
+    },
+    [
+      speakingMessageId,
+      settings.voice_speed,
+      settings.voice_pitch,
+      settings.voice_accent,
+      settings.language,
+      selectedLanguage,
+    ]
+  );
 
   useEffect(() => {
     if (autoSpeak && messages.length > 0 && !isStreaming && !isThinking) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === "assistant" && speakingMessageId === null) {
-        speakText(lastMsg.content, messages.length - 1);
+        const timer = setTimeout(() => {
+          speakText(lastMsg.content, messages.length - 1);
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
-  }, [messages, isStreaming, isThinking, autoSpeak]);
+  }, [messages, isStreaming, isThinking, autoSpeak, speakingMessageId, speakText]);
 
   useEffect(() => {
     return () => {
@@ -362,7 +461,9 @@ export default function ChatPage() {
   const currentTheme = agentThemes[activeAgentId] || agentThemes["productivity-coach"];
 
   // ==================== Breathing Guide State (Burnout Support) ====================
-  const [breathingState, setBreathingState] = useState<"idle" | "inhale" | "hold" | "exhale">("idle");
+  const [breathingState, setBreathingState] = useState<"idle" | "inhale" | "hold" | "exhale">(
+    "idle"
+  );
   const [breathingProgress, setBreathingProgress] = useState(0);
 
   const startBreathingGuide = () => {
@@ -461,7 +562,7 @@ export default function ChatPage() {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
         top: chatContainerRef.current.scrollHeight,
-        behavior: "smooth"
+        behavior: "smooth",
       });
     }
   }, [messages, isThinking]);
@@ -508,10 +609,16 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-[calc(100dvh-64px)] md:h-[100dvh] relative overflow-hidden bg-background">
-      <Celebration type={celebrationType} show={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <Celebration
+        type={celebrationType}
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+      />
 
       {/* Decorative Radial Ambient Glow for selected agent */}
-      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full ${currentTheme.bgGlow} blur-3xl opacity-60 pointer-events-none`} />
+      <div
+        className={`absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full ${currentTheme.bgGlow} blur-3xl opacity-60 pointer-events-none`}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/80 backdrop-blur-md bg-surface/30 relative z-10">
@@ -529,9 +636,7 @@ export default function ChatPage() {
             <h1 className="text-base font-bold text-foreground flex items-center gap-2">
               {currentTheme.name}
             </h1>
-            <p className="text-[11px] text-muted leading-none">
-              {currentTheme.tagline}
-            </p>
+            <p className="text-[11px] text-muted leading-none">{currentTheme.tagline}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -603,9 +708,8 @@ export default function ChatPage() {
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* Scrollable chat body */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-5">
-            
             {/* Dynamic Embedded Widgets based on active agent */}
-            
+
             {/* 1. Pomodoro Timer Widget for Focus Coach */}
             {activeAgentId === "focus-coach" && (
               <motion.div
@@ -652,11 +756,13 @@ export default function ChatPage() {
                   <CardTitle className="text-xs font-bold tracking-widest text-rose-400 uppercase">
                     🧘 Compassionate Grounding Ring
                   </CardTitle>
-                  
+
                   {breathingState === "idle" ? (
                     <div className="space-y-2">
                       <p className="text-xs text-muted leading-relaxed">
-                        {"Feeling anxious, exhausted, or stuck? Let's take three deep breaths together."}
+                        {
+                          "Feeling anxious, exhausted, or stuck? Let's take three deep breaths together."
+                        }
                       </p>
                       <Button
                         size="sm"
@@ -670,7 +776,12 @@ export default function ChatPage() {
                     <div className="flex flex-col items-center space-y-3 py-2">
                       <motion.div
                         animate={{
-                          scale: breathingState === "inhale" ? 1.5 : breathingState === "hold" ? 1.5 : 0.9,
+                          scale:
+                            breathingState === "inhale"
+                              ? 1.5
+                              : breathingState === "hold"
+                                ? 1.5
+                                : 0.9,
                         }}
                         transition={{ duration: 4, ease: "easeInOut" }}
                         className={`w-14 h-14 rounded-full flex items-center justify-center border-2 border-rose-400 bg-rose-500/20`}
@@ -711,7 +822,8 @@ export default function ChatPage() {
                     Chat with {currentTheme.name}
                   </h2>
                   <p className="text-xs text-muted max-w-sm mx-auto leading-relaxed">
-                    {currentTheme.tagline} What productivity hurdle or emotional state shall we conquer today?
+                    {currentTheme.tagline} What productivity hurdle or emotional state shall we
+                    conquer today?
                   </p>
                 </div>
               </div>
@@ -721,7 +833,7 @@ export default function ChatPage() {
             <AnimatePresence>
               {messages.map((msg, i) => {
                 const isUser = msg.role === "user";
-                
+
                 return (
                   <motion.div
                     key={i}
@@ -732,11 +844,13 @@ export default function ChatPage() {
                   >
                     <div className={`max-w-[85%] ${isUser ? "" : "flex items-end gap-2.5"}`}>
                       {!isUser && (
-                        <div className={`text-xl w-8 h-8 rounded-xl flex items-center justify-center border bg-surface/90 shrink-0 ${currentTheme.avatarBg}`}>
+                        <div
+                          className={`text-xl w-8 h-8 rounded-xl flex items-center justify-center border bg-surface/90 shrink-0 ${currentTheme.avatarBg}`}
+                        >
                           {currentTheme.emoji}
                         </div>
                       )}
-                      
+
                       <div
                         className={`p-3.5 rounded-2xl relative group ${
                           isUser
@@ -754,7 +868,8 @@ export default function ChatPage() {
                           </button>
                         )}
                         {/* Render message markdown content */}
-                        <div className="prose prose-invert prose-xs max-w-none
+                        <div
+                          className="prose prose-invert prose-xs max-w-none
                           prose-headings:text-foreground prose-headings:font-bold prose-headings:mt-2.5 prose-headings:mb-1.5
                           prose-p:text-foreground/90 prose-p:leading-relaxed prose-p:mb-2 prose-p:last:mb-0
                           prose-strong:text-foreground prose-strong:font-bold
@@ -763,10 +878,9 @@ export default function ChatPage() {
                           prose-li:text-foreground/90 prose-li:my-0.5
                           prose-ul:my-1.5 prose-ol:my-1.5
                           [&_ul]:!list-disc [&_ol]:!list-decimal [&_li]:!text-xs
-                        ">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
-                          </ReactMarkdown>
+                        "
+                        >
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                         </div>
 
                         {/* Inline microtask checklists for Task Breakdown / general turns */}
@@ -779,7 +893,7 @@ export default function ChatPage() {
                               {msg.tasks.map((task, j) => {
                                 const taskId = `${i}-${j}`;
                                 const isChecked = checkedTasks[taskId] || false;
-                                
+
                                 return (
                                   <div
                                     key={j}
@@ -791,7 +905,9 @@ export default function ChatPage() {
                                       onChange={() => toggleChecklistTask(taskId)}
                                       className="w-4 h-4 rounded-md border-border bg-surface text-calm-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                                     />
-                                    <span className={`${isChecked ? "line-through text-muted/50" : "text-foreground/80 font-medium"}`}>
+                                    <span
+                                      className={`${isChecked ? "line-through text-muted/50" : "text-foreground/80 font-medium"}`}
+                                    >
                                       {task.emoji} {task.text}
                                     </span>
                                   </div>
@@ -814,7 +930,9 @@ export default function ChatPage() {
                 animate={{ opacity: 1 }}
                 className="flex justify-start items-end gap-2.5"
               >
-                <div className={`text-xl w-8 h-8 rounded-xl flex items-center justify-center border bg-surface/90 shrink-0 ${currentTheme.avatarBg}`}>
+                <div
+                  className={`text-xl w-8 h-8 rounded-xl flex items-center justify-center border bg-surface/90 shrink-0 ${currentTheme.avatarBg}`}
+                >
                   {currentTheme.emoji}
                 </div>
                 <div className="bg-surface border border-border/60 rounded-2xl rounded-bl-md p-3.5">
@@ -838,7 +956,11 @@ export default function ChatPage() {
 
             {/* Stream progress or final error logs */}
             {error && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-2">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center py-2"
+              >
                 <p className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 inline-block">
                   ⚠️ {error}
                 </p>
@@ -850,7 +972,6 @@ export default function ChatPage() {
 
           {/* Input container at the bottom */}
           <div className="border-t border-border/80 p-4 bg-surface/30 backdrop-blur-md relative z-10 space-y-3">
-            
             {/* Quick Action Dopamine Suggesters */}
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {currentTheme.quickActions.map((act) => (
@@ -909,7 +1030,9 @@ export default function ChatPage() {
             {/* Premium Controls Tray for Voice and Language settings */}
             <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-border/40">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider">🌐 Voice Language</span>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                  🌐 Voice Language
+                </span>
                 <select
                   value={selectedLanguage}
                   onChange={(e) => setSelectedLanguage(e.target.value)}
@@ -939,7 +1062,8 @@ export default function ChatPage() {
             </div>
 
             <p className="text-[10px] text-muted/40 mt-1 text-center font-medium leading-none">
-              Ecosystem session checkin · Streak {game.streak} days · Gamer Rank {Math.min(5, Math.floor(game.total_focus_minutes / 30) + 1)}
+              Ecosystem session checkin · Streak {game.streak} days · Gamer Rank{" "}
+              {Math.min(5, Math.floor(game.total_focus_minutes / 30) + 1)}
             </p>
           </div>
         </div>
@@ -951,7 +1075,9 @@ export default function ChatPage() {
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-lg">🎫</span>
-                <span className="font-bold text-xs uppercase tracking-wider text-pink-400">My Support Tickets</span>
+                <span className="font-bold text-xs uppercase tracking-wider text-pink-400">
+                  My Support Tickets
+                </span>
               </div>
               <button
                 onClick={fetchTickets}
@@ -976,7 +1102,9 @@ export default function ChatPage() {
                   <div className="text-center py-6 px-4 border border-dashed border-border rounded-2xl bg-surface/30">
                     <span className="text-2xl block mb-2">🌸</span>
                     <p className="text-xs text-muted font-medium">No tickets created yet.</p>
-                    <p className="text-[10px] text-muted/60 mt-1">If you have a glitch or general question, raise one shame-free below!</p>
+                    <p className="text-[10px] text-muted/60 mt-1">
+                      If you have a glitch or general question, raise one shame-free below!
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1000,7 +1128,9 @@ export default function ChatPage() {
                                 <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-muted">
                                   {t.type}
                                 </span>
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${statusColors[t.status] || "bg-border text-muted"}`}>
+                                <span
+                                  className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${statusColors[t.status] || "bg-border text-muted"}`}
+                                >
                                   {t.status.replace("_", " ")}
                                 </span>
                               </div>
@@ -1022,9 +1152,14 @@ export default function ChatPage() {
                                 className="text-[11px] text-muted/90 pt-1 border-t border-border/40 space-y-2 cursor-default"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <p className="leading-relaxed whitespace-pre-wrap">{t.description}</p>
+                                <p className="leading-relaxed whitespace-pre-wrap">
+                                  {t.description}
+                                </p>
                                 <p className="text-[9px] text-muted/40 font-mono">
-                                  Logged: {new Date(t.created_at).toLocaleString()}
+                                  Logged:{" "}
+                                  {t.created_at
+                                    ? new Date(t.created_at).toLocaleString()
+                                    : "Recently"}
                                 </p>
                               </motion.div>
                             )}
@@ -1039,13 +1174,19 @@ export default function ChatPage() {
               {/* Ticket Creation Form */}
               <div className="border-t border-border pt-6 space-y-4">
                 <div className="space-y-1">
-                  <h3 className="text-xs font-bold text-foreground/90 uppercase tracking-wide">Raise Support Ticket</h3>
-                  <p className="text-[10px] text-muted">Submit bugs, questions, or ideas. Shame-free.</p>
+                  <h3 className="text-xs font-bold text-foreground/90 uppercase tracking-wide">
+                    Raise Support Ticket
+                  </h3>
+                  <p className="text-[10px] text-muted">
+                    Submit bugs, questions, or ideas. Shame-free.
+                  </p>
                 </div>
 
                 <form onSubmit={handleCreateTicket} className="space-y-3">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">Ticket Type</label>
+                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                      Ticket Type
+                    </label>
                     <select
                       value={ticketType}
                       onChange={(e) => setTicketType(e.target.value)}
@@ -1058,7 +1199,9 @@ export default function ChatPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">Subject</label>
+                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                      Subject
+                    </label>
                     <input
                       type="text"
                       required
@@ -1070,7 +1213,9 @@ export default function ChatPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">Description</label>
+                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                      Description
+                    </label>
                     <textarea
                       required
                       rows={3}
@@ -1083,7 +1228,9 @@ export default function ChatPage() {
 
                   <Button
                     type="submit"
-                    disabled={submittingTicket || !ticketSubject.trim() || !ticketDescription.trim()}
+                    disabled={
+                      submittingTicket || !ticketSubject.trim() || !ticketDescription.trim()
+                    }
                     className="w-full rounded-xl py-2.5 text-xs font-bold transition-all bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-md border border-white/10"
                   >
                     {submittingTicket ? "Logging..." : "Submit Ticket 🚀"}

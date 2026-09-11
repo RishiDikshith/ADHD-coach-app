@@ -18,11 +18,7 @@ interface ChartWrapperProps {
  * Shows a placeholder skeleton during SSR / initial paint so the container
  * has proper dimensions before the chart tries to measure them.
  */
-export function ChartWrapper({
-  children,
-  className = "",
-  height = "h-64",
-}: ChartWrapperProps) {
+export function ChartWrapper({ children, className = "", height = "h-64" }: ChartWrapperProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

@@ -22,15 +22,36 @@ const itemVariants = {
 };
 
 const healthItems = [
-  { key: "adhd_risk" as const, label: "ADHD Risk", color: "#6ee7b7", format: (v: number) => `${(v * 100).toFixed(0)}%` },
-  { key: "mental_health_score" as const, label: "Mental Health", color: "#667eea", format: (v: number) => `${v.toFixed(0)}%` },
-  { key: "productivity_score" as const, label: "Productivity", color: "#fbbf24", format: (v: number) => `${v.toFixed(0)}%` },
-  { key: "depression_score" as const, label: "Burnout Resistance", color: "#f87171", format: (v: number) => `${v.toFixed(0)}%` },
+  {
+    key: "adhd_risk" as const,
+    label: "ADHD Risk",
+    color: "#6ee7b7",
+    format: (v: number) => `${(v * 100).toFixed(0)}%`,
+  },
+  {
+    key: "mental_health_score" as const,
+    label: "Mental Health",
+    color: "#667eea",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
+  {
+    key: "productivity_score" as const,
+    label: "Productivity",
+    color: "#fbbf24",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
+  {
+    key: "depression_score" as const,
+    label: "Burnout Resistance",
+    color: "#f87171",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
 ];
 
 export default function DashboardPage() {
   const { username, game } = useUserStore();
-  const { scores, insights, setScores, setInsights, overwhelmMode, setOverwhelmMode } = useAnalyticsStore();
+  const { scores, insights, setScores, setInsights, overwhelmMode, setOverwhelmMode } =
+    useAnalyticsStore();
   const timer = useTimerStore();
   const [loading, setLoading] = useState(true);
   const [showAllMetrics, setShowAllMetrics] = useState(false);
@@ -39,19 +60,28 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!username) return;
     Promise.all([
-      api.getScores(username, {}).then(setScores).catch(() => {}),
-      api.getAnalytics(username).then((data) => setInsights(data.insights || [])).catch(() => {}),
+      api
+        .getScores(username, {})
+        .then(setScores)
+        .catch(() => {}),
+      api
+        .getAnalytics(username)
+        .then((data) => setInsights(data.insights || []))
+        .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [username, setScores, setInsights]);
 
   // Auto-detect overwhelm: if mental health or burnout resistance is low, suggest overwhelm mode
   const shouldSuggestOverwhelm =
     scores.mental_health_score != null && scores.mental_health_score < 35;
-  const isLowEnergy =
-    scores.productivity_score != null && scores.productivity_score < 30;
+  const isLowEnergy = scores.productivity_score != null && scores.productivity_score < 30;
 
   // In overwhelm mode, show only essential items
-  const visibleHealthItems = overwhelmMode ? healthItems.slice(0, 2) : showAllMetrics ? healthItems : healthItems;
+  const visibleHealthItems = overwhelmMode
+    ? healthItems.slice(0, 2)
+    : showAllMetrics
+      ? healthItems
+      : healthItems;
 
   return (
     <motion.div
@@ -71,8 +101,8 @@ export default function DashboardPage() {
               {overwhelmMode
                 ? "Let's keep things simple today. Just the essentials."
                 : isLowEnergy
-                ? "A gentle overview of where you are right now."
-                : "Your wellness snapshot at a glance"}
+                  ? "A gentle overview of where you are right now."
+                  : "Your wellness snapshot at a glance"}
             </p>
           </div>
           {game.streak >= 3 && (
@@ -101,7 +131,10 @@ export default function DashboardPage() {
                 <span className="text-2xl">🌿</span>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">Things feel heavy?</p>
-                  <p className="text-xs text-muted">Switch to Gentle Mode — I&apos;ll simplify things and focus on what matters most right now.</p>
+                  <p className="text-xs text-muted">
+                    Switch to Gentle Mode — I&apos;ll simplify things and focus on what matters most
+                    right now.
+                  </p>
                 </div>
                 <Button variant="danger" size="sm" onClick={() => setOverwhelmMode(true)}>
                   🌿 Gentle Mode
@@ -123,7 +156,12 @@ export default function DashboardPage() {
             <Card variant="glass" className="border-danger-500/30 text-center">
               <p className="text-sm text-danger-400 font-medium">🌿 Gentle Mode Active</p>
               <p className="text-xs text-muted mt-1">Showing only what matters most right now.</p>
-              <Button variant="ghost" size="sm" className="mt-2" onClick={() => setOverwhelmMode(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+                onClick={() => setOverwhelmMode(false)}
+              >
                 Exit Gentle Mode
               </Button>
             </Card>
@@ -157,7 +195,10 @@ export default function DashboardPage() {
             {visibleHealthItems.map((item) => {
               const val = scores[item.key];
               return (
-                <motion.div key={item.key} whileHover={overwhelmMode ? undefined : { y: -4, transition: { duration: 0.2 } }}>
+                <motion.div
+                  key={item.key}
+                  whileHover={overwhelmMode ? undefined : { y: -4, transition: { duration: 0.2 } }}
+                >
                   <Card variant={overwhelmMode ? "glass" : "stat"} className="text-center h-full">
                     <CardLabel>{item.label}</CardLabel>
                     <CardValue className="mt-1 block" style={{ color: item.color }}>
@@ -197,7 +238,7 @@ export default function DashboardPage() {
         <motion.div variants={itemVariants} className="flex justify-center">
           <div className="relative">
             <MomentumRing
-              progress={Math.min(100, (game.points % 100))}
+              progress={Math.min(100, game.points % 100)}
               size={120}
               strokeWidth={6}
               color="#667eea"
@@ -227,7 +268,9 @@ export default function DashboardPage() {
             </Button>
           </div>
           {overwhelmMode && (
-            <p className="text-xs text-muted mt-2">Short sessions recommended right now. Just 2 minutes counts.</p>
+            <p className="text-xs text-muted mt-2">
+              Short sessions recommended right now. Just 2 minutes counts.
+            </p>
           )}
         </Card>
       </motion.div>
@@ -251,8 +294,8 @@ export default function DashboardPage() {
                     insight.priority === "high"
                       ? "border-l-danger-500"
                       : insight.priority === "medium"
-                      ? "border-l-warm-500"
-                      : "border-l-calm-500"
+                        ? "border-l-warm-500"
+                        : "border-l-calm-500"
                   }`}
                 >
                   <p className="text-sm text-foreground">{insight.description}</p>
@@ -282,11 +325,18 @@ export default function DashboardPage() {
               ]
           ).map((action) => (
             <Link key={action.href} href={action.href}>
-              <motion.div whileHover={overwhelmMode ? { scale: 1.02 } : { y: -4, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Card className={`h-full cursor-pointer transition-all ${
-                  overwhelmMode ? "hover:border-danger-500/40" : "hover:border-calm-500/50"
-                }`}>
-                  <CardTitle className="text-lg">{action.icon} {action.title}</CardTitle>
+              <motion.div
+                whileHover={overwhelmMode ? { scale: 1.02 } : { y: -4, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Card
+                  className={`h-full cursor-pointer transition-all ${
+                    overwhelmMode ? "hover:border-danger-500/40" : "hover:border-calm-500/50"
+                  }`}
+                >
+                  <CardTitle className="text-lg">
+                    {action.icon} {action.title}
+                  </CardTitle>
                   <p className="text-xs text-muted mt-1">{action.desc}</p>
                 </Card>
               </motion.div>

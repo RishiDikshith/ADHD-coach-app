@@ -10,10 +10,22 @@ import { api } from "@/lib/api-client";
 import { Celebration } from "@/components/shared/celebration";
 import { ChartWrapper } from "@/components/shared/chart-wrapper";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, RadarChart,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  AreaChart, Area,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  AreaChart,
+  Area,
 } from "recharts";
 
 const containerVariants = {
@@ -55,17 +67,57 @@ const radarData = [
 ];
 
 const ProductivityCorrelations = [
-  { factor: "Sleep Quality", strength: 85, direction: "positive" as const, desc: "Better sleep → higher productivity" },
-  { factor: "Stress Level", strength: 72, direction: "negative" as const, desc: "Lower stress → better focus" },
-  { factor: "Exercise", strength: 63, direction: "positive" as const, desc: "Movement boosts output" },
-  { factor: "Phone Distractions", strength: 78, direction: "negative" as const, desc: "Fewer distractions → more done" },
+  {
+    factor: "Sleep Quality",
+    strength: 85,
+    direction: "positive" as const,
+    desc: "Better sleep → higher productivity",
+  },
+  {
+    factor: "Stress Level",
+    strength: 72,
+    direction: "negative" as const,
+    desc: "Lower stress → better focus",
+  },
+  {
+    factor: "Exercise",
+    strength: 63,
+    direction: "positive" as const,
+    desc: "Movement boosts output",
+  },
+  {
+    factor: "Phone Distractions",
+    strength: 78,
+    direction: "negative" as const,
+    desc: "Fewer distractions → more done",
+  },
 ];
 
 const healthItems = [
-  { key: "adhd_risk", label: "ADHD Risk", color: "#6ee7b7", format: (v: number) => `${(v * 100).toFixed(0)}%` },
-  { key: "mental_health_score", label: "Mental Health", color: "#667eea", format: (v: number) => `${v.toFixed(0)}%` },
-  { key: "productivity_score", label: "Productivity", color: "#fbbf24", format: (v: number) => `${v.toFixed(0)}%` },
-  { key: "depression_score", label: "Depression Risk", color: "#f87171", format: (v: number) => `${v.toFixed(0)}%` },
+  {
+    key: "adhd_risk",
+    label: "ADHD Risk",
+    color: "#6ee7b7",
+    format: (v: number) => `${(v * 100).toFixed(0)}%`,
+  },
+  {
+    key: "mental_health_score",
+    label: "Mental Health",
+    color: "#667eea",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
+  {
+    key: "productivity_score",
+    label: "Productivity",
+    color: "#fbbf24",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
+  {
+    key: "depression_score",
+    label: "Depression Risk",
+    color: "#f87171",
+    format: (v: number) => `${v.toFixed(0)}%`,
+  },
 ];
 
 export default function AnalyticsPage() {
@@ -76,15 +128,30 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!username) return;
     Promise.all([
-      api.getScores(username, {}).then(setScores).catch(() => {}),
-      api.getAnalytics(username).then((data) => setInsights(data.insights || [])).catch(() => {}),
+      api
+        .getScores(username, {})
+        .then(setScores)
+        .catch(() => {}),
+      api
+        .getAnalytics(username)
+        .then((data) => setInsights(data.insights || []))
+        .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [username, setInsights, setScores]);
 
   const moodCounts: Record<string, number> = {};
-  moodHistory.forEach((m) => { moodCounts[m.emoji] = (moodCounts[m.emoji] || 0) + 1; });
+  moodHistory.forEach((m) => {
+    moodCounts[m.emoji] = (moodCounts[m.emoji] || 0) + 1;
+  });
   const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const moodLabels: Record<string, string> = { "😊": "Happy", "😌": "Calm", "😐": "Okay", "😟": "Worried", "😰": "Anxious", "😤": "Frustrated" };
+  const moodLabels: Record<string, string> = {
+    "😊": "Happy",
+    "😌": "Calm",
+    "😐": "Okay",
+    "😟": "Worried",
+    "😰": "Anxious",
+    "😤": "Frustrated",
+  };
 
   return (
     <motion.div
@@ -96,7 +163,9 @@ export default function AnalyticsPage() {
       {/* Header */}
       <motion.div variants={itemVariants}>
         <h1 className="text-3xl font-bold text-foreground">📈 Analytics</h1>
-        <p className="text-muted mt-1">Behavioral intelligence — patterns, insights, and recommendations</p>
+        <p className="text-muted mt-1">
+          Behavioral intelligence — patterns, insights, and recommendations
+        </p>
       </motion.div>
 
       <Tabs
@@ -110,11 +179,7 @@ export default function AnalyticsPage() {
         {(activeTab) => (
           <>
             {activeTab === "overview" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-6"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {healthItems.map((item) => {
                     const val = scores[item.key as keyof typeof scores];
@@ -133,9 +198,18 @@ export default function AnalyticsPage() {
                   <Card>
                     <CardTitle>⚡ Activity Summary</CardTitle>
                     <div className="mt-3 grid grid-cols-3 gap-4 text-center">
-                      <div><CardValue className="text-xl">{game.session_count}</CardValue><CardLabel>Sessions</CardLabel></div>
-                      <div><CardValue className="text-xl">{game.streak}</CardValue><CardLabel>Streak</CardLabel></div>
-                      <div><CardValue className="text-xl">{game.level}</CardValue><CardLabel>Level</CardLabel></div>
+                      <div>
+                        <CardValue className="text-xl">{game.session_count}</CardValue>
+                        <CardLabel>Sessions</CardLabel>
+                      </div>
+                      <div>
+                        <CardValue className="text-xl">{game.streak}</CardValue>
+                        <CardLabel>Streak</CardLabel>
+                      </div>
+                      <div>
+                        <CardValue className="text-xl">{game.level}</CardValue>
+                        <CardLabel>Level</CardLabel>
+                      </div>
                     </div>
                   </Card>
 
@@ -150,7 +224,9 @@ export default function AnalyticsPage() {
                         <motion.div
                           className="h-full bg-gradient-to-r from-calm-500 to-focus-500 rounded-full"
                           initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(100, (game.points / (game.level * 100)) * 100)}%` }}
+                          animate={{
+                            width: `${Math.min(100, (game.points / (game.level * 100)) * 100)}%`,
+                          }}
                           transition={{ duration: 1, ease: "easeOut" }}
                         />
                       </div>
@@ -166,9 +242,22 @@ export default function AnalyticsPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <RadarChart data={radarData}>
                           <PolarGrid stroke="#1e293b" />
-                          <PolarAngleAxis dataKey="subject" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 10 }} />
-                          <Radar name="Score" dataKey="A" stroke="#6ee7b7" fill="#6ee7b7" fillOpacity={0.2} />
+                          <PolarAngleAxis
+                            dataKey="subject"
+                            tick={{ fill: "#94a3b8", fontSize: 11 }}
+                          />
+                          <PolarRadiusAxis
+                            angle={30}
+                            domain={[0, 100]}
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                          />
+                          <Radar
+                            name="Score"
+                            dataKey="A"
+                            stroke="#6ee7b7"
+                            fill="#6ee7b7"
+                            fillOpacity={0.2}
+                          />
                         </RadarChart>
                       </ResponsiveContainer>
                     </ChartWrapper>
@@ -180,7 +269,10 @@ export default function AnalyticsPage() {
                     <CardTitle>🏅 Badges Earned</CardTitle>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {game.badges.map((badge) => (
-                        <span key={badge} className="px-3 py-1.5 rounded-full text-sm font-medium bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30">
+                        <span
+                          key={badge}
+                          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30"
+                        >
                           {badge}
                         </span>
                       ))}
@@ -191,11 +283,7 @@ export default function AnalyticsPage() {
             )}
 
             {activeTab === "charts" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-4"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                 {/* Focus Trend */}
                 <Card>
                   <CardTitle>🎯 Focus Trend</CardTitle>
@@ -213,11 +301,28 @@ export default function AnalyticsPage() {
                           <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
                           <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
                           <Tooltip
-                            contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                            contentStyle={{
+                              background: "#0f172a",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                            }}
                             labelStyle={{ color: "#fff" }}
                           />
-                          <Area type="monotone" dataKey="focus" stroke="#6ee7b7" fill="url(#colorFocus)" strokeWidth={2} />
-                          <Area type="monotone" dataKey="distractions" stroke="#f87171" fill="none" strokeWidth={2} strokeDasharray="4 4" />
+                          <Area
+                            type="monotone"
+                            dataKey="focus"
+                            stroke="#6ee7b7"
+                            fill="url(#colorFocus)"
+                            strokeWidth={2}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="distractions"
+                            stroke="#f87171"
+                            fill="none"
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                          />
                         </AreaChart>
                       </ResponsiveContainer>
                     </ChartWrapper>
@@ -235,7 +340,11 @@ export default function AnalyticsPage() {
                           <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
                           <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
                           <Tooltip
-                            contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                            contentStyle={{
+                              background: "#0f172a",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                            }}
                             labelStyle={{ color: "#fff" }}
                           />
                           <Bar dataKey="happy" stackId="a" fill="#6ee7b7" radius={[4, 4, 0, 0]} />
@@ -258,10 +367,20 @@ export default function AnalyticsPage() {
                           <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
                           <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} domain={[0, 100]} />
                           <Tooltip
-                            contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                            contentStyle={{
+                              background: "#0f172a",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                            }}
                             labelStyle={{ color: "#fff" }}
                           />
-                          <Line type="monotone" dataKey="focus" stroke="#fbbf24" strokeWidth={2} dot={{ fill: "#fbbf24" }} />
+                          <Line
+                            type="monotone"
+                            dataKey="focus"
+                            stroke="#fbbf24"
+                            strokeWidth={2}
+                            dot={{ fill: "#fbbf24" }}
+                          />
                         </LineChart>
                       </ResponsiveContainer>
                     </ChartWrapper>
@@ -271,11 +390,7 @@ export default function AnalyticsPage() {
             )}
 
             {activeTab === "insights" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-3"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
                 {topMood && (
                   <Card variant="glass" className="text-center">
                     <p className="text-4xl mb-2">{topMood}</p>
@@ -286,7 +401,10 @@ export default function AnalyticsPage() {
 
                 {insights.length === 0 ? (
                   <Card>
-                    <p className="text-sm text-muted">Chat with your ADHD Coach to generate personalized insights about your patterns.</p>
+                    <p className="text-sm text-muted">
+                      Chat with your ADHD Coach to generate personalized insights about your
+                      patterns.
+                    </p>
                   </Card>
                 ) : (
                   insights.map((insight, i) => (
@@ -301,8 +419,8 @@ export default function AnalyticsPage() {
                           insight.priority === "high"
                             ? "border-l-danger-500"
                             : insight.priority === "medium"
-                            ? "border-l-warm-500"
-                            : "border-l-calm-500"
+                              ? "border-l-warm-500"
+                              : "border-l-calm-500"
                         }`}
                       >
                         <div className="flex items-start gap-2">
@@ -313,7 +431,9 @@ export default function AnalyticsPage() {
                             <p className="text-sm font-medium text-foreground">{insight.title}</p>
                             <p className="text-xs text-muted mt-0.5">{insight.description}</p>
                             {insight.value != null && (
-                              <p className="text-xs text-calm-400 mt-1 font-medium">Score: {insight.value.toFixed(1)}</p>
+                              <p className="text-xs text-calm-400 mt-1 font-medium">
+                                Score: {insight.value.toFixed(1)}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -327,16 +447,21 @@ export default function AnalyticsPage() {
                   <Card>
                     <CardTitle>📊 Mood Timeline</CardTitle>
                     <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
-                      {[...moodHistory].reverse().slice(0, 30).map((entry, i) => (
-                        <div key={i} className="flex items-center gap-3 text-sm py-1">
-                          <span className="text-lg">{entry.emoji}</span>
-                          <span className="text-xs text-muted">
-                            {new Date(entry.timestamp).toLocaleDateString([], {
-                              weekday: "short", hour: "2-digit", minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                      ))}
+                      {[...moodHistory]
+                        .reverse()
+                        .slice(0, 30)
+                        .map((entry, i) => (
+                          <div key={i} className="flex items-center gap-3 text-sm py-1">
+                            <span className="text-lg">{entry.emoji}</span>
+                            <span className="text-xs text-muted">
+                              {new Date(entry.timestamp).toLocaleDateString([], {
+                                weekday: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   </Card>
                 )}
@@ -344,11 +469,7 @@ export default function AnalyticsPage() {
             )}
 
             {activeTab === "correlations" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-4"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                 <Card variant="glass">
                   <CardTitle>🔗 Productivity Correlations</CardTitle>
                   <p className="text-sm text-muted mt-2">
@@ -367,11 +488,13 @@ export default function AnalyticsPage() {
                       <Card>
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm font-medium text-foreground">{corr.factor}</p>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            corr.direction === "positive"
-                              ? "bg-calm-500/10 text-calm-400"
-                              : "bg-danger-500/10 text-danger-400"
-                          }`}>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              corr.direction === "positive"
+                                ? "bg-calm-500/10 text-calm-400"
+                                : "bg-danger-500/10 text-danger-400"
+                            }`}
+                          >
                             {corr.direction === "positive" ? "↑ Positive" : "↓ Negative"}
                           </span>
                         </div>
@@ -385,7 +508,9 @@ export default function AnalyticsPage() {
                             transition={{ duration: 1, delay: i * 0.15 }}
                           />
                         </div>
-                        <p className="text-xs text-muted mt-2">{corr.desc} ({corr.strength}%)</p>
+                        <p className="text-xs text-muted mt-2">
+                          {corr.desc} ({corr.strength}%)
+                        </p>
                       </Card>
                     </motion.div>
                   ))}

@@ -14,7 +14,12 @@ interface ChatState {
   interventions: Intervention[];
   handoffSuggestion: { agent_id: string; message: string } | null;
   error: string | null;
-  sendMessage: (text: string, username: string, userData?: Record<string, number>, language?: string) => Promise<void>;
+  sendMessage: (
+    text: string,
+    username: string,
+    userData?: Record<string, number>,
+    language?: string
+  ) => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   clearMessages: () => void;
   setThinking: (val: boolean) => void;
@@ -171,10 +176,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   updatedHistory[lastMsgIndex] = {
                     ...updatedHistory[lastMsgIndex],
                     content: meta.reply || accumulatedContent,
-                    tasks: meta.interventions?.slice(0, 3).map((i: { emoji?: string; action?: string; title?: string }) => ({
-                      emoji: i.emoji || "✓",
-                      text: i.action || i.title,
-                    })),
+                    tasks: meta.interventions
+                      ?.slice(0, 3)
+                      .map((i: { emoji?: string; action?: string; title?: string }) => ({
+                        emoji: i.emoji || "✓",
+                        text: i.action || i.title,
+                      })),
                   };
                 }
 
@@ -237,4 +244,3 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThinking: (val) => set({ isThinking: val }),
   clearError: () => set({ error: null }),
 }));
-

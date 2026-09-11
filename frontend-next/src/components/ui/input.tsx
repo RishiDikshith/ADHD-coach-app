@@ -12,7 +12,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, className, id, type, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
-    
+
     const isPasswordType = type === "password";
     const resolvedType = isPasswordType ? (showPassword ? "text" : "password") : type;
 
@@ -44,17 +44,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               onClick={() => setShowPassword((prev) => !prev)}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors p-1 rounded-lg hover:bg-white/5 cursor-pointer"
             >
-              {showPassword ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
         </div>
-        {error && (
-          <p className="text-xs text-danger-500 mt-1">{error}</p>
-        )}
+        {error && <p className="text-xs text-danger-500 mt-1">{error}</p>}
       </div>
     );
   }

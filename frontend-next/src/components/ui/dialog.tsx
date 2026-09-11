@@ -18,7 +18,9 @@ export function Dialog({ open, onClose, children, title }: DialogProps) {
     } else {
       document.body.style.overflow = "";
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   useEffect(() => {
@@ -35,7 +37,9 @@ export function Dialog({ open, onClose, children, title }: DialogProps) {
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-surface border border-border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-slide-up p-6">

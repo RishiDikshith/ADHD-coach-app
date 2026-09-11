@@ -54,7 +54,8 @@ const highEnergyTasks = [
 
 const rescueWorkflows = [
   {
-    trigger: "can't start", icon: "🐣",
+    trigger: "can't start",
+    icon: "🐣",
     steps: [
       "Close all tabs except one",
       "Put phone face-down or in another room",
@@ -64,7 +65,8 @@ const rescueWorkflows = [
     ],
   },
   {
-    trigger: "stuck", icon: "🔄",
+    trigger: "stuck",
+    icon: "🔄",
     steps: [
       "Stand up and walk away for 60 seconds",
       "Take 5 deep breaths (in for 4, hold for 4, out for 6)",
@@ -73,7 +75,8 @@ const rescueWorkflows = [
     ],
   },
   {
-    trigger: "scattered", icon: "🌀",
+    trigger: "scattered",
+    icon: "🌀",
     steps: [
       "Write down everything in your head right now",
       "Circle the ONE thing that matters most",
@@ -148,7 +151,11 @@ export default function TasksPage() {
     const isComplex = words.length > 5 || taskInput.length > 30;
     const steps = isComplex
       ? [
-          { emoji: "1️⃣", text: `Open what you need for: "${taskInput.trim().substring(0, 30)}..."`, time: "2 min" },
+          {
+            emoji: "1️⃣",
+            text: `Open what you need for: "${taskInput.trim().substring(0, 30)}..."`,
+            time: "2 min",
+          },
           { emoji: "2️⃣", text: "Do just the first small part", time: "5 min" },
           { emoji: "3️⃣", text: "Take a 2-minute break (set a timer!)", time: "2 min" },
           { emoji: "4️⃣", text: "Do the next small part", time: "5 min" },
@@ -176,8 +183,16 @@ export default function TasksPage() {
       animate="visible"
       className="max-w-4xl mx-auto p-6 space-y-6"
     >
-      <Celebration type="confetti" show={showCelebration} onComplete={() => setShowCelebration(false)} />
-      <Celebration type="sparkle" show={showTaskCelebration} onComplete={() => setShowTaskCelebration(false)} />
+      <Celebration
+        type="confetti"
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+      />
+      <Celebration
+        type="sparkle"
+        show={showTaskCelebration}
+        onComplete={() => setShowTaskCelebration(false)}
+      />
 
       {/* Header */}
       <motion.div variants={itemVariants}>
@@ -195,7 +210,9 @@ export default function TasksPage() {
           >
             <Card variant="glass" className="border-calm-500/30">
               <CardTitle>⚡ How&apos;s your energy right now?</CardTitle>
-              <p className="text-sm text-muted mt-1">I&apos;ll suggest tasks that match your current state.</p>
+              <p className="text-sm text-muted mt-1">
+                I&apos;ll suggest tasks that match your current state.
+              </p>
               <div className="grid grid-cols-3 gap-2 mt-4">
                 {energyLevels.map((e) => (
                   <motion.button
@@ -252,14 +269,19 @@ export default function TasksPage() {
                   </motion.div>
                   <CardTitle>Just Begin Mode</CardTitle>
                   <p className="text-sm text-muted mt-2 max-w-md mx-auto">
-                    When you&apos;re stuck, just start with one tiny thing. Momentum builds from the smallest step.
+                    When you&apos;re stuck, just start with one tiny thing. Momentum builds from the
+                    smallest step.
                   </p>
                   <div className="flex gap-2 justify-center mt-4">
                     <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                      <Button variant="calm" size="lg" onClick={() => {
-                        const task = randomItem(lowEnergyTasks);
-                        handleCompleteTask(`${task.emoji} ${task.text}`, 3);
-                      }}>
+                      <Button
+                        variant="calm"
+                        size="lg"
+                        onClick={() => {
+                          const task = randomItem(lowEnergyTasks);
+                          handleCompleteTask(`${task.emoji} ${task.text}`, 3);
+                        }}
+                      >
                         🌱 2-minute task
                       </Button>
                     </motion.div>
@@ -272,7 +294,9 @@ export default function TasksPage() {
                 </Card>
 
                 <div className="flex items-center justify-between px-2">
-                  <span className="text-sm text-muted">🐣 Start Tiny Mode (always show micro-tasks)</span>
+                  <span className="text-sm text-muted">
+                    🐣 Start Tiny Mode (always show micro-tasks)
+                  </span>
                   <button
                     onClick={() => setStartTinyMode(!startTinyMode)}
                     className={`w-11 h-6 rounded-full transition-all duration-300 relative ${
@@ -342,10 +366,17 @@ export default function TasksPage() {
 
                 <AnimatePresence mode="wait">
                   {energyLevel === "low" && (
-                    <motion.div key="low" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-2">
+                    <motion.div
+                      key="low"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="grid grid-cols-2 gap-2"
+                    >
                       {lowEnergyTasks.map((task, i) => (
                         <motion.button
-                          key={i} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                          key={i}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
                           onClick={() => handleCompleteTask(`${task.emoji} ${task.text}`, 3)}
                           className="p-3 rounded-xl bg-surface border border-border text-left hover:border-calm-500/40 transition-all"
                         >
@@ -356,31 +387,53 @@ export default function TasksPage() {
                     </motion.div>
                   )}
                   {energyLevel === "medium" && (
-                    <motion.div key="medium" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-2">
+                    <motion.div
+                      key="medium"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="grid grid-cols-2 gap-2"
+                    >
                       {mediumEnergyTasks.map((task, i) => (
                         <motion.button
-                          key={i} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                          onClick={() => handleCompleteTask(`${task.emoji} ${task.text} (${task.time})`, 4)}
+                          key={i}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() =>
+                            handleCompleteTask(`${task.emoji} ${task.text} (${task.time})`, 4)
+                          }
                           className="p-3 rounded-xl bg-surface border border-border text-left hover:border-calm-500/40 transition-all"
                         >
                           <span className="text-lg mr-1.5">{task.emoji}</span>
                           <span className="text-xs text-muted">{task.text}</span>
-                          <span className="text-[10px] text-calm-400 block mt-0.5">{task.time}</span>
+                          <span className="text-[10px] text-calm-400 block mt-0.5">
+                            {task.time}
+                          </span>
                         </motion.button>
                       ))}
                     </motion.div>
                   )}
                   {energyLevel === "high" && (
-                    <motion.div key="high" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-2">
+                    <motion.div
+                      key="high"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="grid grid-cols-2 gap-2"
+                    >
                       {highEnergyTasks.map((task, i) => (
                         <motion.button
-                          key={i} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                          onClick={() => handleCompleteTask(`${task.emoji} ${task.text} (${task.time})`, 5)}
+                          key={i}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() =>
+                            handleCompleteTask(`${task.emoji} ${task.text} (${task.time})`, 5)
+                          }
                           className="p-3 rounded-xl bg-surface border border-border text-left hover:border-calm-500/40 transition-all"
                         >
                           <span className="text-lg mr-1.5">{task.emoji}</span>
                           <span className="text-xs text-muted">{task.text}</span>
-                          <span className="text-[10px] text-warm-400 block mt-0.5">{task.time}</span>
+                          <span className="text-[10px] text-warm-400 block mt-0.5">
+                            {task.time}
+                          </span>
                         </motion.button>
                       ))}
                     </motion.div>
@@ -390,8 +443,9 @@ export default function TasksPage() {
                 <Card variant="stat">
                   <CardTitle>⚡ What is energy-aware tasking?</CardTitle>
                   <p className="text-sm text-muted mt-2">
-                    Instead of fighting your brain, work WITH your current energy level. Low energy? Do micro-tasks.
-                    High energy? Tackle deep work. This is how ADHD brains actually thrive.
+                    Instead of fighting your brain, work WITH your current energy level. Low energy?
+                    Do micro-tasks. High energy? Tackle deep work. This is how ADHD brains actually
+                    thrive.
                   </p>
                 </Card>
               </div>
@@ -402,7 +456,9 @@ export default function TasksPage() {
               <div className="space-y-4">
                 <Card>
                   <CardTitle>🔨 Break Down a Task</CardTitle>
-                  <p className="text-sm text-muted mt-1">Tell me what feels overwhelming and I&apos;ll break it into micro-steps.</p>
+                  <p className="text-sm text-muted mt-1">
+                    Tell me what feels overwhelming and I&apos;ll break it into micro-steps.
+                  </p>
                   <div className="mt-3 flex gap-2">
                     <input
                       type="text"
@@ -433,10 +489,18 @@ export default function TasksPage() {
                 <Card variant="glass">
                   <CardTitle>💡 Why this works for ADHD</CardTitle>
                   <ul className="mt-3 space-y-2 text-sm text-muted">
-                    <li>🧠 <strong>Reduces overwhelm</strong> by making tasks concrete and countable</li>
-                    <li>🎯 <strong>Eliminates choice paralysis</strong> — you only need to do step 1</li>
-                    <li>⚡ <strong>Builds momentum</strong> — starting is the hardest part</li>
-                    <li>✨ <strong>Dopamine hits</strong> — each tiny step completed feels good</li>
+                    <li>
+                      🧠 <strong>Reduces overwhelm</strong> by making tasks concrete and countable
+                    </li>
+                    <li>
+                      🎯 <strong>Eliminates choice paralysis</strong> — you only need to do step 1
+                    </li>
+                    <li>
+                      ⚡ <strong>Builds momentum</strong> — starting is the hardest part
+                    </li>
+                    <li>
+                      ✨ <strong>Dopamine hits</strong> — each tiny step completed feels good
+                    </li>
                   </ul>
                 </Card>
               </div>
@@ -473,7 +537,9 @@ export default function TasksPage() {
                             size="sm"
                             className="w-full mt-3"
                             onClick={() => {
-                              setCurrentTask(`🆘 Rescue: I can't start — \n\n${wf.steps.map((s, j) => `${j + 1}. ${s}`).join("\n")}`);
+                              setCurrentTask(
+                                `🆘 Rescue: I can't start — \n\n${wf.steps.map((s, j) => `${j + 1}. ${s}`).join("\n")}`
+                              );
                               addPoints(5);
                               setShowTaskCelebration(true);
                               setTimeout(() => setShowTaskCelebration(false), 2000);
@@ -490,9 +556,18 @@ export default function TasksPage() {
                 <Card variant="stat">
                   <CardTitle>🌿 When to use Rescue Mode</CardTitle>
                   <div className="mt-3 text-sm text-muted space-y-2">
-                    <p>🌀 <strong>Can&apos;t start?</strong> Use the &quot;Can&apos;t Start&quot; rescue — it reduces friction to almost zero.</p>
-                    <p>🔄 <strong>Feeling stuck?</strong> The &quot;Stuck&quot; rescue resets your brain with a physical + mental shift.</p>
-                    <p>🌪️ <strong>Feeling scattered?</strong> The &quot;Scattered&quot; rescue gives you one clear focus point.</p>
+                    <p>
+                      🌀 <strong>Can&apos;t start?</strong> Use the &quot;Can&apos;t Start&quot;
+                      rescue — it reduces friction to almost zero.
+                    </p>
+                    <p>
+                      🔄 <strong>Feeling stuck?</strong> The &quot;Stuck&quot; rescue resets your
+                      brain with a physical + mental shift.
+                    </p>
+                    <p>
+                      🌪️ <strong>Feeling scattered?</strong> The &quot;Scattered&quot; rescue gives
+                      you one clear focus point.
+                    </p>
                   </div>
                 </Card>
               </div>
@@ -526,7 +601,9 @@ export default function TasksPage() {
                 <Card>
                   <CardTitle>☕ Pomodoro Break Guide</CardTitle>
                   <div className="mt-3 text-sm text-muted space-y-2">
-                    <p>🎯 <strong>25 min focus</strong> → 5 min active break</p>
+                    <p>
+                      🎯 <strong>25 min focus</strong> → 5 min active break
+                    </p>
                     <p>🎯 After 4 cycles → take a 15-30 min real break</p>
                     <p>🎯 During breaks: move your body, hydrate, rest your eyes</p>
                     <p>🎯 Use the Focus Timer to track sessions</p>

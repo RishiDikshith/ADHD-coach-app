@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useUserStore } from "@/stores/user-store";
 import { useAnalyticsStore } from "@/stores/analytics-store";
-import { api } from "@/lib/api-client";
+import { api, type TrustedDeviceItem, type ConnectedAccountItem } from "@/lib/api-client";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -48,7 +48,8 @@ const supportedAccents = [
 
 export default function SettingsPage() {
   const { settings, updateSettings, username } = useUserStore();
-  const { timeBlindnessEnabled, toggleTimeBlindness, startTinyMode, setStartTinyMode } = useAnalyticsStore();
+  const { timeBlindnessEnabled, toggleTimeBlindness, startTinyMode, setStartTinyMode } =
+    useAnalyticsStore();
 
   const [coachTone, setCoachTone] = useState(settings.coach_tone || "encouraging");
   const [focusArea, setFocusArea] = useState(settings.focus_area || "general");
@@ -66,44 +67,54 @@ export default function SettingsPage() {
   const [enteredPin, setEnteredPin] = useState("");
   const [pinMessage, setPinMessage] = useState("");
   const [pinError, setPinError] = useState("");
-  const [devices, setDevices] = useState<any[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
-
-  const fetchAccounts = async () => {
-    try {
-      setLoadingAccounts(true);
-      const res = await api.getConnectedAccounts();
-      setConnectedAccounts(res);
-    } catch (err) {
-      console.error("Failed to load connected accounts:", err);
-    } finally {
-      setLoadingAccounts(false);
-    }
-  };
+  const [devices, setDevices] = useState<TrustedDeviceItem[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountItem[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(() =>
+    Boolean(useUserStore.getState().username)
+  );
+  const [loadingAccounts, setLoadingAccounts] = useState(() =>
+    Boolean(useUserStore.getState().username)
+  );
 
   const fetchDevices = async () => {
     try {
-      setLoadingDevices(true);
       const res = await api.getTrustedDevices();
       setDevices(res);
     } catch (err) {
       console.error("Failed to load trusted devices:", err);
-      api.getDevices().then(setDevices).catch(() => {});
-    } finally {
-      setLoadingDevices(false);
     }
   };
 
   useEffect(() => {
-    if (username) {
-      api.hasPin()
-        .then((res) => setHasPin(res.has_pin))
-        .catch(() => {});
-      fetchDevices();
-      fetchAccounts();
-    }
+    if (!username) return;
+    let active = true;
+    api
+      .hasPin()
+      .then((res) => {
+        if (active) setHasPin(res.has_pin);
+      })
+      .catch(() => {});
+    api
+      .getTrustedDevices()
+      .then((res) => {
+        if (active) setDevices(res);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingDevices(false);
+      });
+    api
+      .getConnectedAccounts()
+      .then((res) => {
+        if (active) setConnectedAccounts(res);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingAccounts(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [username]);
 
   const handleSetPin = async () => {
@@ -113,8 +124,9 @@ export default function SettingsPage() {
     }
     try {
       const devId = useUserStore.getState().getDeviceId();
-      const devName = typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
-      
+      const devName =
+        typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
+
       const res = await api.setPin(enteredPin, devId, devName);
       if (res.success) {
         setHasPin(true);
@@ -127,8 +139,8 @@ export default function SettingsPage() {
       } else {
         setPinError(res.message || "Failed to set PIN");
       }
-    } catch (err: any) {
-      setPinError(err.message || "Error setting PIN");
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : "Error setting PIN");
     }
   };
 
@@ -144,8 +156,8 @@ export default function SettingsPage() {
       } else {
         setPinError(res.message || "Failed to remove PIN");
       }
-    } catch (err: any) {
-      setPinError(err.message || "Error removing PIN");
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : "Error removing PIN");
     }
   };
 
@@ -165,8 +177,8 @@ export default function SettingsPage() {
       } else {
         setPinError(res.message || "Failed to remove device");
       }
-    } catch (err: any) {
-      setPinError(err.message || "Error removing device");
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : "Error removing device");
     }
   };
 
@@ -180,8 +192,8 @@ export default function SettingsPage() {
       } else {
         setPinError(res.message || "Failed to revoke all devices");
       }
-    } catch (err: any) {
-      setPinError(err.message || "Error revoking all devices");
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : "Error revoking all devices");
     }
   };
 
@@ -203,36 +215,37 @@ export default function SettingsPage() {
   const playVoiceTest = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    
+
     let text = "Hello! Your new ADHD voice companion is ready.";
     if (selectedLanguage === "es") text = "¡Hola! Tu nuevo asistente de voz para TDAH está listo.";
     else if (selectedLanguage === "fr") text = "Bonjour! Votre nouveau compagnon vocal est prêt.";
     else if (selectedLanguage === "de") text = "Hallo! Dein neuer ADHS-Sprachbegleiter ist bereit.";
     else if (selectedLanguage === "it") text = "Ciao! Il tuo nuovo assistente vocale è pronto.";
     else if (selectedLanguage === "pt") text = "Olá! O seu novo companheiro de voz está pronto.";
-    else if (selectedLanguage === "ja") text = "こんにちは。ADHD音声アシスタントの準備ができました。";
+    else if (selectedLanguage === "ja")
+      text = "こんにちは。ADHD音声アシスタントの準備ができました。";
     else if (selectedLanguage === "zh") text = "你好！您的ADHD语音助手已准备就绪。";
     else if (selectedLanguage === "hi") text = "नमस्ते! आपका नया एडीएचडी वॉयस असिस्टेंट तैयार है।";
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = voiceSpeed;
     utterance.pitch = voicePitch;
-    
+
     const voices = window.speechSynthesis.getVoices();
     let matchedVoice = null;
-    
+
     if (voiceAccent !== "auto") {
-      matchedVoice = voices.find(v => v.lang.startsWith(voiceAccent));
+      matchedVoice = voices.find((v) => v.lang.startsWith(voiceAccent));
     }
-    
+
     if (!matchedVoice) {
-      matchedVoice = voices.find(v => v.lang.startsWith(selectedLanguage));
+      matchedVoice = voices.find((v) => v.lang.startsWith(selectedLanguage));
     }
-    
+
     if (matchedVoice) {
       utterance.voice = matchedVoice;
     }
-    
+
     window.speechSynthesis.speak(utterance);
   };
 
@@ -257,24 +270,33 @@ export default function SettingsPage() {
             {/* Coach Tone */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Coach Tone</label>
-              <p className="text-xs text-muted mb-3">How would you like your AI coach to speak to you?</p>
+              <p className="text-xs text-muted mb-3">
+                How would you like your AI coach to speak to you?
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: "encouraging", emoji: "🌟", label: "Encouraging", desc: "Warm, supportive, celebratory" },
+                  {
+                    id: "encouraging",
+                    emoji: "🌟",
+                    label: "Encouraging",
+                    desc: "Warm, supportive, celebratory",
+                  },
                   { id: "direct", emoji: "🎯", label: "Direct", desc: "Clear, concise, no fluff" },
                   { id: "gentle", emoji: "🌿", label: "Gentle", desc: "Soft, calming, patient" },
                   { id: "humorous", emoji: "😄", label: "Humorous", desc: "Light, funny, playful" },
                 ].map((tone) => (
                   <motion.button
-                     key={tone.id}
-                     whileHover={{ scale: 1.02 }}
-                     whileTap={{ scale: 0.98 }}
-                     onClick={() => setCoachTone(tone.id as "encouraging" | "direct" | "gentle" | "humorous")}
-                     className={`p-3 rounded-xl text-left transition-all duration-200 border ${
-                       coachTone === tone.id
-                         ? "bg-calm-500/10 border-calm-500/50 text-calm-400"
-                         : "bg-surface border-border text-muted hover:border-calm-500/30"
-                     }`}
+                    key={tone.id}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() =>
+                      setCoachTone(tone.id as "encouraging" | "direct" | "gentle" | "humorous")
+                    }
+                    className={`p-3 rounded-xl text-left transition-all duration-200 border ${
+                      coachTone === tone.id
+                        ? "bg-calm-500/10 border-calm-500/50 text-calm-400"
+                        : "bg-surface border-border text-muted hover:border-calm-500/30"
+                    }`}
                   >
                     <span className="text-lg block mb-1">{tone.emoji}</span>
                     <span className="text-sm font-medium block">{tone.label}</span>
@@ -286,7 +308,9 @@ export default function SettingsPage() {
 
             {/* Focus Area */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Primary Focus Area</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Primary Focus Area
+              </label>
               <p className="text-xs text-muted mb-3">What would you like to work on most?</p>
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -327,7 +351,9 @@ export default function SettingsPage() {
           <div className="mt-4 space-y-5">
             {/* Lang Dropdown */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Default Coach Language</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Default Coach Language
+              </label>
               <p className="text-xs text-muted mb-2.5">
                 Which language should the agent chat, analyze context, and store memories in?
               </p>
@@ -346,7 +372,9 @@ export default function SettingsPage() {
 
             {/* Accent Style Selector */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Speaking Accent / Style</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Speaking Accent / Style
+              </label>
               <p className="text-xs text-muted mb-2.5">
                 Choose the localized synthesis profile for the voice feedback.
               </p>
@@ -367,7 +395,9 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between py-2 border-t border-border/40">
               <div>
                 <p className="text-sm font-medium text-foreground">🔊 Auto-Speak Agent Responses</p>
-                <p className="text-xs text-muted">Automatically speaks agent replies aloud as they finish streaming</p>
+                <p className="text-xs text-muted">
+                  Automatically speaks agent replies aloud as they finish streaming
+                </p>
               </div>
               <button
                 onClick={() => setVoiceAutospeak(!voiceAutospeak)}
@@ -403,7 +433,12 @@ export default function SettingsPage() {
 
             {/* Voice Testing Box */}
             <div className="flex items-center gap-3 pt-3 border-t border-border/40">
-              <Button onClick={playVoiceTest} variant="outline" size="sm" className="text-xs font-bold rounded-xl flex items-center gap-1">
+              <Button
+                onClick={playVoiceTest}
+                variant="outline"
+                size="sm"
+                className="text-xs font-bold rounded-xl flex items-center gap-1"
+              >
                 🗣️ Play Test Phrase
               </Button>
               <Button onClick={handleSave} size="sm" className="text-xs font-bold rounded-xl">
@@ -419,9 +454,24 @@ export default function SettingsPage() {
         <Card>
           <CardTitle>⏱️ Focus Timer</CardTitle>
           <div className="mt-4">
-            <Slider label="Default session duration (minutes)" value={timerDuration} onChange={setTimerDuration} min={5} max={120} step={5} />
+            <Slider
+              label="Default session duration (minutes)"
+              value={timerDuration}
+              onChange={setTimerDuration}
+              min={5}
+              max={120}
+              step={5}
+            />
             <motion.div whileTap={{ scale: 0.98 }}>
-              <Button className="mt-3" size="sm" onClick={() => { updateSettings({ timer_duration: timerDuration }); setSaved(true); setTimeout(() => setSaved(false), 2000); }}>
+              <Button
+                className="mt-3"
+                size="sm"
+                onClick={() => {
+                  updateSettings({ timer_duration: timerDuration });
+                  setSaved(true);
+                  setTimeout(() => setSaved(false), 2000);
+                }}
+              >
                 Update Timer Duration
               </Button>
             </motion.div>
@@ -439,8 +489,15 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-foreground">🌙 Time Blindness Helper</p>
                 <p className="text-xs text-muted">Shows a visual day progress bar in the sidebar</p>
               </div>
-              <button onClick={toggleTimeBlindness} className={`w-11 h-6 rounded-full transition-all duration-300 relative ${timeBlindnessEnabled ? "bg-calm-500" : "bg-border"}`}>
-                <motion.div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow" animate={{ left: timeBlindnessEnabled ? 22 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
+              <button
+                onClick={toggleTimeBlindness}
+                className={`w-11 h-6 rounded-full transition-all duration-300 relative ${timeBlindnessEnabled ? "bg-calm-500" : "bg-border"}`}
+              >
+                <motion.div
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                  animate={{ left: timeBlindnessEnabled ? 22 : 2 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
               </button>
             </div>
             <div className="flex items-center justify-between">
@@ -448,8 +505,15 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-foreground">🐣 Start Tiny Mode</p>
                 <p className="text-xs text-muted">Default to micro-tasks and small wins</p>
               </div>
-              <button onClick={() => setStartTinyMode(!startTinyMode)} className={`w-11 h-6 rounded-full transition-all duration-300 relative ${startTinyMode ? "bg-calm-500" : "bg-border"}`}>
-                <motion.div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow" animate={{ left: startTinyMode ? 22 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
+              <button
+                onClick={() => setStartTinyMode(!startTinyMode)}
+                className={`w-11 h-6 rounded-full transition-all duration-300 relative ${startTinyMode ? "bg-calm-500" : "bg-border"}`}
+              >
+                <motion.div
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                  animate={{ left: startTinyMode ? 22 : 2 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
               </button>
             </div>
             <div className="flex items-center justify-between">
@@ -467,13 +531,13 @@ export default function SettingsPage() {
       <motion.div variants={itemVariants}>
         <Card>
           <CardTitle>🔒 Security PIN Settings</CardTitle>
-          
+
           {showPinSetup ? (
             <div className="space-y-4 pt-3 mt-4 border-t border-border/40">
               <p className="text-sm font-medium text-foreground text-center">
                 Enter a 4-Digit Security PIN
               </p>
-              
+
               <div className="flex justify-center gap-3 py-2">
                 {[0, 1, 2, 3].map((index) => (
                   <div
@@ -486,13 +550,11 @@ export default function SettingsPage() {
                   />
                 ))}
               </div>
-              
+
               {pinError && (
-                <p className="text-xs text-danger-500 text-center font-medium">
-                  {pinError}
-                </p>
+                <p className="text-xs text-danger-500 text-center font-medium">{pinError}</p>
               )}
-              
+
               {/* Keypad */}
               <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
@@ -556,11 +618,7 @@ export default function SettingsPage() {
                 >
                   Cancel
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSetPin}
-                  disabled={enteredPin.length !== 4}
-                >
+                <Button size="sm" onClick={handleSetPin} disabled={enteredPin.length !== 4}>
                   Confirm PIN
                 </Button>
               </div>
@@ -626,7 +684,9 @@ export default function SettingsPage() {
               {/* Trusted Devices List */}
               <div className="pt-4 mt-4 border-t border-border/40 w-full space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-foreground">📱 Trusted Devices ({devices.length})</h4>
+                  <h4 className="text-xs font-semibold text-foreground">
+                    📱 Trusted Devices ({devices.length})
+                  </h4>
                   {devices.length > 1 && (
                     <button
                       type="button"
@@ -651,7 +711,9 @@ export default function SettingsPage() {
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-semibold text-foreground text-xs">{dev.device_name}</p>
+                            <p className="font-semibold text-foreground text-xs">
+                              {dev.device_name}
+                            </p>
                             {dev.is_current && (
                               <span className="px-2 py-0.5 rounded-full text-[10px] bg-calm-500/10 text-calm-400 border border-calm-500/30 font-medium">
                                 Current Device
@@ -659,7 +721,8 @@ export default function SettingsPage() {
                             )}
                           </div>
                           <p className="text-[10px] text-muted">
-                            Last Active: {dev.last_used ? new Date(dev.last_used).toLocaleString() : "Recently"}
+                            Last Active:{" "}
+                            {dev.last_used ? new Date(dev.last_used).toLocaleString() : "Recently"}
                           </p>
                         </div>
                         <button
@@ -698,10 +761,22 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-surface-secondary/30">
                     <div className="flex items-center gap-3">
                       <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
                       </svg>
                       <div>
                         <p className="text-xs font-semibold text-foreground">Google</p>
@@ -736,7 +811,10 @@ export default function SettingsPage() {
           <div className="mt-3 text-sm text-muted space-y-2">
             <p>Version 2.0 — ADHD Executive Function Ecosystem</p>
             <p>Free & Open Source · Built with Next.js + FastAPI</p>
-            <p>Designed specifically for ADHD brains — reducing cognitive load, providing dopamine-friendly feedback, and offering emotionally intelligent support.</p>
+            <p>
+              Designed specifically for ADHD brains — reducing cognitive load, providing
+              dopamine-friendly feedback, and offering emotionally intelligent support.
+            </p>
           </div>
         </Card>
       </motion.div>

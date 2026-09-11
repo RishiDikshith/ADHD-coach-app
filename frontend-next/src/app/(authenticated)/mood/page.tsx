@@ -40,7 +40,9 @@ export default function MoodPage() {
   const { game, addPoints, addBadge } = useUserStore();
   const { currentMood, setCurrentMood, moodHistory, addMood, loading } = useAnalyticsStore();
   const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationType, setCelebrationType] = useState<"confetti" | "sparkle" | "levelUp">("confetti");
+  const [celebrationType, setCelebrationType] = useState<"confetti" | "sparkle" | "levelUp">(
+    "confetti"
+  );
   const [completedHabits, setCompletedHabits] = useState<string[]>([]);
   const [journalEntry, setJournalEntry] = useState("");
   const [energy, setEnergy] = useState(5);
@@ -58,9 +60,7 @@ export default function MoodPage() {
 
   const toggleHabit = (id: string) => {
     const isAdding = !completedHabits.includes(id);
-    const next = isAdding
-      ? [...completedHabits, id]
-      : completedHabits.filter((h) => h !== id);
+    const next = isAdding ? [...completedHabits, id] : completedHabits.filter((h) => h !== id);
 
     setCompletedHabits(next);
 
@@ -91,9 +91,7 @@ export default function MoodPage() {
   });
   const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
   const todayStr = new Date().toISOString().split("T")[0];
-  const todayEntries = moodHistory.filter(
-    (m) => m.timestamp.startsWith(todayStr)
-  );
+  const todayEntries = moodHistory.filter((m) => m.timestamp.startsWith(todayStr));
 
   return (
     <motion.div
@@ -102,7 +100,11 @@ export default function MoodPage() {
       animate="visible"
       className="max-w-4xl mx-auto p-6 space-y-6"
     >
-      <Celebration type={celebrationType} show={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <Celebration
+        type={celebrationType}
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+      />
 
       {/* Header */}
       <motion.div variants={itemVariants}>
@@ -196,7 +198,9 @@ export default function MoodPage() {
           {/* Journal */}
           <Card>
             <CardTitle>📝 Quick Journal</CardTitle>
-            <CardDescription className="mt-1">Write a short note about how you&apos;re doing</CardDescription>
+            <CardDescription className="mt-1">
+              Write a short note about how you&apos;re doing
+            </CardDescription>
             <div className="mt-3">
               <textarea
                 value={journalEntry}
@@ -221,28 +225,33 @@ export default function MoodPage() {
             <Card>
               <CardTitle>📊 Recent Mood Timeline</CardTitle>
               <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
-                {[...moodHistory].reverse().slice(0, 30).map((entry, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm py-1">
-                    <span className="text-lg">{entry.emoji}</span>
-                    <span className="text-xs text-muted">
-                      {new Date(entry.timestamp).toLocaleDateString([], {
-                        weekday: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {entry.energy && (
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: entry.energy }).map((_, j) => (
-                          <div key={j} className="w-1.5 h-1.5 rounded-full bg-warm-400" />
-                        ))}
-                      </div>
-                    )}
-                    {entry.note && (
-                      <span className="text-xs text-muted truncate max-w-[200px]">{entry.note}</span>
-                    )}
-                  </div>
-                ))}
+                {[...moodHistory]
+                  .reverse()
+                  .slice(0, 30)
+                  .map((entry, i) => (
+                    <div key={i} className="flex items-center gap-3 text-sm py-1">
+                      <span className="text-lg">{entry.emoji}</span>
+                      <span className="text-xs text-muted">
+                        {new Date(entry.timestamp).toLocaleDateString([], {
+                          weekday: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {entry.energy && (
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: entry.energy }).map((_, j) => (
+                            <div key={j} className="w-1.5 h-1.5 rounded-full bg-warm-400" />
+                          ))}
+                        </div>
+                      )}
+                      {entry.note && (
+                        <span className="text-xs text-muted truncate max-w-[200px]">
+                          {entry.note}
+                        </span>
+                      )}
+                    </div>
+                  ))}
               </div>
             </Card>
           )}

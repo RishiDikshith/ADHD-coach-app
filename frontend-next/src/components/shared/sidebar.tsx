@@ -27,16 +27,25 @@ const navItems = [
 ];
 
 const tinyTasks = [
-  "💧 Drink a glass of water", "🌬️ Take 3 deep breaths", "🧘 Stand up and stretch",
-  "📝 Write one sentence", "🔖 Open the one tab you need", "🧹 Put one thing away",
-  "😌 Close your eyes for 30s", "☀️ Step outside for 1 minute",
-  "🎵 Play one calming song", "✍️ Write one thing you're grateful for",
+  "💧 Drink a glass of water",
+  "🌬️ Take 3 deep breaths",
+  "🧘 Stand up and stretch",
+  "📝 Write one sentence",
+  "🔖 Open the one tab you need",
+  "🧹 Put one thing away",
+  "😌 Close your eyes for 30s",
+  "☀️ Step outside for 1 minute",
+  "🎵 Play one calming song",
+  "✍️ Write one thing you're grateful for",
 ];
 
 const moods = [
-  { emoji: "😊", label: "Happy" }, { emoji: "😌", label: "Calm" },
-  { emoji: "😐", label: "Okay" }, { emoji: "😟", label: "Worried" },
-  { emoji: "😰", label: "Anxious" }, { emoji: "😤", label: "Frustrated" },
+  { emoji: "😊", label: "Happy" },
+  { emoji: "😌", label: "Calm" },
+  { emoji: "😐", label: "Okay" },
+  { emoji: "😟", label: "Worried" },
+  { emoji: "😰", label: "Anxious" },
+  { emoji: "😤", label: "Frustrated" },
 ];
 
 const sidebarVariants = {
@@ -48,7 +57,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { username, game, logout, role } = useUserStore();
-  const { currentMood, setCurrentMood, timeBlindnessEnabled, startTinyMode, setStartTinyMode } = useAnalyticsStore();
+  const { currentMood, setCurrentMood, timeBlindnessEnabled, startTinyMode, setStartTinyMode } =
+    useAnalyticsStore();
   const timer = useTimerStore();
   const [mounted, setMounted] = useState(false);
   const [microTask, setMicroTask] = useState("");
@@ -65,13 +75,14 @@ export function Sidebar() {
   const tod = getTimeOfDay();
   const dayPct = getDayProgress();
 
-  const itemsToRender = role === "admin"
-    ? [
-        ...navItems.slice(0, 1),
-        { href: "/admin", label: "Admin Dashboard", icon: "🛡️" },
-        ...navItems.slice(1)
-      ]
-    : navItems;
+  const itemsToRender =
+    role === "admin"
+      ? [
+          ...navItems.slice(0, 1),
+          { href: "/admin", label: "Admin Dashboard", icon: "🛡️" },
+          ...navItems.slice(1),
+        ]
+      : navItems;
 
   return (
     <motion.aside
@@ -83,9 +94,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="glass-strong m-3 rounded-2xl p-4 text-center">
         <h2 className="text-lg font-bold gradient-text">🧠 ADHD Coach</h2>
-        {username && (
-          <p className="text-xs text-muted mt-1">Welcome, {username}</p>
-        )}
+        {username && <p className="text-xs text-muted mt-1">Welcome, {username}</p>}
       </div>
 
       {/* Time Blindness */}
@@ -98,7 +107,9 @@ export function Sidebar() {
             className="px-4 pb-2"
           >
             <div className="flex items-center gap-2 text-xs text-muted mb-1.5">
-              <span>{tod.emoji} {tod.label}</span>
+              <span>
+                {tod.emoji} {tod.label}
+              </span>
               <span className="text-muted-foreground">— Day {dayPct}% complete</span>
             </div>
             <div className="h-1.5 bg-border rounded-full overflow-hidden">
@@ -246,7 +257,9 @@ export function Sidebar() {
             >
               <p className="text-xs text-calm-400 mb-2">Everything in 2 minutes or less!</p>
               <Button
-                variant="calm" size="sm" className="w-full"
+                variant="calm"
+                size="sm"
+                className="w-full"
                 onClick={() => setMicroTask(randomItem(tinyTasks))}
               >
                 🌱 2-minute task
@@ -272,7 +285,10 @@ export function Sidebar() {
           {!timer.isActive ? (
             <>
               <input
-                type="range" min={5} max={120} step={5}
+                type="range"
+                min={5}
+                max={120}
+                step={5}
                 value={timer.duration / 60}
                 onChange={(e) => timer.setDuration(Number(e.target.value))}
                 className="w-full accent-calm-500"
@@ -291,7 +307,12 @@ export function Sidebar() {
               >
                 {timer.getFormattedTime()}
               </motion.p>
-              <Button size="sm" variant="danger" className="w-full mt-2" onClick={() => timer.stop()}>
+              <Button
+                size="sm"
+                variant="danger"
+                className="w-full mt-2"
+                onClick={() => timer.stop()}
+              >
                 ⏹ Stop
               </Button>
             </>
@@ -302,10 +323,14 @@ export function Sidebar() {
       {/* Badges */}
       {game.badges.length > 0 && (
         <div className="px-3 pb-3">
-          <p className="text-xs text-muted font-semibold uppercase tracking-wider mb-2">🏅 Badges</p>
+          <p className="text-xs text-muted font-semibold uppercase tracking-wider mb-2">
+            🏅 Badges
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {game.badges.map((badge) => (
-              <Badge key={badge} variant="purple">{badge}</Badge>
+              <Badge key={badge} variant="purple">
+                {badge}
+              </Badge>
             ))}
           </div>
         </div>

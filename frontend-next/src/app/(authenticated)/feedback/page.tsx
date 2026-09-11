@@ -53,12 +53,7 @@ export default function FeedbackPage() {
 
     setIsSubmitting(true);
     try {
-      const response = await api.submitFeedback(
-        username,
-        rating,
-        category,
-        feedbackText
-      );
+      const response = await api.submitFeedback(username, rating, category, feedbackText);
 
       if (response.success) {
         // Award XP on local Zustand store
@@ -91,7 +86,11 @@ export default function FeedbackPage() {
       animate="visible"
       className="max-w-3xl mx-auto p-6 space-y-6"
     >
-      <Celebration type="confetti" show={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <Celebration
+        type="confetti"
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+      />
 
       {/* Header */}
       <motion.div variants={itemVariants}>
@@ -106,10 +105,15 @@ export default function FeedbackPage() {
             <span className="text-2xl">⚡</span>
             <div>
               <p className="text-sm font-semibold text-calm-400">Dopamine Reward Active</p>
-              <p className="text-xs text-muted">Complete this quick check-in feedback to boost your momentum & unlock +15 XP instantly!</p>
+              <p className="text-xs text-muted">
+                Complete this quick check-in feedback to boost your momentum & unlock +15 XP
+                instantly!
+              </p>
             </div>
           </div>
-          <Badge variant="purple" className="px-3 py-1 font-mono">+15 XP</Badge>
+          <Badge variant="purple" className="px-3 py-1 font-mono">
+            +15 XP
+          </Badge>
         </div>
       </motion.div>
 
@@ -119,7 +123,9 @@ export default function FeedbackPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Category Select */}
             <div>
-              <CardTitle className="text-base font-semibold">1. What area is your feedback about?</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                1. What area is your feedback about?
+              </CardTitle>
               <CardDescription className="mt-1">Pick a topic to route your advice</CardDescription>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-3">
                 {feedbackCategories.map((cat) => (
@@ -143,8 +149,10 @@ export default function FeedbackPage() {
             {/* Satisfaction Rating Slider/Buttons */}
             <div>
               <CardTitle className="text-base font-semibold">2. Rate your experience</CardTitle>
-              <CardDescription className="mt-1">How supportive has the coach felt in this area?</CardDescription>
-              
+              <CardDescription className="mt-1">
+                How supportive has the coach felt in this area?
+              </CardDescription>
+
               <div className="grid grid-cols-5 gap-2 mt-4">
                 {satisfactionRatings.map((sat) => {
                   const isSelected = rating === sat.value;
@@ -159,7 +167,7 @@ export default function FeedbackPage() {
                           : "bg-surface border-border opacity-70 hover:opacity-100 hover:border-calm-500/10"
                       }`}
                     >
-                      <motion.span 
+                      <motion.span
                         animate={isSelected ? { scale: [1, 1.2, 1] } : {}}
                         className="text-3xl block"
                       >
@@ -176,16 +184,19 @@ export default function FeedbackPage() {
               {/* Dynamic feedback indicator description */}
               <div className="mt-3 text-center">
                 <span className="text-xs font-semibold text-calm-400">
-                  {satisfactionRatings.find(r => r.value === rating)?.label}
+                  {satisfactionRatings.find((r) => r.value === rating)?.label}
                 </span>
               </div>
             </div>
 
             {/* Textarea */}
             <div>
-              <CardTitle className="text-base font-semibold">3. Share your thoughts (ADHD-friendly check-in)</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                3. Share your thoughts (ADHD-friendly check-in)
+              </CardTitle>
               <CardDescription className="mt-1">
-                Zero pressure. Write a sentence, bullet points, or paragraphs — whatever flows easiest for you!
+                Zero pressure. Write a sentence, bullet points, or paragraphs — whatever flows
+                easiest for you!
               </CardDescription>
               <div className="mt-3">
                 <textarea
@@ -224,7 +235,9 @@ export default function FeedbackPage() {
           className="bg-calm-500/10 border border-calm-500/20 text-calm-400 p-4 rounded-xl text-center text-sm font-medium"
         >
           {successMessage}
-          <div className="mt-1 text-xs text-muted-foreground font-mono">⚡ XP Awarded! Check your level progression in the sidebar.</div>
+          <div className="mt-1 text-xs text-muted-foreground font-mono">
+            ⚡ XP Awarded! Check your level progression in the sidebar.
+          </div>
         </motion.div>
       )}
     </motion.div>

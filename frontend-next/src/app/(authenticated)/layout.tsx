@@ -7,11 +7,7 @@ import { BottomNav } from "@/components/shared/bottom-nav";
 import { PinSetupModal } from "@/components/shared/PinSetupModal";
 import { useUserStore } from "@/stores/user-store";
 
-export default function AuthenticatedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const authStatus = useUserStore((state) => state.authStatus);
 
@@ -20,7 +16,11 @@ export default function AuthenticatedLayout({
   }, [authStatus, router]);
 
   if (authStatus === "initializing") {
-    return <div className="flex h-screen items-center justify-center text-muted">Checking your session…</div>;
+    return (
+      <div className="flex h-screen items-center justify-center text-muted">
+        Checking your session…
+      </div>
+    );
   }
 
   if (authStatus !== "authenticated") return null;
@@ -35,9 +35,7 @@ export default function AuthenticatedLayout({
         <Sidebar />
       </div>
       <main className="flex-1 overflow-y-auto bg-gradient-to-b from-background via-background-secondary to-background pb-16 md:pb-0">
-        <div className="max-w-6xl mx-auto">
-          {children}
-        </div>
+        <div className="max-w-6xl mx-auto">{children}</div>
       </main>
       {/* Mobile bottom navigation */}
       <div className="md:hidden">

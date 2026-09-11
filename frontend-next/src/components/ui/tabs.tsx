@@ -28,9 +28,10 @@ export function Tabs({ tabs, children, defaultTab, className = "" }: TabsProps) 
             className={`
               px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all duration-200
               border-b-2 -mb-px
-              ${active === tab.id
-                ? "border-calm-500 text-calm-400"
-                : "border-transparent text-muted hover:text-foreground hover:border-border"
+              ${
+                active === tab.id
+                  ? "border-calm-500 text-calm-400"
+                  : "border-transparent text-muted hover:text-foreground hover:border-border"
               }
             `}
           >

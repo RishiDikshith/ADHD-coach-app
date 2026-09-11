@@ -47,9 +47,7 @@ export function SwitchGroup({ items }: SwitchGroupProps) {
         <div key={item.id} className="flex items-center justify-between">
           <div className="flex-1">
             <p className="text-sm text-foreground">{item.label}</p>
-            {item.description && (
-              <p className="text-xs text-muted">{item.description}</p>
-            )}
+            {item.description && <p className="text-xs text-muted">{item.description}</p>}
           </div>
           <Switch checked={item.checked} onChange={item.onChange} />
         </div>

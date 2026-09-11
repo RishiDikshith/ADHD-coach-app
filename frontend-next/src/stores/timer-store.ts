@@ -24,11 +24,9 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   startTime: null,
   sessionsCompleted: 0,
 
-  setDuration: (minutes) =>
-    set({ duration: minutes * 60, seconds: minutes * 60 }),
+  setDuration: (minutes) => set({ duration: minutes * 60, seconds: minutes * 60 }),
 
-  start: () =>
-    set({ isActive: true, startTime: Date.now() }),
+  start: () => set({ isActive: true, startTime: Date.now() }),
 
   stop: () => set({ isActive: false, startTime: null }),
 

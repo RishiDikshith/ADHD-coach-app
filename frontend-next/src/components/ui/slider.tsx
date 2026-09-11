@@ -14,9 +14,7 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, label }:
 
   return (
     <div className="space-y-2">
-      {label && (
-        <label className="text-sm text-muted font-medium">{label}</label>
-      )}
+      {label && <label className="text-sm text-muted font-medium">{label}</label>}
       <div className="relative">
         <input
           type="range"

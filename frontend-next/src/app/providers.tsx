@@ -1,12 +1,26 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useUserStore } from "@/stores/user-store";
+
+const subscribeHydration = (callback: () => void) => {
+  if (!useUserStore.persist?.onFinishHydration) {
+    return () => {};
+  }
+  return useUserStore.persist.onFinishHydration(callback);
+};
+
+const getHydrationSnapshot = () => useUserStore.persist?.hasHydrated?.() ?? false;
+const getServerSnapshot = () => false;
 
 export function Providers({ children }: { children: ReactNode }) {
   const initializeAuth = useUserStore((state) => state.initializeAuth);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getHydrationSnapshot,
+    getServerSnapshot
+  );
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -21,18 +35,8 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const unsubscribe = useUserStore.persist.onFinishHydration(() => setHydrated(true));
-    if (useUserStore.persist.hasHydrated()) setHydrated(true);
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
     if (hydrated) void initializeAuth();
   }, [hydrated, initializeAuth]);
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 const shakeVariants = {
   shake: {
     x: [0, -10, 10, -10, 10, -5, 5, 0],
-    transition: { duration: 0.4 }
-  }
+    transition: { duration: 0.4 },
+  },
 };
 
 export function PinSetupModal() {
@@ -25,7 +25,8 @@ export function PinSetupModal() {
     if (authStatus !== "authenticated" || !username) return;
 
     // Check if user already has a PIN
-    api.hasPin()
+    api
+      .hasPin()
       .then((res) => {
         // If they don't have a PIN, and haven't skipped it in this browser session
         const skipped = sessionStorage.getItem("adhd_pin_setup_skipped");
@@ -67,8 +68,9 @@ export function PinSetupModal() {
     setLoading(true);
     try {
       const devId = getDeviceId();
-      const devName = typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
-      
+      const devName =
+        typeof window !== "undefined" ? window.navigator.userAgent.slice(0, 100) : "Unknown Device";
+
       const res = await api.setPin(enteredPin, devId, devName);
       if (res.success) {
         setShowModal(false);
@@ -79,8 +81,8 @@ export function PinSetupModal() {
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 500);
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred");
       setEnteredPin("");
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
@@ -141,9 +143,7 @@ export function PinSetupModal() {
             ))}
           </motion.div>
 
-          {error && (
-            <p className="text-xs text-danger-500 font-medium my-1">{error}</p>
-          )}
+          {error && <p className="text-xs text-danger-500 font-medium my-1">{error}</p>}
 
           {/* Keypad */}
           <div className="grid grid-cols-3 gap-2.5 max-w-[200px] w-full mt-2">

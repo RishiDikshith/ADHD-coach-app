@@ -73,8 +73,8 @@ class BaseWebSocketClient {
   protected reconnectAttempts = 0;
   protected maxReconnectAttempts = 5;
   protected reconnectDelay = 1000;
-  protected pingInterval: any = null;
-  protected reconnectTimeout: any = null;
+  protected pingInterval: ReturnType<typeof setInterval> | null = null;
+  protected reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   protected shouldReconnect = true;
 
   constructor(url: string, onStateChange: (state: WebSocketConnectionState) => void) {
@@ -95,8 +95,8 @@ class BaseWebSocketClient {
         this.ws.onerror = null;
         this.ws.onclose = null;
         this.ws.close();
-      } catch (e) {
-        console.warn("Error closing old WebSocket:", e);
+      } catch (err) {
+        console.warn("Error closing old WebSocket:", err);
       }
       this.ws = null;
     }
@@ -115,7 +115,7 @@ class BaseWebSocketClient {
         try {
           const data = JSON.parse(event.data);
           this.onMessageReceived(data);
-        } catch (e) {
+        } catch {
           console.warn("WS received non-JSON or invalid payload:", event.data);
         }
       };
@@ -152,13 +152,15 @@ class BaseWebSocketClient {
         this.ws.onerror = null;
         this.ws.onclose = null;
         this.ws.close();
-      } catch (e) {}
+      } catch {
+        // Ignore close error
+      }
       this.ws = null;
     }
     this.stateCallback("CLOSED");
   }
 
-  protected send(message: any) {
+  protected send(message: Record<string, unknown> | object) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
@@ -167,7 +169,7 @@ class BaseWebSocketClient {
   }
 
   protected onConnected() {}
-  protected onMessageReceived(data: any) {}
+  protected onMessageReceived(_data: Record<string, unknown>) {}
 
   private startHeartbeat() {
     this.pingInterval = setInterval(() => {
@@ -192,9 +194,13 @@ class BaseWebSocketClient {
     }
 
     this.reconnectAttempts++;
-    const delay = Math.min(30000, this.reconnectDelay * Math.pow(2, this.reconnectAttempts)) + Math.random() * 1000;
-    console.log(`Reconnecting to WebSocket in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})...`);
-    
+    const delay =
+      Math.min(30000, this.reconnectDelay * Math.pow(2, this.reconnectAttempts)) +
+      Math.random() * 1000;
+    console.log(
+      `Reconnecting to WebSocket in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})...`
+    );
+
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       if (this.shouldReconnect) {
@@ -212,7 +218,11 @@ export class FocusRoomWebSocketClient extends BaseWebSocketClient {
   private onRoomUpdate: (roomState: FocusRoomState) => void;
   private onTimerTick: (timer: FocusTimerState) => void;
   private onTimerCompleted: (isBreak: boolean) => void;
-  private onDistractionLogged: (info: { username: string; category: string; total: number }) => void;
+  private onDistractionLogged: (info: {
+    username: string;
+    category: string;
+    total: number;
+  }) => void;
   private onNotification: (msg: string) => void;
 
   constructor(
@@ -264,75 +274,121 @@ export class FocusRoomWebSocketClient extends BaseWebSocketClient {
 
   // --- Receive handlers ---
 
-  protected onMessageReceived(data: any) {
-    switch (data.type) {
+  protected onMessageReceived(data: Record<string, unknown>) {
+    const type = typeof data.type === "string" ? data.type : "";
+    switch (type) {
       case "member_joined":
-        this.onNotification(`👋 ${data.username} joined the co-working room!`);
+        this.onNotification(`👋 ${String(data.username ?? "")} joined the co-working room!`);
         this.onRoomUpdate({
           room_id: "", // filled by context
-          timer: data.timer,
-          members: data.members
-        });
-        break;
-      
-      case "member_left":
-        this.onNotification(`🚪 ${data.username} left the room`);
-        this.onRoomUpdate({
-          room_id: "",
-          timer: { duration_minutes: 25, remaining_seconds: 1500, is_active: false, is_break: false },
-          members: data.members
+          timer: (data.timer as FocusRoomState["timer"]) || {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          },
+          members: (data.members as FocusRoomState["members"]) || [],
         });
         break;
 
-      case "status_changed":
-        const emoji = data.status === "focusing" ? "🎯" : data.status === "break" ? "☕" : "⏸️";
-        this.onNotification(`✨ ${data.username} is now ${data.status} ${emoji}`);
+      case "member_left":
+        this.onNotification(`🚪 ${String(data.username ?? "")} left the room`);
+        this.onRoomUpdate({
+          room_id: "",
+          timer: {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          },
+          members: (data.members as FocusRoomState["members"]) || [],
+        });
         break;
+
+      case "status_changed": {
+        const emoji = data.status === "focusing" ? "🎯" : data.status === "break" ? "☕" : "⏸️";
+        this.onNotification(
+          `✨ ${String(data.username ?? "")} is now ${String(data.status ?? "")} ${emoji}`
+        );
+        break;
+      }
 
       case "distraction_logged":
         this.onDistractionLogged({
-          username: data.username,
-          category: data.category,
-          total: data.total_distractions
+          username: String(data.username ?? ""),
+          category: String(data.category ?? ""),
+          total: Number(data.total_distractions ?? 0),
         });
         break;
 
       case "timer_started":
-        this.onTimerTick(data.timer);
+        this.onTimerTick(
+          (data.timer as FocusRoomState["timer"]) || {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          }
+        );
         this.onNotification(`🎯 Focus session synchronized and started!`);
         break;
 
       case "timer_paused":
-        this.onTimerTick(data.timer);
+        this.onTimerTick(
+          (data.timer as FocusRoomState["timer"]) || {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          }
+        );
         this.onNotification(`⏸️ Session paused by teammates.`);
         break;
 
       case "timer_resumed":
-        this.onTimerTick(data.timer);
+        this.onTimerTick(
+          (data.timer as FocusRoomState["timer"]) || {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          }
+        );
         this.onNotification(`▶️ Focus timer resumed.`);
         break;
 
       case "timer_reset":
-        this.onTimerTick(data.timer);
+        this.onTimerTick(
+          (data.timer as FocusRoomState["timer"]) || {
+            duration_minutes: 25,
+            remaining_seconds: 1500,
+            is_active: false,
+            is_break: false,
+          }
+        );
         this.onNotification(`🔄 Timer reset to initial state.`);
         break;
 
       case "timer_tick":
         this.onTimerTick({
           duration_minutes: 25, // placeholder
-          remaining_seconds: data.remaining_seconds,
-          is_active: data.is_active,
-          is_break: data.is_break
+          remaining_seconds: Number(data.remaining_seconds ?? 0),
+          is_active: Boolean(data.is_active),
+          is_break: Boolean(data.is_break),
         });
         break;
 
       case "timer_completed":
-        this.onTimerCompleted(data.is_break);
-        this.onNotification(data.is_break ? "☕ Break finished! Time to flow again." : "🎉 Congratulations! Focus block completed successfully! +25XP");
+        this.onTimerCompleted(Boolean(data.is_break));
+        this.onNotification(
+          data.is_break
+            ? "☕ Break finished! Time to flow again."
+            : "🎉 Congratulations! Focus block completed successfully! +25XP"
+        );
         break;
 
       case "pong":
-        // Hearthbeat confirmed
+        // Heartbeat confirmed
         break;
     }
   }
@@ -383,37 +439,38 @@ export class AccountabilityWebSocketClient extends BaseWebSocketClient {
 
   // --- Receive handlers ---
 
-  protected onMessageReceived(data: any) {
-    switch (data.type) {
+  protected onMessageReceived(data: Record<string, unknown>) {
+    const type = typeof data.type === "string" ? data.type : "";
+    switch (type) {
       case "presence_update":
-        this.onPresenceUpdate(data.members);
+        this.onPresenceUpdate((data.members as AccountabilityGroupMember[]) || []);
         break;
 
       case "member_check_in":
         this.onCheckIn({
-          username: data.username,
-          status: data.status,
-          stress: data.stress,
-          energy: data.energy,
-          timestamp: data.timestamp
+          username: String(data.username ?? ""),
+          status: String(data.status ?? ""),
+          stress: Number(data.stress ?? 0),
+          energy: Number(data.energy ?? 0),
+          timestamp: String(data.timestamp ?? ""),
         });
         break;
 
       case "member_micro_win":
         this.onMicroWin({
-          username: data.username,
-          task: data.task,
-          timestamp: data.timestamp
+          username: String(data.username ?? ""),
+          task: String(data.task ?? ""),
+          timestamp: String(data.timestamp ?? ""),
         });
         break;
 
       case "dopamine_received":
         this.onDopamineReceived({
-          from_username: data.from_username,
-          to_username: data.to_username,
-          emoji: data.emoji,
-          points: data.points,
-          target_total_points: data.target_total_points
+          from_username: String(data.from_username ?? ""),
+          to_username: String(data.to_username ?? ""),
+          emoji: String(data.emoji ?? "🎉"),
+          points: Number(data.points ?? 10),
+          target_total_points: Number(data.target_total_points ?? 0),
         });
         break;
     }
@@ -428,7 +485,7 @@ export class StreamingChatWebSocketClient extends BaseWebSocketClient {
   private onToken: (token: string) => void;
   private onStreamStart: () => void;
   private onStreamEnd: () => void;
-  private onMetadata: (payload: any) => void;
+  private onMetadata: (payload: Record<string, unknown>) => void;
   private onError: (err: string) => void;
 
   constructor(
@@ -439,7 +496,7 @@ export class StreamingChatWebSocketClient extends BaseWebSocketClient {
       onToken: (token: string) => void;
       onStreamStart: () => void;
       onStreamEnd: () => void;
-      onMetadata: (payload: any) => void;
+      onMetadata: (payload: Record<string, unknown>) => void;
       onError: (err: string) => void;
     }
   ) {
@@ -457,9 +514,9 @@ export class StreamingChatWebSocketClient extends BaseWebSocketClient {
 
   public sendMessage(
     text: string,
-    userData: Record<string, any> = {},
-    sessionData: Record<string, any> = {},
-    history: any[] = [],
+    userData: Record<string, unknown> = {},
+    sessionData: Record<string, unknown> = {},
+    history: unknown[] = [],
     language = "en",
     languageName = "English"
   ) {
@@ -469,20 +526,20 @@ export class StreamingChatWebSocketClient extends BaseWebSocketClient {
       session_data: sessionData,
       history,
       language,
-      language_name: languageName
+      language_name: languageName,
     });
   }
 
   // --- Receive handlers ---
 
-  protected onMessageReceived(data: any) {
+  protected onMessageReceived(data: Record<string, unknown>) {
     switch (data.type) {
       case "stream_start":
         this.onStreamStart();
         break;
 
       case "token":
-        this.onToken(data.token);
+        this.onToken(String(data.token ?? ""));
         break;
 
       case "stream_end":
@@ -490,11 +547,11 @@ export class StreamingChatWebSocketClient extends BaseWebSocketClient {
         break;
 
       case "metadata":
-        this.onMetadata(data.metadata);
+        this.onMetadata((data.metadata as Record<string, unknown>) ?? {});
         break;
 
       case "error":
-        this.onError(data.message);
+        this.onError(String(data.message ?? ""));
         break;
     }
   }

@@ -10,62 +10,100 @@ interface CelebrationProps {
   message?: string;
 }
 
-const COLORS = ["#6ee7b7", "#667eea", "#fbbf24", "#f87171", "#c084fc", "#f472b6", "#34d399", "#fb923c", "#818cf8"];
+const COLORS = [
+  "#6ee7b7",
+  "#667eea",
+  "#fbbf24",
+  "#f87171",
+  "#c084fc",
+  "#f472b6",
+  "#34d399",
+  "#fb923c",
+  "#818cf8",
+];
 const MOMENTUM_COLORS = ["#6ee7b7", "#34d399", "#059669"];
 const STREAK_COLORS = ["#fbbf24", "#fb923c", "#f59e0b"];
 
 interface Particle {
-  x: number; y: number; vx: number; vy: number;
-  size: number; color: string;
-  rotation: number; rotationSpeed: number;
-  alpha: number; shape: "circle" | "square" | "star" | "diamond";
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  rotation: number;
+  rotationSpeed: number;
+  alpha: number;
+  shape: "circle" | "square" | "star" | "diamond";
   update: () => void;
   draw: (ctx: CanvasRenderingContext2D) => void;
 }
 
-function createParticle(canvas: HTMLCanvasElement, type: string, index: number, total: number): Particle {
+function createParticle(
+  canvas: HTMLCanvasElement,
+  type: string,
+  index: number,
+  total: number
+): Particle {
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
   const angle = Math.random() * Math.PI * 2;
-  const speed = type === "levelUp" ? 8 + Math.random() * 14
-    : type === "momentum" ? 3 + Math.random() * 5
-    : type === "streak" ? 5 + Math.random() * 8
-    : 4 + Math.random() * 8;
+  const speed =
+    type === "levelUp"
+      ? 8 + Math.random() * 14
+      : type === "momentum"
+        ? 3 + Math.random() * 5
+        : type === "streak"
+          ? 5 + Math.random() * 8
+          : 4 + Math.random() * 8;
 
   // For momentum, particles rise upward
-  const vx = type === "momentum"
-    ? (Math.random() - 0.5) * 3
-    : Math.cos(angle) * speed;
-  const vy = type === "momentum"
-    ? -Math.random() * 4 - 1
-    : Math.sin(angle) * speed - (type === "balloons" ? 3 : 0);
+  const vx = type === "momentum" ? (Math.random() - 0.5) * 3 : Math.cos(angle) * speed;
+  const vy =
+    type === "momentum"
+      ? -Math.random() * 4 - 1
+      : Math.sin(angle) * speed - (type === "balloons" ? 3 : 0);
 
-  const particleColors = type === "momentum" ? MOMENTUM_COLORS
-    : type === "streak" ? STREAK_COLORS
-    : COLORS;
+  const particleColors =
+    type === "momentum" ? MOMENTUM_COLORS : type === "streak" ? STREAK_COLORS : COLORS;
 
   // Spiral position for momentum (start from center bottom)
   const spiralAngle = (index / total) * Math.PI * 4;
   const spiralRadius = type === "momentum" ? 20 + index * 3 : 0;
 
   return {
-    x: type === "sparkle" ? Math.random() * canvas.width
-      : type === "momentum" ? cx + Math.cos(spiralAngle) * spiralRadius
-      : cx + (Math.random() - 0.5) * 120,
-    y: type === "sparkle" ? Math.random() * canvas.height
-      : type === "momentum" ? cy + 100
-      : cy + (Math.random() - 0.5) * 120,
-    vx, vy,
-    size: type === "sparkle" ? 2 + Math.random() * 3
-      : type === "momentum" ? 4 + Math.random() * 6
-      : 5 + Math.random() * 8,
+    x:
+      type === "sparkle"
+        ? Math.random() * canvas.width
+        : type === "momentum"
+          ? cx + Math.cos(spiralAngle) * spiralRadius
+          : cx + (Math.random() - 0.5) * 120,
+    y:
+      type === "sparkle"
+        ? Math.random() * canvas.height
+        : type === "momentum"
+          ? cy + 100
+          : cy + (Math.random() - 0.5) * 120,
+    vx,
+    vy,
+    size:
+      type === "sparkle"
+        ? 2 + Math.random() * 3
+        : type === "momentum"
+          ? 4 + Math.random() * 6
+          : 5 + Math.random() * 8,
     color: particleColors[Math.floor(Math.random() * particleColors.length)],
     rotation: Math.random() * 360,
     rotationSpeed: (Math.random() - 0.5) * 10,
     alpha: 1,
-    shape: type === "sparkle" ? "star"
-      : type === "momentum" ? "circle"
-      : Math.random() > 0.5 ? "circle" : "square",
+    shape:
+      type === "sparkle"
+        ? "star"
+        : type === "momentum"
+          ? "circle"
+          : Math.random() > 0.5
+            ? "circle"
+            : "square",
 
     update() {
       this.x += this.vx;
@@ -137,19 +175,24 @@ export function Celebration({ type, show, onComplete, message }: CelebrationProp
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const count = type === "levelUp" ? 150
-      : type === "momentum" ? 60
-      : type === "streak" ? 100
-      : type === "confetti" ? 80
-      : 40;
+    const count =
+      type === "levelUp"
+        ? 150
+        : type === "momentum"
+          ? 60
+          : type === "streak"
+            ? 100
+            : type === "confetti"
+              ? 80
+              : 40;
 
-    particlesRef.current = Array.from({ length: count }, (_, i) => createParticle(canvas, type, i, count));
+    particlesRef.current = Array.from({ length: count }, (_, i) =>
+      createParticle(canvas, type, i, count)
+    );
 
     const startTime = Date.now();
-    const duration = type === "sparkle" ? 1500
-      : type === "momentum" ? 4000
-      : type === "streak" ? 3500
-      : 3000;
+    const duration =
+      type === "sparkle" ? 1500 : type === "momentum" ? 4000 : type === "streak" ? 3500 : 3000;
 
     const animate = () => {
       if (Date.now() - startTime > duration) {
@@ -261,11 +304,16 @@ export function MomentumRing({
 
 // Streak Flame — animated flame icon for streak milestones
 export function StreakFlame({ streak }: { streak: number }) {
-  const flameEmoji = streak >= 30 ? "🔥🔥🔥"
-    : streak >= 14 ? "🔥🔥"
-    : streak >= 7 ? "🔥"
-    : streak >= 3 ? "⭐"
-    : "🌱";
+  const flameEmoji =
+    streak >= 30
+      ? "🔥🔥🔥"
+      : streak >= 14
+        ? "🔥🔥"
+        : streak >= 7
+          ? "🔥"
+          : streak >= 3
+            ? "⭐"
+            : "🌱";
 
   return (
     <motion.div
@@ -280,13 +328,7 @@ export function StreakFlame({ streak }: { streak: number }) {
 }
 
 // Level-Up Badge — animated badge for milestone achievements
-export function LevelUpBadge({
-  level,
-  visible,
-}: {
-  level: number;
-  visible: boolean;
-}) {
+export function LevelUpBadge({ level, visible }: { level: number; visible: boolean }) {
   return (
     <AnimatePresence>
       {visible && (

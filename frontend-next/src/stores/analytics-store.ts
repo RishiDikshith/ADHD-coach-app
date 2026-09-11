@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { AnalyticsInsight, ScoreData, FocusPattern, MoodEntry, ProductivityCorrelation } from "@/lib/types";
+import type {
+  AnalyticsInsight,
+  ScoreData,
+  FocusPattern,
+  MoodEntry,
+  ProductivityCorrelation,
+} from "@/lib/types";
 import { api } from "@/services/api";
 
 interface AnalyticsState {
@@ -42,11 +48,19 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
 
   addMood: (emoji, energy, note) => {
     const labelMap: Record<string, string> = {
-      "😊": "Happy", "😌": "Calm", "😐": "Okay",
-      "😟": "Worried", "😰": "Anxious", "😤": "Frustrated",
+      "😊": "Happy",
+      "😌": "Calm",
+      "😐": "Okay",
+      "😟": "Worried",
+      "😰": "Anxious",
+      "😤": "Frustrated",
     };
     const entry: MoodEntry = {
-      emoji, label: labelMap[emoji] || emoji, timestamp: new Date().toISOString(), energy, note,
+      emoji,
+      label: labelMap[emoji] || emoji,
+      timestamp: new Date().toISOString(),
+      energy,
+      note,
     };
     set((s) => ({
       currentMood: emoji,

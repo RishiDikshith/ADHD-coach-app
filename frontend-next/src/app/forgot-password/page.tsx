@@ -11,15 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Card, CardTitle } from "@/components/ui/card";
 import { api } from "@/services/api";
 
-const forgotSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  email: z.string().email("Valid email is required"),
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Please confirm your password"),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords must match",
-  path: ["confirmPassword"],
-});
+const forgotSchema = z
+  .object({
+    username: z.string().min(1, "Username is required"),
+    email: z.string().email("Valid email is required"),
+    newPassword: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(6, "Please confirm your password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords must match",
+    path: ["confirmPassword"],
+  });
 
 type ForgotForm = z.infer<typeof forgotSchema>;
 
@@ -130,7 +132,10 @@ export default function ForgotPasswordPage() {
 
         <p className="text-center text-sm text-muted mt-6">
           Remember your password?{" "}
-          <Link href="/login" className="text-calm-400 hover:text-calm-300 transition-colors font-medium">
+          <Link
+            href="/login"
+            className="text-calm-400 hover:text-calm-300 transition-colors font-medium"
+          >
             Sign in
           </Link>
         </p>

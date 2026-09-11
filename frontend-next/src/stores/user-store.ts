@@ -31,9 +31,15 @@ interface UserState {
 }
 
 const defaultGame: GameState = {
-  points: 0, level: 1, streak: 0, longest_streak: 0,
-  badges: [], session_count: 0, total_focus_minutes: 0,
-  tasks_completed: 0, progress: [],
+  points: 0,
+  level: 1,
+  streak: 0,
+  longest_streak: 0,
+  badges: [],
+  session_count: 0,
+  total_focus_minutes: 0,
+  tasks_completed: 0,
+  progress: [],
 };
 
 const generateUUID = () => {
@@ -79,7 +85,14 @@ export const useUserStore = create<UserState>()(
 
       login: (username, token, role) => {
         setAccessToken(token);
-        set({ username, lastUsername: username, accessToken: token, isAuthenticated: true, authStatus: "authenticated", role: role || "user" });
+        set({
+          username,
+          lastUsername: username,
+          accessToken: token,
+          isAuthenticated: true,
+          authStatus: "authenticated",
+          role: role || "user",
+        });
       },
 
       initializeAuth: async () => {
@@ -105,7 +118,13 @@ export const useUserStore = create<UserState>()(
             });
           } catch {
             setAccessToken(null);
-            set({ username: null, accessToken: null, isAuthenticated: false, authStatus: "unauthenticated", role: null });
+            set({
+              username: null,
+              accessToken: null,
+              isAuthenticated: false,
+              authStatus: "unauthenticated",
+              role: null,
+            });
           } finally {
             initAuthPromise = null;
           }
@@ -118,16 +137,20 @@ export const useUserStore = create<UserState>()(
         setAccessToken(null);
         void api.logout().catch(() => {});
         set({
-          username: null, isAuthenticated: false, contactInfo: null,
-          settings: {}, game: defaultGame, role: null, accessToken: null, authStatus: "unauthenticated",
+          username: null,
+          isAuthenticated: false,
+          contactInfo: null,
+          settings: {},
+          game: defaultGame,
+          role: null,
+          accessToken: null,
+          authStatus: "unauthenticated",
         });
       },
 
-      updateSettings: (settings) =>
-        set((s) => ({ settings: { ...s.settings, ...settings } })),
+      updateSettings: (settings) => set((s) => ({ settings: { ...s.settings, ...settings } })),
 
-      updateGame: (partial) =>
-        set((s) => ({ game: { ...s.game, ...partial } })),
+      updateGame: (partial) => set((s) => ({ game: { ...s.game, ...partial } })),
 
       addPoints: (points) => {
         const game = get().game;

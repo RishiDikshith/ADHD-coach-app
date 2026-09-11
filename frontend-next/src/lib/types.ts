@@ -130,46 +130,94 @@ export interface AgentAnalysis {
 
 export const AGENTS: AgentInfo[] = [
   {
-    id: "productivity-coach", name: "Productivity Coach", emoji: "⚡",
+    id: "productivity-coach",
+    name: "Productivity Coach",
+    emoji: "⚡",
     role: "Focus & motivation guidance",
-    description: "Dopamine-friendly productivity strategies tailored to ADHD brains. Helps channel energy, overcome procrastination, and maintain momentum.",
-    color: "#6ee7b7", promptExamples: ["I can't focus today", "Help me get motivated", "What should I prioritize?"],
+    description:
+      "Dopamine-friendly productivity strategies tailored to ADHD brains. Helps channel energy, overcome procrastination, and maintain momentum.",
+    color: "#6ee7b7",
+    promptExamples: ["I can't focus today", "Help me get motivated", "What should I prioritize?"],
   },
   {
-    id: "task-breakdown", name: "Task Breakdown", emoji: "🔨",
+    id: "task-breakdown",
+    name: "Task Breakdown",
+    emoji: "🔨",
     role: "Microtask generation & overwhelm reduction",
-    description: "Takes overwhelming tasks and breaks them into tiny, concrete micro-steps. Detects task paralysis and suggests the smallest possible starting point.",
-    color: "#667eea", promptExamples: ["I'm overwhelmed by this project", "Break this task down for me", "This feels impossible"],
+    description:
+      "Takes overwhelming tasks and breaks them into tiny, concrete micro-steps. Detects task paralysis and suggests the smallest possible starting point.",
+    color: "#667eea",
+    promptExamples: [
+      "I'm overwhelmed by this project",
+      "Break this task down for me",
+      "This feels impossible",
+    ],
   },
   {
-    id: "focus-optimization", name: "Focus Optimization", emoji: "🎯",
+    id: "focus-optimization",
+    name: "Focus Optimization",
+    emoji: "🎯",
     role: "Focus session analysis & timing",
-    description: "Analyzes focus patterns, detects distraction patterns, and optimizes Pomodoro timing. Recommends breaks and deep work structure.",
-    color: "#fbbf24", promptExamples: ["I keep getting distracted", "Help me find my focus hours", "When should I take breaks?"],
+    description:
+      "Analyzes focus patterns, detects distraction patterns, and optimizes Pomodoro timing. Recommends breaks and deep work structure.",
+    color: "#fbbf24",
+    promptExamples: [
+      "I keep getting distracted",
+      "Help me find my focus hours",
+      "When should I take breaks?",
+    ],
   },
   {
-    id: "mood-burnout", name: "Mood & Burnout", emoji: "😌",
+    id: "mood-burnout",
+    name: "Mood & Burnout",
+    emoji: "😌",
     role: "Emotional exhaustion detection & recovery",
-    description: "Detects burnout patterns, analyzes mood trends, and provides compassionate recovery recommendations grounded in ADHD psychology.",
-    color: "#f87171", promptExamples: ["I feel burned out", "My mood is low today", "I need emotional support"],
+    description:
+      "Detects burnout patterns, analyzes mood trends, and provides compassionate recovery recommendations grounded in ADHD psychology.",
+    color: "#f87171",
+    promptExamples: ["I feel burned out", "My mood is low today", "I need emotional support"],
   },
   {
-    id: "habit-builder", name: "Habit Builder", emoji: "🔄",
+    id: "habit-builder",
+    name: "Habit Builder",
+    emoji: "🔄",
     role: "Streak reinforcement & consistency",
-    description: "Reinforces positive habits, tracks streaks, and builds routines that actually stick with an ADHD brain using behavioral consistency strategies.",
-    color: "#c084fc", promptExamples: ["I can't stick to habits", "Help me build a routine", "How do I stay consistent?"],
+    description:
+      "Reinforces positive habits, tracks streaks, and builds routines that actually stick with an ADHD brain using behavioral consistency strategies.",
+    color: "#c084fc",
+    promptExamples: [
+      "I can't stick to habits",
+      "Help me build a routine",
+      "How do I stay consistent?",
+    ],
   },
   {
-    id: "intervention", name: "Intervention Agent", emoji: "🆘",
+    id: "intervention",
+    name: "Intervention Agent",
+    emoji: "🆘",
     role: "ADHD rescue interventions",
-    description: "Detects overwhelm and triggers rescue modes. Provides grounding exercises, hyperfocus interruption cues, and immediate coping strategies.",
-    color: "#34d399", promptExamples: ["I'm having a panic moment", "I can't stop hyperfocusing", "I need a grounding exercise"],
+    description:
+      "Detects overwhelm and triggers rescue modes. Provides grounding exercises, hyperfocus interruption cues, and immediate coping strategies.",
+    color: "#34d399",
+    promptExamples: [
+      "I'm having a panic moment",
+      "I can't stop hyperfocusing",
+      "I need a grounding exercise",
+    ],
   },
   {
-    id: "accountability", name: "Accountability", emoji: "🤝",
+    id: "accountability",
+    name: "Accountability",
+    emoji: "🤝",
     role: "Gentle reminders & check-ins",
-    description: "Non-judgmental accountability through reminders, check-ins, and productivity summaries. Designed to support, not shame.",
-    color: "#f472b6", promptExamples: ["Check in on my progress", "Help me stay accountable", "Remind me of my goals"],
+    description:
+      "Non-judgmental accountability through reminders, check-ins, and productivity summaries. Designed to support, not shame.",
+    color: "#f472b6",
+    promptExamples: [
+      "Check in on my progress",
+      "Help me stay accountable",
+      "Remind me of my goals",
+    ],
   },
 ];
 

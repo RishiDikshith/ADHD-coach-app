@@ -31,6 +31,33 @@ export class ApiError extends Error {
   }
 }
 
+export interface UserTicket {
+  id: number;
+  subject: string;
+  type: string;
+  status: string;
+  created_at?: string;
+  description: string;
+  admin_notes?: string;
+}
+
+export interface TrustedDeviceItem {
+  device_id: string;
+  device_name: string;
+  is_current: boolean;
+  created_at: string | null;
+  last_used: string | null;
+  expires_at: string | null;
+}
+
+export interface ConnectedAccountItem {
+  provider: string;
+  name: string;
+  connected: boolean;
+  email?: string;
+  linked_at?: string;
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -45,14 +72,19 @@ async function fetchApi<T>(
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.warn(`[API REQUEST TIMEOUT] Request to ${url} timed out after ${API_TIMEOUT}ms. Aborting.`);
+      console.warn(
+        `[API REQUEST TIMEOUT] Request to ${url} timed out after ${API_TIMEOUT}ms. Aborting.`
+      );
       controller.abort();
     }, API_TIMEOUT);
 
     let signal: AbortSignal = controller.signal;
     if (options.signal) {
-      if ("any" in AbortSignal && typeof (AbortSignal as any).any === "function") {
-        signal = (AbortSignal as any).any([controller.signal, options.signal]);
+      const abortSignalWithAny = AbortSignal as unknown as {
+        any?: (signals: AbortSignal[]) => AbortSignal;
+      };
+      if ("any" in AbortSignal && typeof abortSignalWithAny.any === "function") {
+        signal = abortSignalWithAny.any([controller.signal, options.signal]);
       } else {
         options.signal.addEventListener("abort", () => controller.abort(), { once: true });
       }
@@ -84,7 +116,10 @@ async function fetchApi<T>(
         const errorBody = await res.text().catch(() => "");
         const isExpectedAuthMe401 = res.status === 401 && normalizedEndpoint === "/auth/me";
         if (!isExpectedAuthMe401) {
-          console.error(`[API RESPONSE ERROR] ${options.method || "GET"} ${url} - Status: ${res.status}, Body:`, errorBody);
+          console.error(
+            `[API RESPONSE ERROR] ${options.method || "GET"} ${url} - Status: ${res.status}, Body:`,
+            errorBody
+          );
         } else {
           console.debug(`[API] Unauthenticated session on ${normalizedEndpoint} (401)`);
         }
@@ -97,7 +132,9 @@ async function fetchApi<T>(
               if (typeof parsed.detail === "string") {
                 errorMessage = parsed.detail;
               } else if (Array.isArray(parsed.detail)) {
-                errorMessage = parsed.detail.map((err: any) => err.msg || JSON.stringify(err)).join(", ");
+                errorMessage = parsed.detail
+                  .map((err: { msg?: string }) => err.msg || JSON.stringify(err))
+                  .join(", ");
               } else if (parsed.message) {
                 errorMessage = parsed.message;
               } else if (parsed.error) {
@@ -110,7 +147,11 @@ async function fetchApi<T>(
             errorMessage = errorBody.slice(0, 200);
           }
         }
-        if (res.status === 401 && !normalizedEndpoint.startsWith("/auth/login") && !normalizedEndpoint.startsWith("/auth/register")) {
+        if (
+          res.status === 401 &&
+          !normalizedEndpoint.startsWith("/auth/login") &&
+          !normalizedEndpoint.startsWith("/auth/register")
+        ) {
           setAccessToken(null);
         }
         throw new ApiError(errorMessage, res.status);
@@ -124,24 +165,25 @@ async function fetchApi<T>(
         console.error(`[API PARSE ERROR] Failed to parse JSON response from ${url}:`, parseErr);
         throw new ApiError("Failed to parse JSON response", res.status);
       }
-    } catch (err: any) {
-      const isExpectedAuthMe401 = (err instanceof ApiError && err.status === 401 && normalizedEndpoint === "/auth/me");
+    } catch (err: unknown) {
+      const isExpectedAuthMe401 =
+        err instanceof ApiError && err.status === 401 && normalizedEndpoint === "/auth/me";
       if (!isExpectedAuthMe401) {
-        console.error(`[API] ${method} ${normalizedEndpoint} failed`, err instanceof Error ? err.message : err);
+        console.error(
+          `[API] ${method} ${normalizedEndpoint} failed`,
+          err instanceof Error ? err.message : err
+        );
       }
 
-      if (err.name === "AbortError" || controller.signal.aborted) {
+      if ((err instanceof Error && err.name === "AbortError") || controller.signal.aborted) {
         console.warn(`[API REQUEST TIMEOUT/ABORTED] Request to ${url} was aborted/timed out.`);
       }
 
       if (attempt === retryCount || err instanceof ApiError) {
         if (err instanceof ApiError) throw err;
-        throw new ApiError(
-          err instanceof Error ? err.message : "Network error",
-          0
-        );
+        throw new ApiError(err instanceof Error ? err.message : "Network error", 0);
       }
-      
+
       const retryDelay = 500 * (attempt + 1);
       console.log(`[API RETRY] Retrying request to ${url} in ${retryDelay}ms...`);
       await new Promise((r) => setTimeout(r, retryDelay));
@@ -185,10 +227,7 @@ export const api = {
     }),
 
   // ==================== Interventions ====================
-  getInterventions: (
-    userData: Record<string, unknown>,
-    scores: Record<string, unknown>
-  ) =>
+  getInterventions: (userData: Record<string, unknown>, scores: Record<string, unknown>) =>
     fetchApi<{ interventions: unknown[] }>("/get_interventions", {
       method: "POST",
       body: JSON.stringify({ user_data: userData, scores }),
@@ -231,34 +270,49 @@ export const api = {
       body: JSON.stringify({ username, pin }),
     }),
 
-  me: () => fetchApi<{ username: string; email?: string; role: string; token?: string }>("/auth/me", {}, 0),
+  me: () =>
+    fetchApi<{ username: string; email?: string; role: string; token?: string }>("/auth/me", {}, 0),
 
   logout: () => fetchApi<{ success: boolean }>("/auth/logout", { method: "POST" }, 0),
 
   getConnectedAccounts: () =>
-    fetchApi<Array<{ provider: string; name: string; connected: boolean; email?: string; linked_at?: string }>>(
-      "/auth/oauth/connected-accounts"
-    ),
+    fetchApi<
+      Array<{
+        provider: string;
+        name: string;
+        connected: boolean;
+        email?: string;
+        linked_at?: string;
+      }>
+    >("/auth/oauth/connected-accounts"),
 
   getTrustedDevices: () =>
-    fetchApi<Array<{
-      device_id: string;
-      device_name: string;
-      is_current: boolean;
-      created_at: string | null;
-      last_used: string | null;
-      expires_at: string | null;
-    }>>("/auth/trusted-devices"),
+    fetchApi<
+      Array<{
+        device_id: string;
+        device_name: string;
+        is_current: boolean;
+        created_at: string | null;
+        last_used: string | null;
+        expires_at: string | null;
+      }>
+    >("/auth/trusted-devices"),
 
   revokeTrustedDevice: (deviceId: string) =>
-    fetchApi<{ success: boolean; message?: string }>(`/auth/trusted-devices/${encodeURIComponent(deviceId)}/revoke`, {
-      method: "POST",
-    }),
+    fetchApi<{ success: boolean; message?: string }>(
+      `/auth/trusted-devices/${encodeURIComponent(deviceId)}/revoke`,
+      {
+        method: "POST",
+      }
+    ),
 
   revokeAllTrustedDevices: () =>
-    fetchApi<{ success: boolean; revoked_count: number; message?: string }>("/auth/trusted-devices/revoke-all", {
-      method: "POST",
-    }),
+    fetchApi<{ success: boolean; revoked_count: number; message?: string }>(
+      "/auth/trusted-devices/revoke-all",
+      {
+        method: "POST",
+      }
+    ),
 
   checkTrustedDevice: (deviceId: string) =>
     fetchApi<{ is_trusted: boolean; username?: string; device_name?: string; has_pin?: boolean }>(
@@ -287,9 +341,9 @@ export const api = {
     }),
 
   getDevices: () =>
-    fetchApi<Array<{ device_id: string; device_name: string; created_at: string; last_used: string }>>(
-      "/auth/devices"
-    ),
+    fetchApi<
+      Array<{ device_id: string; device_name: string; created_at: string; last_used: string }>
+    >("/auth/devices"),
 
   // ==================== Settings ====================
   getSettings: (username: string) =>
@@ -303,43 +357,35 @@ export const api = {
 
   // ==================== Memory ====================
   getMemoryContext: (username: string) =>
-    fetchApi<Record<string, unknown>>(
-      `/memory/${encodeURIComponent(username)}`
-    ),
+    fetchApi<Record<string, unknown>>(`/memory/${encodeURIComponent(username)}`),
 
   // ==================== Agents ====================
-  triggerAgent: (
-    agentType: string,
-    context: Record<string, unknown>
-  ) =>
+  triggerAgent: (agentType: string, context: Record<string, unknown>) =>
     fetchApi<Record<string, unknown>>("/agents/analyze", {
       method: "POST",
       body: JSON.stringify({ agent_type: agentType, context }),
     }),
 
   // ==================== Task Paralysis ====================
-  analyzeTask: (
-    taskDescription: string,
-    userData: Record<string, unknown>
-  ) =>
+  analyzeTask: (taskDescription: string, userData: Record<string, unknown>) =>
     fetchApi<Record<string, unknown>>("/task-paralysis/analyze", {
       method: "POST",
       body: JSON.stringify({ task: taskDescription, user_data: userData }),
     }),
 
   // ==================== Feedback & Support ====================
-  submitFeedback: (
-    username: string,
-    rating: number,
-    category: string,
-    feedbackText?: string
-  ) =>
+  submitFeedback: (username: string, rating: number, category: string, feedbackText?: string) =>
     fetchApi<{
       success: boolean;
       message: string;
       xp_awarded: number;
       skill_status: { level: number; xp: number; xp_to_next: number; leveled_up: boolean };
-      new_achievements: Array<{ id: string; title: string; description: string; xp_reward: number }>;
+      new_achievements: Array<{
+        id: string;
+        title: string;
+        description: string;
+        xp_reward: number;
+      }>;
     }>("/feedback", {
       method: "POST",
       body: JSON.stringify({
@@ -350,12 +396,7 @@ export const api = {
       }),
     }),
 
-  submitSupportTicket: (
-    username: string,
-    type: string,
-    subject: string,
-    description: string
-  ) =>
+  submitSupportTicket: (username: string, type: string, subject: string, description: string) =>
     fetchApi<{
       success: boolean;
       message: string;
@@ -372,19 +413,48 @@ export const api = {
       body: JSON.stringify({ username, type, subject, description }),
     }),
 
-  getFaqs: () =>
-    fetchApi<
-      Array<{ id: string; question: string; answer: string }>
-    >("/support/faqs"),
+  getFaqs: () => fetchApi<Array<{ id: string; question: string; answer: string }>>("/support/faqs"),
 
   getUserTickets: (username: string) =>
-    fetchApi<{ success: boolean; tickets: any[] }>(`/support/tickets/${encodeURIComponent(username)}`),
+    fetchApi<{
+      success: boolean;
+      tickets: Array<{
+        id: number;
+        subject: string;
+        type: string;
+        status: string;
+        created_at?: string;
+        description: string;
+        admin_notes?: string;
+      }>;
+    }>(`/support/tickets/${encodeURIComponent(username)}`),
 
   getAdminFeedbacks: () =>
-    fetchApi<{ success: boolean; feedbacks: any[] }>("/admin/feedbacks"),
+    fetchApi<{
+      success: boolean;
+      feedbacks: Array<{
+        id: number;
+        username: string;
+        rating: number;
+        category: string;
+        feedback_text?: string;
+        created_at: string;
+      }>;
+    }>("/admin/feedbacks"),
 
   getAdminTickets: () =>
-    fetchApi<{ success: boolean; tickets: any[] }>("/admin/tickets"),
+    fetchApi<{
+      success: boolean;
+      tickets: Array<{
+        id: number;
+        username: string;
+        type: string;
+        subject: string;
+        description: string;
+        status: string;
+        created_at: string;
+      }>;
+    }>("/admin/tickets"),
 
   updateTicketStatus: (id: number, status: string) =>
     fetchApi<{

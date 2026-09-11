@@ -37,7 +37,9 @@ export function BottomNav() {
                 <span className={`text-lg transition-all ${isActive ? "scale-110" : "opacity-60"}`}>
                   {item.icon}
                 </span>
-                <span className={`text-[10px] font-medium ${isActive ? "text-calm-400" : "text-muted"}`}>
+                <span
+                  className={`text-[10px] font-medium ${isActive ? "text-calm-400" : "text-muted"}`}
+                >
                   {item.label}
                 </span>
               </Link>
