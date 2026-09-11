@@ -8,21 +8,22 @@ and compiles them directly to their production paths with joblib compression (co
 
 import os
 import sys
-import joblib
-import pandas as pd
-import numpy as np
 import warnings
+
+import joblib
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings("ignore")
 
+from catboost import CatBoostRegressor
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.model_selection import train_test_split
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
-from catboost import CatBoostRegressor
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 # Resolve project directories
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -82,7 +83,7 @@ try:
     joblib.dump((lr_mh, tfidf), final_nlp_path, compress=3)
     print(f"[SUCCESS] Saved evaluation final tuple: {final_nlp_path}")
     
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print(f"[ERROR] Failed to compile NLP Model: {e}")
 
 
@@ -125,7 +126,7 @@ try:
     joblib.dump((cat_model, top_features), final_cb_path, compress=3)
     print(f"[SUCCESS] Saved evaluation final tuple: {final_cb_path}")
     
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print(f"[ERROR] Failed to compile Productivity Model: {e}")
 
 
@@ -165,7 +166,7 @@ try:
     joblib.dump({"model": stud_pipeline, "threshold": 0.50}, final_stud_path, compress=3)
     print(f"[SUCCESS] Saved evaluation final dict: {final_stud_path}")
     
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print(f"[ERROR] Failed to compile Student Model: {e}")
 
 
@@ -246,7 +247,7 @@ try:
     joblib.dump(adhd_pipeline, final_adhd_path, compress=3)
     print(f"[SUCCESS] Saved evaluation final pipeline: {final_adhd_path}")
     
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print(f"[ERROR] Failed to compile ADHD Model: {e}")
 
 print("\n" + "=" * 80)

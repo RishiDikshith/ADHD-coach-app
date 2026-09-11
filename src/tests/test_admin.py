@@ -6,11 +6,9 @@ and structured security audit logging.
 """
 
 import os
-import re
 import sys
 import unittest
-import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Add project root to python search path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,11 +19,17 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_adhd_coach_temp.db"
 os.environ["GROQ_API_KEY"] = "mock_groq_key"
 
 import asyncio
+
 import httpx
+
 from api.main_api import app, bootstrap_admin
-from database.models import init_db, User, engine
+from auth.auth_handler import (
+    get_password_hash,
+    require_admin,
+    verify_password,
+)
 from database.crud import DatabaseManager
-from auth.auth_handler import require_admin, require_user, get_password_hash, verify_password
+from database.models import User, engine, init_db
 
 
 class SyncTestClient:
@@ -64,7 +68,7 @@ class TestAdminSystem(unittest.TestCase):
             if os.path.exists(f):
                 try:
                     os.remove(f)
-                except Exception:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                     pass
 
     @patch("api.main_api.os.getenv")
@@ -187,14 +191,17 @@ class TestAdminSystem(unittest.TestCase):
         ]
 
         for pwd in weak_passwords:
-            def getenv_mock(key, default=None):
-                vals = {
-                    "ADMIN_USERNAME": "prodadmin",
-                    "ADMIN_PASSWORD": pwd,
-                    "ENVIRONMENT": "production",
-                }
-                return vals.get(key, default)
-            mock_getenv.side_effect = getenv_mock
+            def make_getenv_mock(current_pwd):
+                def getenv_mock(key, default=None):
+                    vals = {
+                        "ADMIN_USERNAME": "prodadmin",
+                        "ADMIN_PASSWORD": current_pwd,
+                        "ENVIRONMENT": "production",
+                    }
+                    return vals.get(key, default)
+                return getenv_mock
+
+            mock_getenv.side_effect = make_getenv_mock(pwd)
 
             with self.assertRaises(RuntimeError) as context:
                 bootstrap_admin(self.db_manager)
@@ -239,6 +246,7 @@ class TestAdminSystem(unittest.TestCase):
             # Let's use FastAPI dependency override to simulate a normal user vs admin user.
             # First, test the dependency class itself manually.
             from fastapi import Request
+
             from auth.auth_handler import RoleChecker
             
             checker = RoleChecker(allowed_roles=["admin"])

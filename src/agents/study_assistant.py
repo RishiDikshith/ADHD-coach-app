@@ -6,7 +6,7 @@ and study-focused coaching for ADHD students and lifelong learners.
 """
 
 import logging
-from typing import Any, Optional
+
 from memory.memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,13 @@ class StudyAssistantAgent:
             "- Tone: focused, academic, motivating, and deeply understanding"
         )
 
-    def get_study_recommendation(self, context: dict) -> Optional[dict]:
+    def get_study_recommendation(self, context: dict) -> dict | None:
         """Generate study-specific recommendation based on user profiles or tasks."""
         user = context.get("user", {})
         session = context.get("session", {})
 
         stress = session.get("current_stress", 5)
-        study_hours = user.get("study_hours", 0)
+        user.get("study_hours", 0)
         adhd_risk = user.get("adhd_risk", 0.5)
 
         # High stress study recommendations

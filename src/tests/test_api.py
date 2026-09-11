@@ -9,7 +9,7 @@ import os
 import sys
 import unittest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Add project root to python search path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,7 +21,9 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_adhd_coach_temp.db"
 os.environ["GROQ_API_KEY"] = "mock_groq_key"
 
 import asyncio
+
 import httpx
+
 from api.main_api import app
 
 
@@ -52,14 +54,14 @@ class TestADHDProductivityAPI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up the database tables, global engines, and synchronous wrapper client."""
-        import api.main_api as main_api
-        from database.models import init_db
+        from ai_engine.rag_engine import RAGEngine
+        from api import main_api
         from database.crud import DatabaseManager
-        from task_paralysis.state_detector import ADHDStateDetector
-        from intervention.adaptive_coach import AdaptiveCoach
+        from database.models import init_db
         from focus.focus_engine import FocusEngine
         from gamification import GamificationEngine
-        from ai_engine.rag_engine import RAGEngine
+        from intervention.adaptive_coach import AdaptiveCoach
+        from task_paralysis.state_detector import ADHDStateDetector
 
         # 1. Initialize DB tables
         init_db()
@@ -83,7 +85,7 @@ class TestADHDProductivityAPI(unittest.TestCase):
         cls.client.close()
         
         # Force close main app database session
-        import api.main_api as main_api
+        from api import main_api
         if main_api._db_manager:
             main_api._db_manager.close()
 
@@ -91,7 +93,7 @@ class TestADHDProductivityAPI(unittest.TestCase):
         from database.models import engine
         try:
             engine.dispose()
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             pass
 
         # Remove the temp database files
@@ -100,13 +102,13 @@ class TestADHDProductivityAPI(unittest.TestCase):
             for f in ["./test_adhd_coach_temp.db", "./test_adhd_coach_temp.db-journal"]:
                 if os.path.exists(f):
                     os.remove(f)
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             pass
 
     def test_health_check_documentation(self):
         """Verify Swagger UI and OpenAPI schemas are accessible."""
         response = self.client.get("/openapi.json")
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 200)
         self.assertIn("ADHD Productivity API", response.json()["info"]["title"])
 
     def test_auth_registration_validation(self):

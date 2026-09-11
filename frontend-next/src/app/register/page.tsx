@@ -1,34 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useUserStore } from "@/stores/user-store";
 import { api } from "@/services/api";
-
-const registerSchema = z
-  .object({
-    username: z
-      .string()
-      .min(3, "Username must be at least 3 characters")
-      .max(20, "Username must be at most 20 characters")
-      .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(1, "Please confirm your password"),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords must match",
-    path: ["confirmPassword"],
-  });
-
-type RegisterForm = z.infer<typeof registerSchema>;
+import { API_URL } from "@/lib/api";
 
 // ==================== ADHD Onboarding Steps ====================
 
@@ -87,16 +67,37 @@ const containerVariants = {
 };
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-background via-[#0a1628] to-background">
+        <div className="w-8 h-8 border-4 border-calm-500/30 border-t-calm-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
+  );
+}
+
+function RegisterContent() {
   const router = useRouter();
-  const { login: loginUser, isAuthenticated, authStatus } = useUserStore();
+  const searchParams = useSearchParams();
+  const urlStep = searchParams.get("step");
+
+  const { isAuthenticated, authStatus } = useUserStore();
+
+  const [step, setStep] = useState<"account" | "focus" | "energy" | "style" | "triggers" | "tone" | "complete">(
+    urlStep === "focus" ? "focus" : "account"
+  );
+  const [rememberDevice, setRememberDevice] = useState(true);
 
   useEffect(() => {
-    if (authStatus === "authenticated" && isAuthenticated) {
+    if (urlStep === "focus") {
+      setStep("focus");
+    } else if (authStatus === "authenticated" && isAuthenticated && step === "account") {
       router.push("/dashboard");
     }
-  }, [authStatus, isAuthenticated, router]);
+  }, [authStatus, isAuthenticated, urlStep, router, step]);
 
-  const [step, setStep] = useState<"account" | "focus" | "energy" | "style" | "triggers" | "tone" | "complete">("account");
   const [onboarding, setOnboarding] = useState<OnboardingData>({
     focusStyle: "",
     energyPattern: "",
@@ -105,29 +106,10 @@ export default function RegisterPage() {
     emotionalPreferences: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
-  const {
-    register,
-    handleSubmit,
-    setError: setFormError,
-    formState: { errors, isSubmitting: formSubmitting },
-  } = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
-
-  const handleRegister = async (data: RegisterForm) => {
-    try {
-      const res = await api.register(data.username, data.password);
-      if (res.success) {
-        if (!res.token) throw new Error("Registration response did not include an access token.");
-        loginUser(res.username || data.username, res.token, res.role);
-        setStep("focus");
-      } else {
-        setFormError("root", { message: res.error || "Registration failed." });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection error. Please try again.";
-      setFormError("root", { message: msg });
-    }
+  const handleOAuthRedirect = (provider: "google" = "google") => {
+    const backendUrl = API_URL || "http://localhost:8000";
+    window.location.href = `${backendUrl}/auth/oauth/${provider}/login?remember_device=${rememberDevice}`;
   };
 
   const saveProfile = async (data: OnboardingData) => {
@@ -157,7 +139,7 @@ export default function RegisterPage() {
     }));
   };
 
-  // If account step, show registration form
+  // If account step, show OAuth buttons
   if (step === "account") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-background via-[#0a1628] to-background">
@@ -178,50 +160,44 @@ export default function RegisterPage() {
             <h1 className="text-2xl font-bold text-foreground">
               Create <span className="gradient-text">Account</span>
             </h1>
-            <p className="text-sm text-muted mt-1">Start your ADHD coaching journey</p>
+            <p className="text-sm text-muted mt-1">Sign in securely with Google</p>
           </div>
 
-          <Card className="p-6">
-            <form onSubmit={handleSubmit(handleRegister)} className="space-y-4">
-              <Input
-                label="Username"
-                id="username"
-                placeholder="Choose a username"
-                error={errors.username?.message}
-                autoFocus
-                {...register("username")}
-              />
-              <Input
-                label="Password"
-                id="password"
-                type="password"
-                placeholder="At least 6 characters"
-                error={errors.password?.message}
-                {...register("password")}
-              />
-              <Input
-                label="Confirm Password"
-                id="confirmPassword"
-                type="password"
-                placeholder="Repeat your password"
-                error={errors.confirmPassword?.message}
-                {...register("confirmPassword")}
-              />
+          <Card className="p-6 space-y-5">
+            <div className="space-y-3">
+              {/* Continue with Google */}
+              <button
+                type="button"
+                onClick={() => handleOAuthRedirect("google")}
+                className="w-full flex items-center justify-center px-4 py-3 border border-border/80 rounded-xl bg-surface hover:bg-white/5 hover:border-calm-500/40 text-foreground font-medium text-sm transition-all duration-200 shadow-sm cursor-pointer group"
+              >
+                <svg className="w-5 h-5 mr-3 flex-shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span className="group-hover:translate-x-0.5 transition-transform">Continue with Google</span>
+              </button>
+            </div>
 
-              {errors.root && (
-                <motion.p
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-danger-500 bg-danger-500/10 rounded-lg p-3"
-                >
-                  {errors.root.message}
-                </motion.p>
-              )}
+            {/* Remember this device checkbox */}
+            <div className="flex items-center space-x-2.5 pt-1 px-1">
+              <input
+                type="checkbox"
+                id="registerRememberDevice"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                className="w-4 h-4 rounded border-border text-calm-500 focus:ring-calm-500/40 bg-surface cursor-pointer"
+              />
+              <label htmlFor="registerRememberDevice" className="text-xs text-foreground font-medium cursor-pointer select-none">
+                Remember this device <span className="text-muted text-[11px] block font-normal">Stay logged in for 30 days</span>
+              </label>
+            </div>
 
-              <Button type="submit" loading={formSubmitting} className="w-full">
-                Create Account
-              </Button>
-            </form>
+            <div className="p-3 bg-surface-secondary/50 rounded-xl border border-border/40 text-xs text-muted">
+              🚀 On your first login, we will guide you through quick ADHD coaching preference questions to personalize your experience.
+            </div>
           </Card>
 
           <p className="text-center text-sm text-muted mt-6">
@@ -229,6 +205,10 @@ export default function RegisterPage() {
             <Link href="/login" className="text-calm-400 hover:text-calm-300 transition-colors font-medium">
               Sign in
             </Link>
+          </p>
+
+          <p className="text-center text-xs text-muted/50 mt-4">
+            Free & Open Source · Your data stays private
           </p>
         </motion.div>
       </div>

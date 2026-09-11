@@ -13,7 +13,11 @@ from scoring.final_score import final_score
 from scoring.mental_health_scoring import mental_health_score
 from scoring.productivity_scoring import productivity_score
 from scoring.student_scoring import depression_score
-from utils.helpers import align_features_to_model, get_model_feature_names, prepare_model_for_inference
+from utils.helpers import (
+    align_features_to_model,
+    get_model_feature_names,
+    prepare_model_for_inference,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -34,9 +38,9 @@ def predict_mental_health_probability(model, text):
 
 
 def chatbot_response(text, scores, user_data):
-    from agents.orchestrator import AgentOrchestrator
-    from memory.memory_manager import MemoryManager
     from unittest.mock import MagicMock
+
+    from agents.orchestrator import AgentOrchestrator
     
     mock_memory = MagicMock()
     mock_memory.store = MagicMock()

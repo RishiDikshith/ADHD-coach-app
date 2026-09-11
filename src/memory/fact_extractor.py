@@ -12,10 +12,8 @@ Key capabilities:
 - Category classification
 """
 
-import re
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +156,7 @@ class FactExtractor:
         text_lower = text.lower()
         return any(kw in text_lower for kw in FACT_TRIGGER_KEYWORDS)
 
-    def extract_facts(self, text: str) -> List[dict]:
+    def extract_facts(self, text: str) -> list[dict]:
         """
         Extract structured facts from text.
         Returns list of fact dicts with keys: type, category, key, value, confidence.
@@ -319,7 +317,7 @@ class FactMemoryConsolidator:
         self.db = db_manager
         self.extractor = FactExtractor()
 
-    def process_message(self, username: str, message: str) -> List[dict]:
+    def process_message(self, username: str, message: str) -> list[dict]:
         """
         Process a user message, extract facts, and persist them.
         Returns the newly extracted facts.
@@ -373,6 +371,6 @@ class FactMemoryConsolidator:
                     parts.extend(category_facts)
 
             return "\n".join(parts)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Could not generate fact context: {e}")
             return ""

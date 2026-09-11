@@ -6,18 +6,30 @@ Provides clean async-friendly CRUD operations for all models.
 """
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, desc, and_, text
-from sqlalchemy.orm import Session
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from .models import (
-    User, ChatMessage, MoodEntry, InterventionCompletion, Streak,
-    UserFact, FocusSession, DistractionLog, Achievement, SkillProgress,
-    UserFeedback, SupportTicket, RefreshToken, TrustedDevice,
-    SessionLocal, init_db
+    Achievement,
+    ChatMessage,
+    DistractionLog,
+    FocusSession,
+    InterventionCompletion,
+    MoodEntry,
+    OAuthAccount,
+    RefreshToken,
+    SessionLocal,
+    SkillProgress,
+    Streak,
+    SupportTicket,
+    TrustedDevice,
+    User,
+    UserFact,
+    UserFeedback,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +38,7 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Central data access layer for all persistent storage operations."""
 
-    def __init__(self, db: Optional[Session] = None):
+    def __init__(self, db: Session | None = None):
         self._db = db
 
     @property
@@ -43,11 +55,11 @@ class DatabaseManager:
             try:
                 # Quick check if session is usable
                 self._db.execute(text("SELECT 1"))
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 # Session is broken, create new one
                 try:
                     self._db.close()
-                except Exception:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                     pass
                 self._db = SessionLocal()
         return self._db
@@ -61,16 +73,16 @@ class DatabaseManager:
             logger.warning(f"Database commit failed, rolling back: {e}")
             try:
                 self.db.rollback()
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
             # Reset the session after rollback
             self._ensure_session()
             return False
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Unexpected commit error: {e}")
             try:
                 self.db.rollback()
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
             return False
 
@@ -78,7 +90,7 @@ class DatabaseManager:
         if self._db is not None:
             try:
                 self._db.close()
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
             self._db = None
 
@@ -87,24 +99,24 @@ class DatabaseManager:
         try:
             if self._db is not None:
                 self._db.close()
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             pass
         self._db = SessionLocal()
         return self._db
 
     # ==================== Session-safe Helpers ====================
 
-    def _safe_get_user(self, username: str) -> Optional[User]:
+    def _safe_get_user(self, username: str) -> User | None:
         """Get user with automatic session recovery."""
         try:
             self._ensure_session()
             return self.db.query(User).filter(User.username == username).first()
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"User lookup failed, resetting session: {e}")
             self.reset_session()
             try:
                 return self.db.query(User).filter(User.username == username).first()
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 return None
 
     # ==================== User Management ====================
@@ -127,7 +139,7 @@ class DatabaseManager:
             self._safe_commit()
             try:
                 self.db.refresh(user)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
             logger.info(f"Created user: {username} with role: {role}")
         return user
@@ -157,23 +169,31 @@ class DatabaseManager:
         except IntegrityError as exc:
             self.db.rollback()
             raise ValueError("username already exists") from exc
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             self.db.rollback()
             raise
 
-    def get_user(self, username: str) -> Optional[User]:
+    def get_user(self, username: str) -> User | None:
         try:
             self._ensure_session()
-            return self.db.query(User).filter(func.lower(User.username) == username.lower()).first()
-        except Exception as e:
+            cleaned = username.lower().strip()
+            user = self.db.query(User).filter(func.lower(User.username) == cleaned).first()
+            if not user and "@" in cleaned:
+                user = self.db.query(User).filter(func.lower(User.email) == cleaned).first()
+            return user
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning("User lookup failed, resetting session: %s", e)
             self.reset_session()
-            return self.db.query(User).filter(func.lower(User.username) == username.lower()).first()
+            cleaned = username.lower().strip()
+            user = self.db.query(User).filter(func.lower(User.username) == cleaned).first()
+            if not user and "@" in cleaned:
+                user = self.db.query(User).filter(func.lower(User.email) == cleaned).first()
+            return user
 
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
+    def get_user_by_id(self, user_id: int) -> User | None:
         return self.db.query(User).filter(User.id == user_id).first()
 
-    def update_user_settings(self, username: str, settings: dict) -> Optional[User]:
+    def update_user_settings(self, username: str, settings: dict) -> User | None:
         user = self.get_user(username)
         if user:
             current = dict(user.settings or {})
@@ -191,7 +211,7 @@ class DatabaseManager:
 
     # ==================== Refresh Tokens / RTR ====================
 
-    def save_refresh_token(self, token: str, username: str, family_id: str, expires_at: datetime) -> Optional[RefreshToken]:
+    def save_refresh_token(self, token: str, username: str, family_id: str, expires_at: datetime) -> RefreshToken | None:
         """Save a new refresh token for Refresh Token Rotation (RTR)."""
         try:
             rt = RefreshToken(
@@ -206,15 +226,15 @@ class DatabaseManager:
             self.db.commit()
             self.db.refresh(rt)
             return rt
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to save refresh token: {e}")
             return None
 
-    def get_refresh_token(self, token: str) -> Optional[RefreshToken]:
+    def get_refresh_token(self, token: str) -> RefreshToken | None:
         """Retrieve a refresh token from the database."""
         try:
             return self.db.query(RefreshToken).filter(RefreshToken.token == token).first()
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to query refresh token: {e}")
             return None
 
@@ -226,12 +246,12 @@ class DatabaseManager:
                 t.is_revoked = True
             self.db.commit()
             logger.warning(f"Security: Revoked token family {family_id} due to reuse attempt.")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to revoke token family: {e}")
 
     # ==================== Trusted Devices ====================
 
-    def get_trusted_device(self, user_id: int, device_id: str) -> Optional[TrustedDevice]:
+    def get_trusted_device(self, user_id: int, device_id: str) -> TrustedDevice | None:
         """Retrieve a specific trusted device entry for a user."""
         try:
             self._ensure_session()
@@ -244,11 +264,11 @@ class DatabaseManager:
                 )
                 .first()
             )
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to query trusted device: {e}")
             return None
 
-    def get_trusted_device_by_id_only(self, device_id: str) -> Optional[TrustedDevice]:
+    def get_trusted_device_by_id_only(self, device_id: str) -> TrustedDevice | None:
         """Retrieve an active trusted device by device ID only."""
         try:
             self._ensure_session()
@@ -257,13 +277,13 @@ class DatabaseManager:
                 .filter(TrustedDevice.device_id == device_id, TrustedDevice.is_active == True)
                 .first()
             )
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
             logger.warning(f"Failed to query trusted device by ID: {e}")
             return None
 
     def save_trusted_device(
-        self, user_id: int, device_id: str, device_name: str, pin_hash: Optional[str] = None
-    ) -> Optional[TrustedDevice]:
+        self, user_id: int, device_id: str, device_name: str, pin_hash: str | None = None
+    ) -> TrustedDevice | None:
         """Save or reactivate a trusted device record."""
         try:
             self._ensure_session()
@@ -290,11 +310,11 @@ class DatabaseManager:
             self.db.commit()
             self.db.refresh(device)
             return device
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to save trusted device: {e}")
             return None
 
-    def get_active_trusted_devices(self, username: str) -> List[TrustedDevice]:
+    def get_active_trusted_devices(self, username: str) -> list[TrustedDevice]:
         """Retrieve all active trusted devices associated with a username."""
         try:
             self._ensure_session()
@@ -306,16 +326,236 @@ class DatabaseManager:
                 .filter(TrustedDevice.user_id == user.id, TrustedDevice.is_active == True)
                 .all()
             )
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Failed to query trusted devices list: {e}")
             return []
+
+    def save_hashed_trusted_device(
+        self, user_id: int, token_hash: str, device_name: str, expires_at: datetime, device_id: str | None = None
+    ) -> TrustedDevice | None:
+        """Save a trusted device with a secure token hash."""
+        try:
+            self._ensure_session()
+            dev_id = device_id or f"dev_{secrets.token_hex(12)}"
+            device = (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.user_id == user_id, TrustedDevice.token_hash == token_hash)
+                .first()
+            )
+            if device:
+                device.device_name = device_name
+                device.expires_at = expires_at
+                device.is_active = True
+                device.revoked_at = None
+                device.last_used = datetime.now(timezone.utc)
+            else:
+                device = TrustedDevice(
+                    user_id=user_id,
+                    device_id=dev_id,
+                    device_name=device_name,
+                    token_hash=token_hash,
+                    expires_at=expires_at,
+                    is_active=True,
+                    created_at=datetime.now(timezone.utc),
+                    last_used=datetime.now(timezone.utc)
+                )
+                self.db.add(device)
+            self.db.commit()
+            self.db.refresh(device)
+            return device
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to save hashed trusted device: {e}")
+            return None
+
+    def get_trusted_device_by_hash(self, token_hash: str) -> TrustedDevice | None:
+        """Retrieve an active, non-revoked, non-expired trusted device by token hash."""
+        try:
+            self._ensure_session()
+            now = datetime.now(timezone.utc)
+            return (
+                self.db.query(TrustedDevice)
+                .filter(
+                    TrustedDevice.token_hash == token_hash,
+                    TrustedDevice.is_active == True,
+                    TrustedDevice.revoked_at == None,
+                    (TrustedDevice.expires_at == None) | (TrustedDevice.expires_at > now)
+                )
+                .first()
+            )
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to query trusted device by hash: {e}")
+            return None
+
+    def revoke_trusted_device_by_id(self, user_id: int, device_id: str) -> bool:
+        """Revoke a trusted device by user ID and device ID."""
+        try:
+            self._ensure_session()
+            device = (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.user_id == user_id, TrustedDevice.device_id == device_id)
+                .first()
+            )
+            if device:
+                device.is_active = False
+                device.revoked_at = datetime.now(timezone.utc)
+                self.db.commit()
+                return True
+            return False
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to revoke trusted device by ID: {e}")
+            return False
+
+    def revoke_trusted_device_by_hash(self, token_hash: str) -> bool:
+        """Revoke a trusted device by token hash."""
+        try:
+            self._ensure_session()
+            device = (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.token_hash == token_hash)
+                .first()
+            )
+            if device:
+                device.is_active = False
+                device.revoked_at = datetime.now(timezone.utc)
+                self.db.commit()
+                return True
+            return False
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to revoke trusted device by hash: {e}")
+            return False
+
+    def revoke_all_trusted_devices(self, user_id: int) -> int:
+        """Revoke all active trusted devices for a user."""
+        try:
+            self._ensure_session()
+            devices = (
+                self.db.query(TrustedDevice)
+                .filter(TrustedDevice.user_id == user_id, TrustedDevice.is_active == True)
+                .all()
+            )
+            now = datetime.now(timezone.utc)
+            count = 0
+            for dev in devices:
+                dev.is_active = False
+                dev.revoked_at = now
+                count += 1
+            self.db.commit()
+            return count
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to revoke all trusted devices: {e}")
+            return 0
+
+    # ==================== OAuth Accounts ====================
+
+    def get_oauth_account(self, provider: str, provider_user_id: str) -> OAuthAccount | None:
+        """Retrieve an OAuth account by provider and provider subject ID."""
+        try:
+            self._ensure_session()
+            return (
+                self.db.query(OAuthAccount)
+                .filter(OAuthAccount.provider == provider, OAuthAccount.provider_user_id == provider_user_id)
+                .first()
+            )
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to query OAuth account: {e}")
+            return None
+
+    def get_oauth_accounts_for_user(self, user_id: int) -> list[OAuthAccount]:
+        """Retrieve all linked OAuth accounts for a user."""
+        try:
+            self._ensure_session()
+            return (
+                self.db.query(OAuthAccount)
+                .filter(OAuthAccount.user_id == user_id)
+                .all()
+            )
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to query OAuth accounts for user: {e}")
+            return []
+
+    def create_oauth_account(
+        self, user_id: int, provider: str, provider_user_id: str, email: str | None = None
+    ) -> OAuthAccount | None:
+        """Create a new OAuth account association."""
+        try:
+            self._ensure_session()
+            account = OAuthAccount(
+                user_id=user_id,
+                provider=provider,
+                provider_user_id=provider_user_id,
+                email=email,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            self.db.add(account)
+            self.db.commit()
+            self.db.refresh(account)
+            return account
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+            logger.warning(f"Failed to create OAuth account: {e}")
+            try:
+                self.db.rollback()
+            except (SQLAlchemyError, OSError) as rb_err:
+                logger.debug("Failed to rollback failed OAuth account creation: %s", rb_err)
+            return None
+
+    def get_user_by_email(self, email: str) -> User | None:
+        """Retrieve a user by verified email."""
+        if not email:
+            return None
+        try:
+            self._ensure_session()
+            return (
+                self.db.query(User)
+                .filter(func.lower(User.email) == email.lower().strip())
+                .first()
+            )
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to query user by email: {e}")
+            return None
+
+    def create_oauth_user(
+        self, username: str, email: str | None, provider: str, provider_user_id: str, role: str = "user"
+    ) -> User | None:
+        """Create a new local User along with their initial OAuthAccount."""
+        try:
+            self._ensure_session()
+            user = User(
+                username=username,
+                email=email,
+                password_hash=None,
+                role=role,
+                auth_provider=provider,
+                is_active=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                settings={"coach_tone": "encouraging"}
+            )
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.create_oauth_account(
+                user_id=user.id,
+                provider=provider,
+                provider_user_id=provider_user_id,
+                email=email
+            )
+            return user
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+            logger.warning(f"Failed to create OAuth user: {e}")
+            try:
+                self.db.rollback()
+            except (SQLAlchemyError, OSError) as rb_err:
+                logger.debug("Failed to rollback failed OAuth user creation: %s", rb_err)
+            return None
 
     # ==================== Chat History ====================
 
     def save_chat_message(
         self, username: str, role: str, content: str,
-        emotion: Optional[str] = None, metadata_json: Optional[dict] = None
-    ) -> Optional[ChatMessage]:
+        emotion: str | None = None, metadata_json: dict | None = None
+    ) -> ChatMessage | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -330,7 +570,7 @@ class DatabaseManager:
 
     def get_chat_history(
         self, username: str, limit: int = 50, offset: int = 0
-    ) -> List[ChatMessage]:
+    ) -> list[ChatMessage]:
         user = self.get_user(username)
         if not user:
             return []
@@ -343,7 +583,7 @@ class DatabaseManager:
             .all()
         )
 
-    def search_chat_history(self, username: str, query: str, limit: int = 10) -> List[ChatMessage]:
+    def search_chat_history(self, username: str, query: str, limit: int = 10) -> list[ChatMessage]:
         user = self.get_user(username)
         if not user:
             return []
@@ -358,7 +598,7 @@ class DatabaseManager:
             .all()
         )
 
-    def get_recent_emotions(self, username: str, days: int = 7) -> List[dict]:
+    def get_recent_emotions(self, username: str, days: int = 7) -> list[dict]:
         """Get emotional trend data for the last N days."""
         user = self.get_user(username)
         if not user:
@@ -379,11 +619,11 @@ class DatabaseManager:
     # ==================== Mood Tracking ====================
 
     def save_mood(
-        self, username: str, mood: str, emoji: Optional[str] = None,
-        energy: Optional[int] = None, focus: Optional[int] = None,
-        burnout: Optional[int] = None, anxiety: Optional[int] = None,
-        productivity: Optional[int] = None, note: Optional[str] = None
-    ) -> Optional[MoodEntry]:
+        self, username: str, mood: str, emoji: str | None = None,
+        energy: int | None = None, focus: int | None = None,
+        burnout: int | None = None, anxiety: int | None = None,
+        productivity: int | None = None, note: str | None = None
+    ) -> MoodEntry | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -397,7 +637,7 @@ class DatabaseManager:
         self.db.refresh(entry)
         return entry
 
-    def get_mood_history(self, username: str, days: int = 30) -> List[MoodEntry]:
+    def get_mood_history(self, username: str, days: int = 30) -> list[MoodEntry]:
         user = self.get_user(username)
         if not user:
             return []
@@ -426,10 +666,10 @@ class DatabaseManager:
             "avg_burnout": round(sum(burnouts) / len(burnouts), 1) if burnouts else None,
             "avg_anxiety": round(sum(anxieties) / len(anxieties), 1) if anxieties else None,
             "entry_count": len(entries),
-            "most_common_mood": max(set(e.mood for e in entries), key=lambda m: sum(1 for e in entries if e.mood == m)) if entries else None,
+            "most_common_mood": max({e.mood for e in entries}, key=lambda m: sum(1 for e in entries if e.mood == m)) if entries else None,
         }
 
-    def detect_burnout_alert(self, username: str) -> Optional[dict]:
+    def detect_burnout_alert(self, username: str) -> dict | None:
         """Check if user shows signs of burnout based on recent mood data."""
         entries = self.get_mood_history(username, days=3)
         if len(entries) < 2:
@@ -461,8 +701,8 @@ class DatabaseManager:
 
     def record_intervention(
         self, username: str, intervention_type: str, title: str,
-        duration_minutes: Optional[int] = None, metadata_json: Optional[dict] = None
-    ) -> Optional[InterventionCompletion]:
+        duration_minutes: int | None = None, metadata_json: dict | None = None
+    ) -> InterventionCompletion | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -528,7 +768,6 @@ class DatabaseManager:
         )
 
         now = datetime.now(timezone.utc)
-        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         if not streak:
             streak = Streak(
@@ -540,8 +779,9 @@ class DatabaseManager:
         else:
             last = streak.last_activity_date
             if last:
-                last_date = last.replace(hour=0, minute=0, second=0, microsecond=0)
-                days_diff = (today - last_date).days
+                today_date = now.date()
+                last_date = last.date()
+                days_diff = (today_date - last_date).days
                 if days_diff == 1:
                     streak.current_streak += 1
                 elif days_diff > 1:
@@ -562,7 +802,7 @@ class DatabaseManager:
             "type": streak_type,
         }
 
-    def get_streaks(self, username: str) -> List[dict]:
+    def get_streaks(self, username: str) -> list[dict]:
         user = self.get_user(username)
         if not user:
             return []
@@ -590,9 +830,9 @@ class DatabaseManager:
 
     def save_fact(
         self, username: str, fact_type: str, key: str, value: str,
-        category: Optional[str] = None, confidence: float = 1.0,
-        source: str = "extraction", context: Optional[str] = None
-    ) -> Optional[UserFact]:
+        category: str | None = None, confidence: float = 1.0,
+        source: str = "extraction", context: str | None = None
+    ) -> UserFact | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -625,7 +865,7 @@ class DatabaseManager:
         self.db.refresh(fact)
         return fact
 
-    def get_facts(self, username: str, fact_type: Optional[str] = None) -> List[UserFact]:
+    def get_facts(self, username: str, fact_type: str | None = None) -> list[UserFact]:
         user = self.get_user(username)
         if not user:
             return []
@@ -651,7 +891,7 @@ class DatabaseManager:
             }
         return result
 
-    def search_facts(self, username: str, query: str) -> List[UserFact]:
+    def search_facts(self, username: str, query: str) -> list[UserFact]:
         user = self.get_user(username)
         if not user:
             return []
@@ -673,10 +913,10 @@ class DatabaseManager:
 
     def save_focus_session(
         self, username: str, mode: str, duration_minutes: int,
-        completed: bool = False, quality: Optional[int] = None,
-        energy_before: Optional[int] = None, energy_after: Optional[int] = None,
-        distractions: int = 0, notes: Optional[str] = None
-    ) -> Optional[FocusSession]:
+        completed: bool = False, quality: int | None = None,
+        energy_before: int | None = None, energy_after: int | None = None,
+        distractions: int = 0, notes: str | None = None
+    ) -> FocusSession | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -691,7 +931,7 @@ class DatabaseManager:
         self.db.refresh(session)
         return session
 
-    def get_focus_sessions(self, username: str, days: int = 30) -> List[FocusSession]:
+    def get_focus_sessions(self, username: str, days: int = 30) -> list[FocusSession]:
         user = self.get_user(username)
         if not user:
             return []
@@ -741,9 +981,9 @@ class DatabaseManager:
 
     def log_distraction(
         self, username: str, distraction: str,
-        category: Optional[str] = None, energy_level: Optional[int] = None,
-        session_id: Optional[int] = None
-    ) -> Optional[DistractionLog]:
+        category: str | None = None, energy_level: int | None = None,
+        session_id: int | None = None
+    ) -> DistractionLog | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -827,8 +1067,8 @@ class DatabaseManager:
 
     def unlock_achievement(
         self, username: str, achievement_id: str,
-        title: str, description: Optional[str] = None, xp_reward: int = 0
-    ) -> Optional[Achievement]:
+        title: str, description: str | None = None, xp_reward: int = 0
+    ) -> Achievement | None:
         """Unlock an achievement for a user. No-op if already unlocked."""
         user = self.get_user(username)
         if not user:
@@ -860,7 +1100,7 @@ class DatabaseManager:
         logger.info(f"Achievement unlocked for {username}: {title}")
         return achievement
 
-    def get_achievements(self, username: str) -> List[dict]:
+    def get_achievements(self, username: str) -> list[dict]:
         user = self.get_user(username)
         if not user:
             return []
@@ -881,7 +1121,7 @@ class DatabaseManager:
             for a in achievements
         ]
 
-    def get_skills(self, username: str) -> List[dict]:
+    def get_skills(self, username: str) -> list[dict]:
         user = self.get_user(username)
         if not user:
             return []
@@ -897,7 +1137,7 @@ class DatabaseManager:
             for s in skills
         ]
 
-    def check_and_award_achievements(self, username: str) -> List[Achievement]:
+    def check_and_award_achievements(self, username: str) -> list[Achievement]:
         """Check all achievement conditions and award any that are met."""
         user = self.get_user(username)
         if not user:
@@ -1036,7 +1276,7 @@ class DatabaseManager:
             "burnout_alert": self.detect_burnout_alert(username),
         }
 
-    def get_top_distractions(self, username: str, days: int = 7, limit: int = 5) -> List[dict]:
+    def get_top_distractions(self, username: str, days: int = 7, limit: int = 5) -> list[dict]:
         user = self.get_user(username)
         if not user:
             return []
@@ -1051,7 +1291,7 @@ class DatabaseManager:
         )
         return [{"distraction": d, "count": c} for d, c in logs]
 
-    def get_peak_focus_hours(self, username: str, days: int = 14) -> List[dict]:
+    def get_peak_focus_hours(self, username: str, days: int = 14) -> list[dict]:
         """Analyze which hours of the day have the best focus quality."""
         user = self.get_user(username)
         if not user:
@@ -1089,8 +1329,8 @@ class DatabaseManager:
     # ==================== Feedback & Support ====================
 
     def save_feedback(
-        self, username: str, rating: int, category: str, feedback_text: Optional[str] = None
-    ) -> Optional[UserFeedback]:
+        self, username: str, rating: int, category: str, feedback_text: str | None = None
+    ) -> UserFeedback | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -1104,7 +1344,7 @@ class DatabaseManager:
 
     def save_support_ticket(
         self, username: str, type: str, subject: str, description: str
-    ) -> Optional[SupportTicket]:
+    ) -> SupportTicket | None:
         user = self.get_user(username)
         if not user:
             return None
@@ -1116,7 +1356,7 @@ class DatabaseManager:
         self.db.refresh(ticket)
         return ticket
 
-    def get_user_support_tickets(self, username: str) -> List[SupportTicket]:
+    def get_user_support_tickets(self, username: str) -> list[SupportTicket]:
         user = self.get_user(username)
         if not user:
             return []

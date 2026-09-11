@@ -7,7 +7,8 @@ task paralysis. All tasks are designed to be completable in
 """
 
 import logging
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class MicroTaskGenerator:
     """
 
     # Template microtask families for common task types
-    TASK_TEMPLATES = {
+    TASK_TEMPLATES: ClassVar[MappingProxyType[str, dict[str, object]]] = MappingProxyType({
         "writing": {
             "name": "Writing Tasks",
             "micro_steps": [
@@ -109,7 +110,7 @@ class MicroTaskGenerator:
             ],
             "two_minute_starter": "Set a 2-minute timer and do any tiny part of the task.",
         },
-    }
+    })
 
     def __init__(self):
         self.generated_count = 0

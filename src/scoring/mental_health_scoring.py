@@ -251,7 +251,6 @@ def analyze_stress_text(text):
         stress_score = min(0.95, stress_score + frequency_boost)
     
     # Sentiment context: check for negations that might reduce stress
-    negation_words = ["not", "no", "don't", "won't", "didn't", "can't", "couldn't"]
     text_words = text_lower.split()
     
     # If text is mostly questions, reduce stress (curiosity/seeking help is positive)
@@ -267,7 +266,7 @@ def analyze_stress_text(text):
         return 0.0
     elif stress_score > 0.9:
         # Only return near-1 if we have critical indicators
-        has_critical = any(ind in text_lower for ind in critical_indicators.keys())
+        has_critical = any(ind in text_lower for ind in critical_indicators)
         if not has_critical:
             stress_score = min(0.75, stress_score)
     

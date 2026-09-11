@@ -6,12 +6,15 @@ gradients, quick actions, and specialized memory retrieval parameters
 for all 8 chatbots in the Multi-Chatbot ADHD Ecosystem.
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
 from memory.memory_manager import MemoryManager
 
 # Curated gradients matching shadcn/Tailwind systems
-AGENT_CONFIGS: Dict[str, Dict[str, Any]] = {
+AGENT_CONFIGS: dict[str, dict[str, Any]] = {
     "productivity-coach": {
         "id": "productivity-coach",
         "name": "Productivity Coach",
@@ -507,7 +510,7 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
                             lines.append(f"- Ticket #{t.id}: [{t.type.upper()}] '{t.subject}' (Status: {t.status}) - Description: {t.description}")
                     else:
                         lines.append("No active support tickets logged yet.")
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     lines.append(f"Could not retrieve tickets: {e}")
             else:
                 lines.append("No DB manager available to check tickets.")
@@ -520,7 +523,6 @@ def retrieve_specialized_memory(agent_id: str, memory: MemoryManager) -> str:
             lines.append(f"- {m['content']}")
         return "\n".join(lines) if len(lines) > 1 else ""
 
-    except Exception as e:
-        import logging
-        logging.warning(f"Error querying specialized memory for agent '{agent_id}': {e}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        logger.warning("Error querying specialized memory for agent '%s': %s", agent_id, e)
         return ""

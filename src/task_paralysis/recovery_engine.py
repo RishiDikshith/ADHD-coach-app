@@ -6,12 +6,11 @@ and 'Just Begin' mode into a cohesive recovery system.
 """
 
 import logging
-from typing import Any, Optional
 
 from memory.memory_manager import MemoryManager
 from task_paralysis.detector import TaskParalysisDetector
-from task_paralysis.microtasks import MicroTaskGenerator
 from task_paralysis.just_begin import JustBeginMode
+from task_paralysis.microtasks import MicroTaskGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class TaskParalysisRecoveryEngine:
         self.microtask_gen = MicroTaskGenerator()
         self.just_begin = JustBeginMode()
 
-    def process_user_message(self, user_message: str, context: dict = None) -> dict:
+    def process_user_message(self, user_message: str, context: dict | None = None) -> dict:
         """
         Process a user message through the entire recovery pipeline.
         Returns recovery suggestions if task paralysis is detected.
@@ -116,7 +115,7 @@ class TaskParalysisRecoveryEngine:
 
         return result
 
-    def _extract_task(self, message: str) -> Optional[str]:
+    def _extract_task(self, message: str) -> str | None:
         """
         Try to extract a task reference from the user message.
         Uses simple pattern matching.

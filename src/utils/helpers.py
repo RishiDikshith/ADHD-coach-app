@@ -1,7 +1,10 @@
 import logging
+
+logger = logging.getLogger(__name__)
+import os
+
 import numpy as np
 import pandas as pd
-import os
 
 os.makedirs("logs", exist_ok=True)
 
@@ -13,7 +16,7 @@ logging.basicConfig(
 
 
 def log(message):
-    logging.info(message)
+    logger.info(message)
 
 
 def get_model_feature_names(model):
@@ -42,16 +45,16 @@ def align_features_to_model(df, model, fill_value=np.nan):
 
 def prepare_model_for_inference(model):
     """Prepare model for efficient single-threaded inference"""
-    if hasattr(model, "n_jobs") and getattr(model, "n_jobs") not in (None, 1):
+    if hasattr(model, "n_jobs") and model.n_jobs not in (None, 1):
         try:
             model.n_jobs = 1
-        except Exception as e:
-            logging.debug(f"Could not set n_jobs=1 on model: {e}")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.debug(f"Could not set n_jobs=1 on model: {e}")
     
-    if hasattr(model, "thread_count") and getattr(model, "thread_count") not in (None, 1):
+    if hasattr(model, "thread_count") and model.thread_count not in (None, 1):
         try:
             model.thread_count = 1
-        except Exception as e:
-            logging.debug(f"Could not set thread_count=1 on model: {e}")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.debug(f"Could not set thread_count=1 on model: {e}")
     
     return model

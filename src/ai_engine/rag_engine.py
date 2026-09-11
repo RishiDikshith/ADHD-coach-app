@@ -12,8 +12,8 @@ Architecture:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ class RAGEngine:
         self,
         username: str,
         query: str,
-        user_data: Optional[dict] = None,
-        session_data: Optional[dict] = None,
+        user_data: dict | None = None,
+        session_data: dict | None = None,
         max_tokens: int = 2000,
     ) -> str:
         """
@@ -95,7 +95,7 @@ class RAGEngine:
             fact_context = self.memory.get_fact_context_for_prompt()
             if fact_context:
                 return fact_context
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Fact context retrieval error: {e}")
 
         return ""
@@ -126,15 +126,15 @@ class RAGEngine:
             # Check for recent emotions from chat
             emotions = self.db.get_recent_emotions(username, days=3)
             if emotions:
-                emotion_counts = {}
+                emotion_counts: dict[str, int] = {}
                 for e in emotions:
-                    em = e.get("emotion", "neutral")
+                    em = str(e.get("emotion", "neutral"))
                     emotion_counts[em] = emotion_counts.get(em, 0) + 1
                 total = sum(emotion_counts.values())
                 if total > 0:
-                    dominant = max(emotion_counts, key=emotion_counts.get)
+                    dominant = max(emotion_counts.items(), key=lambda item: item[1])[0]
                     return f"[Recent Emotions] Dominant: {dominant} | Entries: {total}"
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Mood context retrieval error: {e}")
 
         return ""
@@ -154,7 +154,7 @@ class RAGEngine:
                     if content:
                         lines.append(f"• {content[:200]}")
                 return "\n".join(lines)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Memory context retrieval error: {e}")
 
         # Fallback to recent memories
@@ -167,12 +167,12 @@ class RAGEngine:
                     if content:
                         lines.append(f"• {content[:150]}")
                 return "\n".join(lines)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Recent memory retrieval error: {e}")
 
         return ""
 
-    def _get_session_context(self, user_data: Optional[dict], session_data: Optional[dict]) -> str:
+    def _get_session_context(self, user_data: dict | None, session_data: dict | None) -> str:
         """Get current session context."""
         if not user_data and not session_data:
             return ""
@@ -232,7 +232,7 @@ class RAGEngine:
                     parts.append(f"[Streaks] {' | '.join(streak_parts)}")
 
             return "\n".join(parts)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Activity context error: {e}")
             return ""
 
@@ -250,7 +250,7 @@ class RAGEngine:
                 for insight in recent:
                     lines.append(f"• {insight}")
                 return "\n".join(lines)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.debug(f"Insight context error: {e}")
 
         return ""
@@ -267,7 +267,7 @@ class LLMRouter:
     - analytics → ML pipeline (no LLM needed)
     """
 
-    ROUTE_TYPES = {
+    ROUTE_TYPES: ClassVar[MappingProxyType[str, dict[str, Any]]] = MappingProxyType({
         "emotional_support": {
             "priority": "high",
             "requires_empathy": True,
@@ -292,9 +292,9 @@ class LLMRouter:
             "max_tokens": 256,
             "temperature": 0.3,
         },
-    }
+    })
 
-    def __init__(self, groq_api_key: Optional[str] = None):
+    def __init__(self, groq_api_key: str | None = None):
         self.groq_api_key = groq_api_key
 
     def classify_intent(self, text: str) -> str:

@@ -12,14 +12,12 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 from utils.celery_app import celery_app
-import utils.celery_tasks  # Force task registrations
 
 # Export celery_app for running the worker:
 # celery -A celery_worker.celery_app worker --loglevel=info
 app = celery_app
 
 if __name__ == "__main__":
-    import celery
     print("Celery Worker Configuration:")
     print(f"Broker URL: {celery_app.conf.broker_url}")
     print(f"Result Backend: {celery_app.conf.result_backend}")

@@ -68,6 +68,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     });
 
+    const streamController = new AbortController();
+    const streamTimeoutId = setTimeout(() => streamController.abort(), 60000);
+
     try {
       const agentHistory = get().messagesByAgent[currentAgent] || [];
       const history = agentHistory
@@ -76,6 +79,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const response = await fetch(`${API_BASE}/chat/stream`, {
         method: "POST",
+        signal: streamController.signal,
         headers: {
           "Content-Type": "application/json",
         },
@@ -95,6 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           agent_id: currentAgent,
         }),
       });
+      clearTimeout(streamTimeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();

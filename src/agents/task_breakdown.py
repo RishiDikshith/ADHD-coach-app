@@ -6,7 +6,6 @@ microtasks to reduce task paralysis and overwhelm for ADHD users.
 """
 
 import logging
-from typing import Any, Optional
 
 from memory.memory_manager import MemoryManager
 
@@ -65,28 +64,28 @@ class TaskBreakdownAgent:
             micro_size = "2_minute"
             steps = [
                 f"Open the file/app you need for: {task}",
-                f"Write/draft just the FIRST sentence or step",
-                f"Set a 5-minute timer and work until it rings",
-                f"Take a 2-minute break",
-                f"Review what you did and decide the next tiny step",
+                "Write/draft just the FIRST sentence or step",
+                "Set a 5-minute timer and work until it rings",
+                "Take a 2-minute break",
+                "Review what you did and decide the next tiny step",
             ]
         elif stress >= 4:
             micro_size = "5_minute"
             steps = [
                 f"Gather everything you need for: {task}",
-                f"Work for 5 focused minutes (set a timer!)",
-                f"Check your progress — even one step counts!",
-                f"Take a short break if needed",
-                f"Decide on the next 5-minute block",
+                "Work for 5 focused minutes (set a timer!)",
+                "Check your progress — even one step counts!",
+                "Take a short break if needed",
+                "Decide on the next 5-minute block",
             ]
         else:
             micro_size = "10_minute"
             steps = [
                 f"List 3 sub-tasks within: {task}",
-                f"Pick the easiest sub-task and start",
-                f"Set a 10-minute focus block",
-                f"After the block, check in with yourself",
-                f"Adjust your next block based on energy",
+                "Pick the easiest sub-task and start",
+                "Set a 10-minute focus block",
+                "After the block, check in with yourself",
+                "Adjust your next block based on energy",
             ]
 
         return {

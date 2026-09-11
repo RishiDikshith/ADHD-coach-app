@@ -9,9 +9,8 @@ Advanced ADHD focus management system with:
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +34,14 @@ class FocusMode:
     allow_extensions: bool
     use_distraction_blocking: bool
     use_background_noise: bool
-    suggested_activities: List[str] = field(default_factory=list)
+    suggested_activities: list[str] = field(default_factory=list)
 
     @classmethod
-    def get_all_modes(cls) -> Dict[str, 'FocusMode']:
+    def get_all_modes(cls) -> dict[str, 'FocusMode']:
         return {m.id: m for m in cls.get_modes_list()}
 
     @classmethod
-    def get_modes_list(cls) -> List['FocusMode']:
+    def get_modes_list(cls) -> list['FocusMode']:
         return [
             cls(
                 id="deep_focus",
@@ -125,6 +124,25 @@ class FocusMode:
                     "Celebrate with a small reward (dopamine!)",
                 ],
             ),
+            cls(
+                id="standard",
+                name="Standard Focus",
+                emoji="⏱️",
+                description="Classic 25-minute Pomodoro focus block with balanced breaks.",
+                default_duration_minutes=25,
+                min_duration=15,
+                max_duration=45,
+                recommended_break_minutes=5,
+                allow_extensions=True,
+                use_distraction_blocking=True,
+                use_background_noise=True,
+                suggested_activities=[
+                    "Choose a single focus task",
+                    "Put notifications on silent",
+                    "Work steadily for 25 minutes",
+                    "Take a 5-minute rejuvenating break",
+                ],
+            ),
         ]
 
 
@@ -134,13 +152,13 @@ class FocusSessionResult:
     mode: str
     duration_minutes: int
     completed: bool
-    quality: Optional[int] = None
+    quality: int | None = None
     distractions: int = 0
-    energy_before: Optional[int] = None
-    energy_after: Optional[int] = None
-    suggested_next_mode: Optional[str] = None
-    suggested_next_duration: Optional[int] = None
-    break_recommendation: Optional[str] = None
+    energy_before: int | None = None
+    energy_after: int | None = None
+    suggested_next_mode: str | None = None
+    suggested_next_duration: int | None = None
+    break_recommendation: str | None = None
 
 
 # ==================== Adaptive Pomodoro ====================
@@ -161,7 +179,7 @@ class AdaptivePomodoro:
         self,
         focus_score: float = 0.5,  # 0.0 to 1.0
         sessions_completed_today: int = 0,
-        avg_historical_duration: Optional[int] = None,
+        avg_historical_duration: int | None = None,
         stress_level: int = 5,
         energy_level: int = 5,
         mode: str = "standard",
@@ -239,7 +257,7 @@ class AdaptivePomodoro:
             },
         }
 
-    def recommend_break(self, mode: str, duration_minutes: int, quality: Optional[int] = None) -> dict:
+    def recommend_break(self, mode: str, duration_minutes: int, quality: int | None = None) -> dict:
         """Recommend break duration and activities based on focus mode and session."""
         mode_configs = {
             "deep_focus": (5, 15),
@@ -269,7 +287,7 @@ class AdaptivePomodoro:
             "reason": "Recovery mode" if mode == "recovery" else "Standard break",
         }
 
-    def _get_break_activities(self, mode: str, duration: int) -> List[str]:
+    def _get_break_activities(self, mode: str, duration: int) -> list[str]:
         """Get ADHD-friendly break activities based on mode and duration."""
         if mode == "recovery":
             return [
@@ -311,10 +329,10 @@ class FocusEngine:
     def __init__(self, db_manager=None):
         self.db = db_manager
         self.adaptive_pomodoro = AdaptivePomodoro(db_manager)
-        self._active_sessions: Dict[str, dict] = {}
-        self._distraction_log: List[dict] = []
+        self._active_sessions: dict[str, dict] = {}
+        self._distraction_log: list[dict] = []
 
-    def get_mode(self, mode_id: str) -> Optional[FocusMode]:
+    def get_mode(self, mode_id: str) -> FocusMode | None:
         """Get a focus mode by ID."""
         return FocusMode.get_all_modes().get(mode_id)
 
@@ -339,8 +357,8 @@ class FocusEngine:
         stress_level: int = 5,
         energy_level: int = 5,
         fatigue: int = 5,
-        avg_historical_duration: Optional[int] = None,
-        preferred_mode: Optional[str] = None,
+        avg_historical_duration: int | None = None,
+        preferred_mode: str | None = None,
     ) -> dict:
         """
         Generate a complete focus session recommendation.
@@ -384,7 +402,7 @@ class FocusEngine:
         }
 
     def log_distraction(self, username: str, distraction: str, category: str = "other",
-                        energy_level: Optional[int] = None):
+                        energy_level: int | None = None):
         """Log a distraction event for pattern analysis."""
         entry = {
             "username": username,
@@ -421,7 +439,7 @@ class FocusEngine:
             "most_common": max(categories, key=categories.get) if categories else None,
         }
 
-    def get_session_feedback_questions(self, mode_id: str) -> List[str]:
+    def get_session_feedback_questions(self, mode_id: str) -> list[str]:
         """Get post-session feedback questions specific to the focus mode."""
         questions = [
             "How was your focus quality? (1-10)",

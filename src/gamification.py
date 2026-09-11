@@ -29,8 +29,6 @@ Skill Trees:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +214,7 @@ class GamificationEngine:
 
     # ==================== XP & Levels ====================
 
-    def award_xp(self, username: str, action: str, metadata: Optional[dict] = None) -> dict:
+    def award_xp(self, username: str, action: str, metadata: dict | None = None) -> dict:
         """
         Award XP for a specific action.
         Returns the updated XP/level state and any new achievements.
@@ -295,7 +293,7 @@ class GamificationEngine:
             return []
         try:
             return self.db.check_and_award_achievements(username)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Achievement check error: {e}")
             return []
 
@@ -310,7 +308,7 @@ class GamificationEngine:
             achievements = self.db.get_achievements(username)
             skills = self.db.get_skills(username)
             streaks = self.db.get_all_streak_summary(username)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Gamification state error: {e}")
             return {"achievements": [], "skills": [], "streaks": {}, "level": 1, "total_xp": 0}
 
@@ -367,11 +365,11 @@ class GamificationEngine:
             "progress_pct": round((xp_in_level / xp_per_level) * 100, 1),
         }
 
-    def get_all_achievements(self) -> List[dict]:
+    def get_all_achievements(self) -> list[dict]:
         """Get all possible achievements with their definitions."""
         return list(ACHIEVEMENTS.values())
 
-    def get_all_skill_trees(self) -> List[dict]:
+    def get_all_skill_trees(self) -> list[dict]:
         """Get all skill tree definitions with level details."""
         result = []
         for skill_id, tree in SKILL_TREES.items():
@@ -432,7 +430,7 @@ def award_xp(db_manager, username: str, action: str) -> dict:
 
 
 # Convenience function for quick celebration messages
-def get_celebration_message(action: str, level_up: bool = False, achievement: Optional[dict] = None) -> str:
+def get_celebration_message(action: str, level_up: bool = False, achievement: dict | None = None) -> str:
     """Generate a celebration message for an action."""
     if achievement:
         return (

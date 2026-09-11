@@ -3,15 +3,15 @@ ML Model Optimization & Efficient Inference
 Optimizes model loading, inference, and caching for production performance
 """
 
-import joblib
-import pandas as pd
-import numpy as np
 import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
 import threading
-from functools import lru_cache
 import time
+from pathlib import Path
+from typing import Any
+
+import joblib
+import numpy as np
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ def load_model_cached(model_path: str, force_reload=False):
         model = joblib.load(model_path)
         _model_cache_instance.set(model_path, model)
         return model
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Failed to load {model_path}: {e}")
         return None
 
@@ -130,7 +130,7 @@ def align_features_optimized(df: pd.DataFrame, model, fill_value=np.nan):
         return df[expected_features]
     
     # Check cache for alignment mapping
-    cache_key = f"{model.__class__.__name__}_{len(expected_features)}"
+    f"{model.__class__.__name__}_{len(expected_features)}"
     
     # Alignment with minimal copies
     aligned_df = df.copy()
@@ -209,7 +209,7 @@ class BatchPredictor:
 # PREDICTION CACHING
 # ============================================================================
 
-def get_prediction_hash(features_dict: Dict) -> str:
+def get_prediction_hash(features_dict: dict) -> str:
     """Create hash of features for caching"""
     import hashlib
     import json
@@ -219,7 +219,7 @@ def get_prediction_hash(features_dict: Dict) -> str:
     return hashlib.md5(json_str.encode()).hexdigest()
 
 
-def cached_predict(model, features_dict: Dict, cache_ttl: int = 3600) -> Optional[float]:
+def cached_predict(model, features_dict: dict, cache_ttl: int = 3600) -> float | None:
     """
     Predict with caching (useful for repeated queries)
     
@@ -242,7 +242,7 @@ def cached_predict(model, features_dict: Dict, cache_ttl: int = 3600) -> Optiona
     return None
 
 
-def store_prediction(features_dict: Dict, prediction: float):
+def store_prediction(features_dict: dict, prediction: float):
     """Store prediction in cache"""
     cache_key = get_prediction_hash(features_dict)
     _prediction_cache[cache_key] = (time.time(), prediction)
@@ -265,7 +265,7 @@ def clear_prediction_cache():
 # MODEL HELPER FUNCTIONS
 # ============================================================================
 
-def get_model_feature_names(model) -> Optional[List[str]]:
+def get_model_feature_names(model) -> list[str] | None:
     """Extract feature names from model"""
     for attr_name in ("feature_names_", "feature_names_in_"):
         feature_names = getattr(model, attr_name, None)
@@ -279,13 +279,13 @@ def prepare_model_for_inference(model):
     if hasattr(model, "n_jobs"):
         try:
             model.n_jobs = 1
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Could not set n_jobs=1: {e}")
     
     if hasattr(model, "thread_count"):
         try:
             model.thread_count = 1
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Could not set thread_count=1: {e}")
     
     return model
@@ -304,7 +304,7 @@ class InferenceProfiler:
         self.model_names = []
     
     def profile_inference(self, model_name: str, model, X: pd.DataFrame, 
-                         n_runs: int = 100) -> Dict[str, float]:
+                         n_runs: int = 100) -> dict[str, float]:
         """Profile inference speed"""
         times = []
         
@@ -389,7 +389,7 @@ class EfficientInference:
         else:
             return self.model.predict(X_aligned)
     
-    def predict_proba(self, X: pd.DataFrame, use_batch: bool = True) -> Optional[np.ndarray]:
+    def predict_proba(self, X: pd.DataFrame, use_batch: bool = True) -> np.ndarray | None:
         """Efficient probability prediction"""
         if self.model is None or not hasattr(self.model, 'predict_proba'):
             return None
@@ -411,7 +411,7 @@ class EfficientInference:
 # MODEL STATISTICS
 # ============================================================================
 
-def get_model_stats(model_path: str) -> Dict[str, Any]:
+def get_model_stats(model_path: str) -> dict[str, Any]:
     """Get model statistics"""
     try:
         stat_info = Path(model_path).stat()
@@ -426,7 +426,7 @@ def get_model_stats(model_path: str) -> Dict[str, Any]:
             "model_type": model.__class__.__name__,
             "has_predict_proba": hasattr(model, 'predict_proba'),
         }
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Could not get stats for {model_path}: {e}")
         return {}
 
@@ -445,16 +445,16 @@ class BatchInferenceOrchestrator:
         """Register a model"""
         self.models[name] = EfficientInference(model_path, name)
     
-    def predict_all(self, X: pd.DataFrame) -> Dict[str, np.ndarray]:
+    def predict_all(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
         """Get predictions from all registered models"""
         results = {}
         for name, inference in self.models.items():
             try:
                 results[name] = inference.predict(X)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Prediction failed for {name}: {e}")
         return results
     
-    def get_stats(self) -> Dict[str, Dict]:
+    def get_stats(self) -> dict[str, dict]:
         """Get statistics for all models"""
         return {name: inf.model_path for name, inf in self.models.items()}

@@ -9,8 +9,6 @@ commitment tracking, and emotionally aware follow-ups.
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +40,16 @@ class AccountabilityAgent:
             "- Tone: supportive partner, like someone who's in your corner, not a manager"
         )
 
-    def generate_check_in(self, context: dict, previous_commitments: list = None) -> dict:
+    def generate_check_in(self, context: dict, previous_commitments: list | None = None) -> dict:
         session = context.get("session", {})
-        user = context.get("user", {})
+        context.get("user", {})
 
         stress = session.get("current_stress", 5)
         turn_count = session.get("turn_count", 0)
         completed_tasks = session.get("completed_tasks_count", 0)
         active_tasks = session.get("active_tasks", [])
         energy = session.get("current_energy", 5)
-        mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
 
         # Previous commitments made in this session
         commitments_made = session.get("commitments_made", [])

@@ -283,9 +283,13 @@ export default function AgentsPage() {
     setVoiceIsThinking(true);
     setVoiceError(null);
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     try {
       const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: promptText,
@@ -296,6 +300,7 @@ export default function AgentsPage() {
           language: voiceLanguage.split("-")[0],
         })
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         throw new Error(`Server returned code ${res.status}`);

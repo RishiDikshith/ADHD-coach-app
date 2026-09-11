@@ -7,7 +7,6 @@ is the hardest part for ADHD brains.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,7 @@ class JustBeginMode:
             "celebration": True,
         }
 
-    def check_in(self, user_id: str = "default") -> Optional[dict]:
+    def check_in(self, user_id: str = "default") -> dict | None:
         """Check in on an active 'Just Begin' session."""
         session = self.active_sessions.get(user_id)
         if not session or session["state"] != "started":
@@ -126,11 +125,11 @@ class JustBeginMode:
     def _get_start_instructions(self, task: str) -> list:
         """Get step-by-step start instructions."""
         return [
-            f"1. Take one deep breath",
+            "1. Take one deep breath",
             f"2. Look at your task: '{task}'",
-            f"3. Set a 2-minute timer (yes, just 2 minutes)",
+            "3. Set a 2-minute timer (yes, just 2 minutes)",
             f"4. Begin the micro-goal: '{self._generate_micro_goal(task)}'",
-            f"5. When the timer rings, you can stop — no guilt!",
+            "5. When the timer rings, you can stop — no guilt!",
         ]
 
     def _format_session(self, session: dict) -> dict:

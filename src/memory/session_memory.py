@@ -6,9 +6,9 @@ and state for continuity across chat turns.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,14 @@ class SessionMemory:
         self.session_dir = Path(".session_memories")
         self.session_dir.mkdir(exist_ok=True)
 
-        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self.session_path = self.session_dir / f"{user_id}_{self.session_id}.json"
 
         # In-memory state (volatile)
         self._state: dict[str, Any] = {
             "user_id": user_id,
             "session_id": self.session_id,
-            "started_at": datetime.now().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
 
             # Current conversation context
             "current_topic": None,
@@ -88,9 +88,9 @@ class SessionMemory:
                     saved = json.load(f)
                 self._state.update(saved)
                 # Generate new session ID but keep useful context
-                self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+                self.session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
                 self._state["session_id"] = self.session_id
-                self._state["started_at"] = datetime.now().isoformat()
+                self._state["started_at"] = datetime.now(timezone.utc).isoformat()
                 self._state["turn_count"] = 0
                 logger.debug(f"Restored session context for {self.user_id}")
         except (json.JSONDecodeError, OSError, IndexError):
@@ -134,7 +134,7 @@ class SessionMemory:
             "user": user_message[:200],
             "assistant": assistant_message[:200],
             "type": interaction_type,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Keep last 5 interactions
@@ -149,7 +149,7 @@ class SessionMemory:
         emotions.append({
             "emotion": emotion,
             "turn": self._state["turn_count"],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         if len(emotions) > 20:
             self._state["recent_emotions"] = emotions[-20:]
@@ -168,7 +168,7 @@ class SessionMemory:
         self._state["current_tasks"].append({
             "task": task,
             "source": source,
-            "added_at": datetime.now().isoformat(),
+            "added_at": datetime.now(timezone.utc).isoformat(),
             "completed": False,
         })
 
@@ -177,7 +177,7 @@ class SessionMemory:
         tasks = self._state["current_tasks"]
         if 0 <= task_index < len(tasks):
             tasks[task_index]["completed"] = True
-            tasks[task_index]["completed_at"] = datetime.now().isoformat()
+            tasks[task_index]["completed_at"] = datetime.now(timezone.utc).isoformat()
             self._state["completed_tasks"].append(tasks[task_index])
 
     def set_overwhelm(self, detected: bool):
@@ -192,7 +192,7 @@ class SessionMemory:
         """Track an active intervention."""
         self._state["active_interventions"].append({
             "intervention": intervention,
-            "applied_at": datetime.now().isoformat(),
+            "applied_at": datetime.now(timezone.utc).isoformat(),
             "effective": None,  # Will be set later
         })
 
@@ -205,7 +205,7 @@ class SessionMemory:
         self._state["intervention_results"].append({
             "intervention": intervention,
             "effective": effective,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
     def get_context_summary(self) -> dict:
@@ -252,7 +252,7 @@ class SessionMemory:
         self._state = {
             "user_id": self.user_id,
             "session_id": self.session_id,
-            "started_at": datetime.now().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "current_topic": None,
             "current_stress_level": 5,
             "current_energy_level": 5,

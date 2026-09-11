@@ -1,9 +1,10 @@
-import os
-import hashlib
-from contextlib import contextmanager
-from dotenv import load_dotenv
 import csv
-from datetime import datetime
+import hashlib
+import os
+from contextlib import contextmanager
+from datetime import datetime, timezone
+
+from dotenv import load_dotenv
 
 # 🔥 Load .env
 load_dotenv()
@@ -20,7 +21,7 @@ def _append_feedback_to_csv(username, rating, text):
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["username", "rating", "feedback_text", "created_at"])
-        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         writer.writerow([username, rating, text, created_at])
 
 def hash_password(password):
@@ -29,7 +30,7 @@ def hash_password(password):
 # ==========================================
 # CLOUD DATABASE (POSTGRESQL)
 # ==========================================
-if DATABASE_URL:
+if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
     import psycopg2
     
     @contextmanager
@@ -40,12 +41,12 @@ if DATABASE_URL:
             try:
                 conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
                 break
-            except psycopg2.OperationalError as e:
+            except psycopg2.OperationalError:
                 if attempt < max_retries - 1:
                     print(f"WARNING: DB connection attempt {attempt + 1} failed. Retrying...")
                     time.sleep(2)
                 else:
-                    raise e
+                    raise
         try:
             yield conn
         finally:
@@ -92,7 +93,7 @@ if DATABASE_URL:
                     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code TEXT")
                     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP")
                 conn.commit()
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 conn.rollback()
 
     def create_user(username, password, contact_info=None):
@@ -105,70 +106,63 @@ if DATABASE_URL:
                     )
                 conn.commit()
             return True, ""
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Database error creating user: {e}")
             return False, str(e)
 
     def verify_user(username, password):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
-                row = cur.fetchone()
-                return bool(row and row[0] == hash_password(password))
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            return bool(row and row[0] == hash_password(password))
 
     def update_user_contact(username, contact_info):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET contact_info = %s WHERE username = %s",
-                    (contact_info, username)
-                )
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET contact_info = %s WHERE username = %s",
+                (contact_info, username)
+            )
             conn.commit()
 
     def get_user_by_username(username):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
-                row = cur.fetchone()
-                if row:
-                    return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT username, contact_info, otp_code, otp_expires_at, is_verified FROM users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if row:
+                return {"username": row[0], "contact_info": row[1], "otp_code": row[2], "otp_expires_at": row[3], "is_verified": row[4]}
         return None
 
     def set_user_otp(username, otp, expires_at):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET otp_code = %s, otp_expires_at = %s WHERE username = %s",
-                    (otp, expires_at, username)
-                )
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET otp_code = %s, otp_expires_at = %s WHERE username = %s",
+                (otp, expires_at, username)
+            )
             conn.commit()
 
     def activate_user(username):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = %s",
-                    (username,)
-                )
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE username = %s",
+                (username,)
+            )
             conn.commit()
 
     def reset_password(username, contact_info, new_password):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-                if cur.fetchone():
-                    cur.execute("UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s", (hash_password(new_password), username))
-                    conn.commit()
-                    return True
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cur.fetchone():
+                cur.execute("UPDATE users SET password_hash = %s, otp_code = NULL, otp_expires_at = NULL WHERE username = %s", (hash_password(new_password), username))
+                conn.commit()
+                return True
         return False
 
     def save_result(score, level, username="anonymous"):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO results (final_score, level, username) VALUES (%s, %s, %s)",
-                    (score, level, username)
-                )
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO results (final_score, level, username) VALUES (%s, %s, %s)",
+                (score, level, username)
+            )
             conn.commit()
 
     def save_feedback(username, rating, text):
@@ -181,7 +175,7 @@ if DATABASE_URL:
                         (username, rating, text)
                     )
                 conn.commit()
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Warning: Failed to save feedback to cloud DB: {e}")
 
 # ==========================================
@@ -213,7 +207,11 @@ else:
             """)
             try:
                 conn.execute("ALTER TABLE results ADD COLUMN username TEXT DEFAULT 'anonymous'")
-                conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE results ADD COLUMN created_at TIMESTAMP")
+                conn.execute("UPDATE results SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
             except sqlite3.OperationalError:
                 pass
 
@@ -255,7 +253,7 @@ else:
                 )
                 conn.commit()
             return True, ""
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Database error creating user: {e}")
             return False, str(e)
 
@@ -323,10 +321,10 @@ else:
                     (username, rating, text)
                 )
                 conn.commit()
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Warning: Failed to save feedback to local DB: {e}")
 
 try:
     init_db()
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print(f"Warning: Could not initialize database on import: {e}")

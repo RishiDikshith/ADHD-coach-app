@@ -5,11 +5,32 @@ SQLAlchemy-based persistent data layer with SQLite (dev) / PostgreSQL (productio
 Stores chat history, mood tracking, intervention completions, streaks, user facts, and more.
 """
 
-from .models import Base, User, ChatMessage, MoodEntry, InterventionCompletion, Streak, UserFact, FocusSession, DistractionLog, Achievement, SkillProgress
 from .crud import DatabaseManager
+from .models import (
+    Achievement,
+    Base,
+    ChatMessage,
+    DistractionLog,
+    FocusSession,
+    InterventionCompletion,
+    MoodEntry,
+    SkillProgress,
+    Streak,
+    User,
+    UserFact,
+)
 
 __all__ = [
-    "Base", "User", "ChatMessage", "MoodEntry", "InterventionCompletion",
-    "Streak", "UserFact", "FocusSession", "DistractionLog", "Achievement", "SkillProgress",
+    "Achievement",
+    "Base",
+    "ChatMessage",
     "DatabaseManager",
+    "DistractionLog",
+    "FocusSession",
+    "InterventionCompletion",
+    "MoodEntry",
+    "SkillProgress",
+    "Streak",
+    "User",
+    "UserFact",
 ]

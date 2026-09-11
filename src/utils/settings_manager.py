@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
+from types import MappingProxyType
+from typing import Any, ClassVar
 
 
 class SettingsManager:
     """Manage user settings persistence"""
-    
-    DEFAULT_SETTINGS = {
+
+    DEFAULT_SETTINGS: ClassVar[MappingProxyType[str, Any]] = MappingProxyType({
         "theme": "dark",
         "language": "en",
         "notifications_enabled": True,
@@ -14,8 +16,8 @@ class SettingsManager:
         "auto_check_in": True,
         "sound_enabled": True,
         "use_12h_format": False,
-        "pin_hash": None
-    }
+        "pin_hash": None,
+    })
     
     def __init__(self, username, settings_dir=".settings_data"):
         self.username = username
@@ -31,7 +33,7 @@ class SettingsManager:
                     saved = json.load(f)
                 # Merge with defaults (in case new settings were added)
                 return {**self.DEFAULT_SETTINGS, **saved}
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 print(f"Error loading settings: {e}")
                 return self.DEFAULT_SETTINGS.copy()
         return self.DEFAULT_SETTINGS.copy()
@@ -42,7 +44,7 @@ class SettingsManager:
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=2)
             return True
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             print(f"Error saving settings: {e}")
             return False
     

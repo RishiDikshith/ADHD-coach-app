@@ -6,7 +6,6 @@ behavioral insights and pattern analysis.
 """
 
 import logging
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class RecommendationEngine:
     def __init__(self, memory=None):
         self.memory = memory
 
-    def generate_recommendations(self, context: dict, user_profile: dict = None) -> list:
+    def generate_recommendations(self, context: dict, user_profile: dict | None = None) -> list:
         """Generate personalized recommendations based on context and profile."""
         recommendations = []
         session = context.get("session", {})
@@ -158,7 +157,7 @@ class RecommendationEngine:
 
         return "\n".join(lines)
 
-    def get_priority_recommendations(self, context: dict, user_profile: dict = None) -> list:
+    def get_priority_recommendations(self, context: dict, user_profile: dict | None = None) -> list:
         """Get only high-priority recommendations."""
         all_recs = self.generate_recommendations(context, user_profile)
         return [r for r in all_recs if r.get("priority") == "high"]

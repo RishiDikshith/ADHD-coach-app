@@ -1,17 +1,18 @@
 # train_adhd_risk_model.py
 
-import pandas as pd
-import numpy as np
-import joblib
 import warnings
+
+import joblib
+import pandas as pd
+
 warnings.filterwarnings("ignore")
 
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 print("="*70)
 print("FINAL ADHD MODEL (FULLY FIXED)")
@@ -56,7 +57,7 @@ try:
     nlp_available = True
     print("✓ NLP model loaded")
 
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print("⚠️ NLP not available:", str(e))
 
 # Productivity
@@ -72,7 +73,7 @@ try:
     prod_available = True
     print("✓ Productivity model loaded")
 
-except Exception as e:
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
     print("⚠️ Productivity not available:", str(e))
 
 # =========================
@@ -114,7 +115,7 @@ if prod_available:
         df["productivity_score"] = prod_model.predict(prod_input)
         print("✓ Productivity feature added")
 
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         print("⚠️ Productivity failed:", str(e))
         df["productivity_score"] = 0.5
 else:

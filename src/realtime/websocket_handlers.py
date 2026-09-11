@@ -1,11 +1,12 @@
-import logging
-import json
 import asyncio
+import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
-from typing import Dict, List, Set, Any, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from typing import Any
+
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 # Logging
 logger = logging.getLogger("realtime_websocket")
@@ -22,9 +23,9 @@ class FocusTimer:
         self.remaining_seconds = duration_minutes * 60
         self.is_active = False
         self.is_break = False
-        self.task: Optional[asyncio.Task] = None
+        self.task: asyncio.Task | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "duration_minutes": self.duration_minutes,
             "remaining_seconds": self.remaining_seconds,
@@ -38,18 +39,18 @@ class FocusRoom:
         self.room_id = room_id
         self.timer = FocusTimer()
         # username -> dict containing details
-        self.members: Dict[str, Dict[str, Any]] = {}
+        self.members: dict[str, dict[str, Any]] = {}
         # username -> WebSocket connections
-        self.connections: Dict[str, WebSocket] = {}
+        self.connections: dict[str, WebSocket] = {}
 
-    async def broadcast(self, message: Dict[str, Any]):
+    async def broadcast(self, message: dict[str, Any]):
         """Broadcasts a JSON message to all active WebSocket connections in the room."""
         disconnected_users = []
         payload = json.dumps(message)
         for username, ws in list(self.connections.items()):
             try:
                 await ws.send_text(payload)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Error broadcasting to {username} in room {self.room_id}: {e}")
                 disconnected_users.append(username)
 
@@ -79,7 +80,7 @@ class FocusRoom:
         if username in self.members:
             del self.members[username]
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         return {
             "room_id": self.room_id,
             "timer": self.timer.to_dict(),
@@ -89,7 +90,7 @@ class FocusRoom:
 class FocusRoomManager:
     """Manages active co-working focus rooms and their background ticking loops."""
     def __init__(self):
-        self.rooms: Dict[str, FocusRoom] = {}
+        self.rooms: dict[str, FocusRoom] = {}
         self._lock = asyncio.Lock()
 
     async def get_or_create_room(self, room_id: str) -> FocusRoom:
@@ -137,7 +138,7 @@ class FocusRoomManager:
                     room.timer.remaining_seconds = room.timer.duration_minutes * 60
             except asyncio.CancelledError:
                 logger.info(f"Timer loop cancelled for room: {room.room_id}")
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Error in timer loop for room {room.room_id}: {e}")
             finally:
                 room.timer.is_active = False
@@ -158,17 +159,17 @@ class AccountabilityGroup:
     def __init__(self, group_id: str):
         self.group_id = group_id
         # username -> WebSocket
-        self.connections: Dict[str, WebSocket] = {}
+        self.connections: dict[str, WebSocket] = {}
         # username -> current state info (status, stress, energy, points)
-        self.members: Dict[str, Dict[str, Any]] = {}
+        self.members: dict[str, dict[str, Any]] = {}
 
-    async def broadcast(self, message: Dict[str, Any]):
+    async def broadcast(self, message: dict[str, Any]):
         disconnected_users = []
         payload = json.dumps(message)
         for username, ws in list(self.connections.items()):
             try:
                 await ws.send_text(payload)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Error broadcasting accountability update to {username}: {e}")
                 disconnected_users.append(username)
 
@@ -195,7 +196,7 @@ class AccountabilityGroup:
         if username in self.members:
             del self.members[username]
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         return {
             "group_id": self.group_id,
             "members": list(self.members.values())
@@ -204,7 +205,7 @@ class AccountabilityGroup:
 class AccountabilityManager:
     """Manages active accountability groups."""
     def __init__(self):
-        self.groups: Dict[str, AccountabilityGroup] = {}
+        self.groups: dict[str, AccountabilityGroup] = {}
         self._lock = asyncio.Lock()
 
     async def get_or_create_group(self, group_id: str) -> AccountabilityGroup:
@@ -233,9 +234,9 @@ router = APIRouter(prefix="/ws", tags=["realtime"])
 # Helper imports from main_api avoiding import time circular dependency
 def get_main_api_globals():
     try:
-        import src.api.main_api as main_api
+        from src.api import main_api
         return main_api
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Failed to import main_api globals: {e}")
         return None
 
@@ -294,7 +295,7 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
                         if api and api._db_manager:
                             try:
                                 api._db_manager.log_distraction(username, room_id, category)
-                            except Exception as db_err:
+                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
                                 logger.warning(f"Failed to log distraction to DB: {db_err}")
 
                 elif msg_type == "start_timer":
@@ -341,7 +342,7 @@ async def websocket_focus(websocket: WebSocket, room_id: str, username: str = Qu
 
             except json.JSONDecodeError:
                 logger.warning(f"Received invalid JSON in focus WS: {data}")
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Error handling focus WS message: {e}")
 
     except WebSocketDisconnect:
@@ -407,7 +408,7 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
                         if api and api._db_manager and api._gamification:
                             try:
                                 api._gamification.award_xp(username, "mood_checkin")
-                            except Exception as xp_err:
+                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
                                 logger.warning(f"Failed to award check-in XP: {xp_err}")
 
                 elif msg_type == "micro_win":
@@ -425,7 +426,7 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
                     if api and api._db_manager and api._gamification:
                         try:
                             api._gamification.award_xp(username, "intervention_completed")
-                        except Exception as xp_err:
+                        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
                             logger.warning(f"Failed to award micro-win XP: {xp_err}")
 
                 elif msg_type == "send_dopamine":
@@ -450,7 +451,7 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
                         if api and api._db_manager and api._gamification:
                             try:
                                 api._gamification.award_xp(target, "mood_checkin") # Custom dopamine gift XP
-                            except Exception as xp_err:
+                            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as xp_err:
                                 logger.warning(f"Failed to award gift XP to {target}: {xp_err}")
 
                 elif msg_type == "ping":
@@ -458,7 +459,7 @@ async def websocket_accountability(websocket: WebSocket, group_id: str, username
 
             except json.JSONDecodeError:
                 logger.warning(f"Received invalid JSON in accountability WS: {data}")
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Error handling accountability message: {e}")
 
     except WebSocketDisconnect:
@@ -503,7 +504,7 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                 session_data = msg.get("session_data", {})
                 history = msg.get("history", [])
                 language = msg.get("language", "en")
-                language_name = msg.get("language_name", "English")
+                msg.get("language_name", "English")
 
                 # Detect language automatically
                 if len(text.strip()) > 1:
@@ -512,12 +513,12 @@ async def websocket_chat(websocket: WebSocket, username: str = Query("default"),
                         detected = langdetect.detect(text)
                         if detected and len(detected) == 2:
                             language = detected
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110
                         pass
 
                 # Initialize cognitive/memory managers for user
-                from memory.memory_manager import MemoryManager
                 from agents.orchestrator import AgentOrchestrator
+                from memory.memory_manager import MemoryManager
                 from task_paralysis.recovery_engine import TaskParalysisRecoveryEngine
 
                 memory = MemoryManager(user_id=username)
@@ -640,9 +641,10 @@ TASKS:
                     try:
                         from groq import AsyncGroq
                         client = AsyncGroq(api_key=groq_api_key)
+                        model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                         completion_stream = await client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
-                            model="llama-3.1-8b-instant",
+                            model=model,
                             temperature=0.7,
                             max_tokens=1024,
                             stream=True,
@@ -652,7 +654,7 @@ TASKS:
                             if token:
                                 full_raw_response += token
                                 await websocket.send_text(json.dumps({"type": "token", "token": token}))
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         logger.error(f"Error in Groq streaming WebSocket: {e}")
                         offline_reply = api.generate_offline_reply(prompt)
                         for i in range(0, len(offline_reply), 5):
@@ -675,7 +677,7 @@ TASKS:
                     tasks_part = parts[1].strip()
                     for line in tasks_part.split('\n'):
                         line = line.strip()
-                        if line.startswith("-") or line.startswith("*") or line.startswith("☐"):
+                        if line.startswith(("-", "*", "☐")):
                             clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
                             if clean_task:
                                 dynamic_tasks.append(clean_task)
@@ -708,7 +710,7 @@ TASKS:
                         api._db_manager.save_chat_message(username, "user", text, analysis_result.get("emotion"))
                         api._db_manager.save_chat_message(username, "assistant", reply[:1000])
                         api._gamification.award_xp(username, "mood_checkin")
-                    except Exception as db_err:
+                    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
                         logger.warning(f"WS DB Error: {db_err}")
 
                 # Build interventions list
@@ -734,7 +736,7 @@ TASKS:
                 if api._db_manager and interventions:
                     try:
                         api._gamification.award_xp(username, "intervention_completed")
-                    except Exception:
+                    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                         pass
 
                 # Build the complete final response metadata payload
@@ -762,11 +764,11 @@ TASKS:
 
             except json.JSONDecodeError:
                 logger.warning(f"WS Chat received invalid JSON: {data}")
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(f"Error handling WS Chat message: {e}")
                 await websocket.send_text(json.dumps({
                     "type": "error",
-                    "message": f"Processing failed: {str(e)}"
+                    "message": f"Processing failed: {e!s}"
                 }))
 
     except WebSocketDisconnect:

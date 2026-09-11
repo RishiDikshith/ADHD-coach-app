@@ -1,21 +1,25 @@
 import logging
+
+logger = logging.getLogger(__name__)
 import os
 import sys
+import threading
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
+from typing import Annotated, Any
 
-import joblib
 import numpy as np
 import pandas as pd
-from functools import lru_cache
-import threading
-from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
+from kombu.exceptions import OperationalError as CeleryOperationalError
+from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 # Load environment variables
 load_dotenv()
@@ -26,38 +30,50 @@ src_dir = os.path.dirname(current_dir)
 if src_dir not in sys.path:
     sys.path.append(src_dir)
 
+from agents.orchestrator import AgentOrchestrator
+from ai_engine.rag_engine import LLMRouter, RAGEngine
+from analytics.insight_engine import InsightEngine
+from analytics.pattern_analyzer import PatternAnalyzer
+from analytics.recommendation_engine import RecommendationEngine
+from auth.auth_handler import (
+    AuthHandler,
+    create_access_token,
+    create_refresh_token,
+    get_password_hash,
+    optional_user,
+    rate_limiter,
+    require_admin,
+    require_user,
+    sanitize_prompt,
+    sanitize_username,
+    verify_token,
+)
+from database.crud import DatabaseManager
+
+# === NEW SYSTEM IMPORTS ===
+from database.models import engine, get_db, init_db
 from feature_engineering.feature_builder import build_features
+from focus.focus_engine import FocusEngine
+from gamification import GamificationEngine
+from intervention.adaptive_coach import AdaptiveCoach
 from intervention.intervention_engine import generate_interventions
+from memory.memory_manager import MemoryManager
+from ml_models.efficient_inference import (
+    EfficientInference,
+    load_model_cached,
+)
 from scoring.adhd_questionnaire_score import calculate_adhd_score
 from scoring.adhd_scoring import combined_adhd_score
 from scoring.final_score import final_score
 from scoring.mental_health_scoring import mental_health_score
 from scoring.productivity_scoring import productivity_score
 from scoring.student_scoring import depression_score
-from utils.helpers import align_features_to_model, get_model_feature_names, prepare_model_for_inference
-from ml_models.efficient_inference import (
-    EfficientInference, 
-    load_model_cached,
-    align_features_optimized,
-    cached_predict,
-    store_prediction
-)
-from memory.memory_manager import MemoryManager
-from agents.orchestrator import AgentOrchestrator
 from task_paralysis.recovery_engine import TaskParalysisRecoveryEngine
-from analytics.insight_engine import InsightEngine
-from analytics.pattern_analyzer import PatternAnalyzer
-from analytics.recommendation_engine import RecommendationEngine
-
-# === NEW SYSTEM IMPORTS ===
-from database.models import engine, init_db, get_db
-from database.crud import DatabaseManager
-from auth.auth_handler import AuthHandler, get_password_hash, sanitize_input, sanitize_prompt, rate_limiter, sanitize_username, require_user, require_coach, require_admin, optional_user
 from task_paralysis.state_detector import ADHDStateDetector
-from intervention.adaptive_coach import AdaptiveCoach
-from focus.focus_engine import FocusEngine
-from gamification import GamificationEngine
-from ai_engine.rag_engine import RAGEngine, LLMRouter
+from utils.helpers import (
+    align_features_to_model,
+    prepare_model_for_inference,
+)
 
 # Global analytics engine instances (lazy initialized per user)
 _insight_engines = {}
@@ -76,8 +92,8 @@ def bootstrap_admin(db_manager):
     """
     import os
     import re
-    import logging
-    from auth.auth_handler import get_password_hash, sanitize_username
+
+    from auth.auth_handler import sanitize_username
     from utils.audit_logger import audit_log
 
     admin_user = os.getenv("ADMIN_USERNAME")
@@ -89,7 +105,7 @@ def bootstrap_admin(db_manager):
     if not admin_user or not admin_pass:
         msg = "ADMIN_USERNAME or ADMIN_PASSWORD not configured in environment variables."
         if is_prod:
-            logging.critical(f"FATAL: Production admin bootstrapping failed: {msg}")
+            logger.critical(f"FATAL: Production admin bootstrapping failed: {msg}")
             audit_log(
                 username="system",
                 action="admin_bootstrap",
@@ -99,7 +115,7 @@ def bootstrap_admin(db_manager):
             )
             raise RuntimeError(f"Production admin bootstrapping failed: {msg}")
         else:
-            logging.warning(f"WARNING: Dev admin bootstrapping skipped: {msg}")
+            logger.warning(f"WARNING: Dev admin bootstrapping skipped: {msg}")
             return
 
     # Validate password complexity in production
@@ -125,7 +141,7 @@ def bootstrap_admin(db_manager):
 
         if is_weak:
             msg = f"Production ADMIN_PASSWORD fails complexity requirements: {'; '.join(reasons)}"
-            logging.critical(f"FATAL: {msg}")
+            logger.critical(f"FATAL: {msg}")
             audit_log(
                 username="system",
                 action="admin_bootstrap",
@@ -140,15 +156,15 @@ def bootstrap_admin(db_manager):
     if not sanitized_admin:
         msg = f"ADMIN_USERNAME '{admin_user}' is in an invalid format."
         if is_prod:
-            logging.critical(f"FATAL: {msg}")
+            logger.critical(f"FATAL: {msg}")
             raise RuntimeError(msg)
         else:
-            logging.warning(f"WARNING: {msg}")
+            logger.warning(f"WARNING: {msg}")
             return
 
     # Check database status
     if not db_manager:
-        logging.warning("Database manager not initialized. Skipping admin bootstrap.")
+        logger.warning("Database manager not initialized. Skipping admin bootstrap.")
         return
 
     # Check if admin user exists
@@ -158,7 +174,7 @@ def bootstrap_admin(db_manager):
         if getattr(existing_user, "role", "user") != "admin":
             existing_user.role = "admin"
             db_manager.db.commit()
-            logging.info(f"Promoted existing user '{sanitized_admin}' to admin role.")
+            logger.info(f"Promoted existing user '{sanitized_admin}' to admin role.")
             audit_log(
                 username=sanitized_admin,
                 action="admin_bootstrap_promotion",
@@ -166,7 +182,7 @@ def bootstrap_admin(db_manager):
                 details={"message": "Existing user promoted to admin role"}
             )
         else:
-            logging.info(f"Admin user '{sanitized_admin}' already exists. Skipping initialization.")
+            logger.info(f"Admin user '{sanitized_admin}' already exists. Skipping initialization.")
         return
 
     # Create administrative user
@@ -184,15 +200,15 @@ def bootstrap_admin(db_manager):
         )
         db_manager.db.add(new_admin)
         db_manager.db.commit()
-        logging.info(f"✅ Admin user '{sanitized_admin}' bootstrapped successfully.")
+        logger.info(f"✅ Admin user '{sanitized_admin}' bootstrapped successfully.")
         audit_log(
             username=sanitized_admin,
             action="admin_bootstrap_creation",
             status="SUCCESS",
             details={"message": "Admin user created successfully"}
         )
-    except Exception as e:
-        logging.error(f"Error bootstrapping admin user: {e}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        logger.error(f"Error bootstrapping admin user: {e}")
         db_manager.db.rollback()
 
 
@@ -210,22 +226,22 @@ async def lifespan(app: FastAPI):
     if missing_vars:
         msg = f"Critical environment variables missing at startup: {', '.join(missing_vars)}"
         if is_prod:
-            logging.critical(f"FATAL: {msg}")
+            logger.critical(f"FATAL: {msg}")
             raise RuntimeError(msg)
         else:
-            logging.warning(f"WARNING: {msg} (Proceeding in development mode)")
+            logger.warning(f"WARNING: {msg} (Proceeding in development mode)")
 
     if is_prod and not os.getenv("DATABASE_URL", "").startswith(("postgresql://", "postgres://")):
         raise RuntimeError("Production requires DATABASE_URL to reference PostgreSQL; refusing SQLite fallback.")
 
     global _db_manager, _state_detector, _adaptive_coach, _focus_engine, _gamification, _rag_engine
-    logging.info("Initializing database...")
+    logger.info("Initializing database...")
     try:
         init_db()
         _db_manager = DatabaseManager()
-        logging.info("[AUTH] database_backend=%s", engine.url.get_backend_name())
-    except Exception as e:
-        logging.error(f"Database startup failed: {e}")
+        logger.info("[AUTH] database_backend=%s", engine.url.get_backend_name())
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        logger.error(f"Database startup failed: {e}")
         if is_prod:
             raise RuntimeError(f"Database startup failed: {e}")
         _db_manager = None
@@ -233,12 +249,12 @@ async def lifespan(app: FastAPI):
     if _db_manager:
         try:
             bootstrap_admin(_db_manager)
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             if is_prod:
-                logging.critical(f"FATAL: Admin bootstrap failed: {e}")
+                logger.critical(f"FATAL: Admin bootstrap failed: {e}")
                 raise
             else:
-                logging.warning(f"Admin bootstrap skipped: {e}")
+                logger.warning(f"Admin bootstrap skipped: {e}")
 
         # Initialize dependent services AFTER db_manager is ready
         try:
@@ -248,9 +264,9 @@ async def lifespan(app: FastAPI):
             _focus_engine = FocusEngine(_db_manager)
             _gamification = GamificationEngine(_db_manager)
             _rag_engine = RAGEngine(None, _db_manager)
-            logging.info("✅ Database and all services initialized successfully")
-        except Exception as e:
-            logging.error(f"Failed to initialize services: {e}")
+            logger.info("✅ Database and all services initialized successfully")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.error(f"Failed to initialize services: {e}")
             if is_prod:
                 raise
     else:
@@ -277,7 +293,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000", "http://localhost:3001",
-        "http://127.0.0.1:3000", os.getenv("FRONTEND_URL", ""),
+        "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000",
+        os.getenv("FRONTEND_URL", "").rstrip("/"),
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
@@ -286,19 +303,20 @@ app.add_middleware(
 )
 
 @app.get("/healthz")
-def healthz(db = Depends(get_db)):
+def healthz(db: Annotated[Any, Depends(get_db)]):
     from sqlalchemy import text
     try:
         # Test DB connection
         db.execute(text("SELECT 1"))
         return {"status": "healthy", "database": "connected"}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {e}")
 
 @app.get("/admin/health")
 def get_admin_health(current_admin: str = Depends(require_admin)):
     """Protected health check for admins."""
     from datetime import datetime, timezone
+
     from utils.audit_logger import audit_log
     audit_log(
         username=current_admin,
@@ -315,6 +333,7 @@ def get_admin_health(current_admin: str = Depends(require_admin)):
 
 # Register real-time WebSocket routes for co-working, accountability, and low-latency chat
 from realtime.websocket_handlers import router as websocket_router
+
 app.include_router(websocket_router)
 
 
@@ -352,31 +371,31 @@ _llm_router = LLMRouter()
 # -------- EFFICIENT MODEL LOADING WITH CACHING --------
 try:
     adhd_inference = EfficientInference(str(MODELS_DIR / "adhd_risk_model.pkl"), "ADHD Risk Model")
-    logging.info("✅ ADHD Risk Model loaded with optimization")
-except Exception as e:
-    logging.error(f"Failed to load ADHD model: {e}")
+    logger.info("✅ ADHD Risk Model loaded with optimization")
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+    logger.error(f"Failed to load ADHD model: {e}")
     adhd_inference = None
 
 try:
     productivity_inference = EfficientInference(str(MODELS_DIR / "productivity_model.pkl"), "Productivity Model")
-    logging.info("✅ Productivity Model loaded with optimization")
-except Exception as e:
-    logging.error(f"Failed to load Productivity model: {e}")
+    logger.info("✅ Productivity Model loaded with optimization")
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+    logger.error(f"Failed to load Productivity model: {e}")
     productivity_inference = None
 
 try:
     student_inference = EfficientInference(str(MODELS_DIR / "student_model.pkl"), "Student Depression Model")
-    logging.info("✅ Student Depression Model loaded with optimization")
-except Exception as e:
-    logging.error(f"Failed to load Student model: {e}")
+    logger.info("✅ Student Depression Model loaded with optimization")
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+    logger.error(f"Failed to load Student model: {e}")
     student_inference = None
 
 try:
     mental_pipeline = load_model_cached(str(MODELS_DIR / "mental_health_nlp_pipeline.pkl"))
     mental_pipeline = prepare_model_for_inference(mental_pipeline)
-    logging.info("✅ Mental Health NLP Pipeline loaded with optimization")
-except Exception as e:
-    logging.error(f"Failed to load Mental Health model: {e}")
+    logger.info("✅ Mental Health NLP Pipeline loaded with optimization")
+except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+    logger.error(f"Failed to load Mental Health model: {e}")
     mental_pipeline = None
 
 adhd_model = adhd_inference.model if adhd_inference else None
@@ -433,38 +452,46 @@ TASKS:
 
 class ChatRequest(BaseModel):
     text: str
-    history: List[Any] = Field(default_factory=list)
-    user_data: Dict[str, Any] = Field(default_factory=dict)
-    session_data: Dict[str, Any] = Field(default_factory=dict)
+    history: list[Any] = Field(default_factory=list)
+    user_data: dict[str, Any] = Field(default_factory=dict)
+    session_data: dict[str, Any] = Field(default_factory=dict)
     language: str = "en"
     language_name: str = "English"
     username: str = "default"
-    agent_id: Optional[str] = "productivity-coach"
+    agent_id: str | None = "productivity-coach"
 
 
 class ScoreRequest(BaseModel):
-    user_data: Dict[str, Any] = Field(default_factory=dict)
-    adhd_answers: List[str] = Field(default_factory=list)
+    user_data: dict[str, Any] = Field(default_factory=dict)
+    adhd_answers: list[str] = Field(default_factory=list)
     text: str = ""
+    username: str | None = None
 
 class InterventionRequest(BaseModel):
-    user_data: Dict[str, Any] = Field(default_factory=dict)
-    scores: Dict[str, Any] = Field(default_factory=dict)
+    user_data: dict[str, Any] = Field(default_factory=dict)
+    scores: dict[str, Any] = Field(default_factory=dict)
 
-from pydantic import field_validator
 import re
 
+from pydantic import field_validator
+
+
 class AuthRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., min_length=3, max_length=100)
     password: str = Field(..., min_length=8)
-    device_id: Optional[str] = None
-    device_name: Optional[str] = None
+    device_id: str | None = None
+    device_name: str | None = None
 
     @field_validator("username")
     @classmethod
     def validate_username(cls, v):
-        if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
+        v = v.strip()
+        if "@" in v:
+            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+                raise ValueError("Invalid email format")
+        else:
+            if not re.match(r"^[a-zA-Z0-9_.-]+$", v):
+                raise ValueError("Username can only contain alphanumeric characters, underscores, hyphens, and dots")
         return v
 
 class PinLoginRequest(BaseModel):
@@ -487,8 +514,8 @@ class PinLoginRequest(BaseModel):
 
 class SetPinRequest(BaseModel):
     pin: str = Field(..., min_length=4, max_length=4)
-    device_id: Optional[str] = None
-    device_name: Optional[str] = None
+    device_id: str | None = None
+    device_name: str | None = None
 
     @field_validator("pin")
     @classmethod
@@ -531,7 +558,7 @@ class AdminPinLoginRequest(BaseModel):
         return v
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., max_length=50)
     password: str = Field(..., min_length=8)
     email: str = Field("", max_length=255)
 
@@ -590,11 +617,11 @@ class SettingsUpdateRequest(BaseModel):
 
 class AgentAnalyzeRequest(BaseModel):
     agent_type: str
-    context: Dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 class TaskParalysisRequest(BaseModel):
     task: str
-    user_data: Dict[str, Any] = Field(default_factory=dict)
+    user_data: dict[str, Any] = Field(default_factory=dict)
 
 class FocusRecommendRequest(BaseModel):
     mode_id: str = "standard"
@@ -631,8 +658,8 @@ def predict_mental_health_probability(text: str):
             else:
                 prediction = str(mental_pipeline.predict([text])[0]).lower()
                 ml_probability = 1.0 if prediction in {"1", "stress"} else 0.0
-        except Exception:
-            logging.debug("ML mental health prediction failed, using text analysis")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
+            logger.debug("ML mental health prediction failed, using text analysis")
             ml_probability = None
     from scoring.mental_health_scoring import analyze_stress_text
     stress_probability = analyze_stress_text(text)
@@ -648,19 +675,19 @@ def student_model_has_usable_inputs(df: pd.DataFrame) -> bool:
     feature_count = student_inference.get_feature_count()
     return feature_count > 0 and len(df.columns) >= feature_count * 0.8
 
-def estimate_depression_health_score(user_data: Dict[str, Any], engineered_df: pd.DataFrame) -> float:
+def estimate_depression_health_score(user_data: dict[str, Any], engineered_df: pd.DataFrame) -> float:
     if student_inference is not None and student_model_has_usable_inputs(engineered_df):
         try:
             predicted_label = student_inference.predict(engineered_df)[0]
             return float(depression_score(predicted_label))
-        except Exception as e:
-            logging.warning(f"Student model prediction failed: {e}")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning(f"Student model prediction failed: {e}")
     stress_level = user_data.get("stress_level", 5)
     sleep_hours = user_data.get("sleep_hours", 7)
     estimated_risk = min(1.0, max(0.0, (stress_level / 10) * 0.7 + max(0, 7 - sleep_hours) * 0.08))
     return float(max(20, min(85, (1 - estimated_risk) * 100)))
 
-def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: List[str] | None = None, analysis: Dict[str, str] = None) -> Dict[str, Any]:
+def build_user_scores(user_data: dict[str, Any], text: str = "", adhd_answers: list[str] | None = None, analysis: dict[str, str] | None = None) -> dict[str, Any]:
     if not user_data:
         return {}
     adhd_answers = adhd_answers or []
@@ -673,16 +700,16 @@ def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: L
             raise ValueError("Productivity model unavailable")
         productivity_raw = np.expm1(productivity_inference.predict(engineered_df)[0])
         productivity_pct = float(productivity_score(productivity_raw))
-    except Exception:
-        logging.exception("Productivity scoring failed")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
+        logger.exception("Productivity scoring failed")
         productivity_pct = 50.0
     try:
         if adhd_inference is None:
             raise ValueError("ADHD model unavailable")
         adhd_raw = adhd_inference.predict(engineered_df)[0]
         adhd_risk = max(0.0, min(1.0, adhd_raw / 100 if adhd_raw > 1 else adhd_raw))
-    except Exception:
-        logging.exception("ADHD scoring failed")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
+        logger.exception("ADHD scoring failed")
         adhd_risk = 0.5
     if adhd_answers:
         questionnaire_score, questionnaire_level = calculate_adhd_score(adhd_answers)
@@ -743,7 +770,10 @@ def build_user_scores(user_data: Dict[str, Any], text: str = "", adhd_answers: L
     }
 
 def analyze(text):
-    import json, re
+    if not text or not str(text).strip():
+        return {"emotion": "neutral", "productivity": "medium"}
+    import json
+    import re
     try:
         prompt = f"""Analyze the following text from a user seeking productivity and mental health coaching. Classify the user's emotion as exactly one of: 'positive', 'neutral', or 'stress'. Classify their productivity status as exactly one of: 'high', 'medium', or 'low'. Respond with ONLY a valid JSON object in this format: {{"emotion": "...", "productivity": "..."}}. Do not include any other text. Text to analyze: '{text}'"""
         raw_response = get_ai_reply(prompt)
@@ -751,8 +781,8 @@ def analyze(text):
         if match:
             result = json.loads(match.group())
             return {"emotion": result.get("emotion", "neutral").lower(), "productivity": result.get("productivity", "medium").lower()}
-    except Exception as e:
-        logging.debug(f"LLM analysis failed, falling back to heuristics: {e}")
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"LLM analysis failed, falling back to heuristics: {e}")
     try:
         predicted_probability = predict_mental_health_probability(text)
         prompt_lower = text.lower()
@@ -769,9 +799,9 @@ def analyze(text):
         else:
             productivity = "medium"
         return {"emotion": emotion_label, "productivity": productivity}
-    except Exception as exc:
-        logging.error("Analysis error: %s", exc)
-        return {"emotion": "normal", "productivity": "medium"}
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Analysis error: %s", exc)
+        return {"emotion": "neutral", "productivity": "medium"}
 
 def format_history(history):
     if not history:
@@ -842,8 +872,8 @@ def translate_to_english(text: str) -> str:
         from deep_translator import GoogleTranslator
         translated = GoogleTranslator(source="auto", target="en").translate(text)
         return translated if translated else text
-    except Exception as e:
-        logging.debug(f"Translation to English failed: {e}")
+    except (AttributeError, KeyError, ModuleNotFoundError, ImportError, OSError, RuntimeError, TypeError, ValueError) as e:
+        logger.debug(f"Translation to English failed: {e}")
         return text
 
 def translate_reply_if_needed(reply: str, language: str):
@@ -853,7 +883,7 @@ def translate_reply_if_needed(reply: str, language: str):
     try:
         from deep_translator import GoogleTranslator
         return GoogleTranslator(source="auto", target=target_language).translate(reply)
-    except Exception:
+    except (AttributeError, KeyError, ModuleNotFoundError, ImportError, OSError, RuntimeError, TypeError, ValueError):
         return reply
 
 def generate_offline_reply(prompt):
@@ -911,6 +941,17 @@ TASKS:
 MAX_CONCURRENT_AI_REQUESTS = int(os.getenv("MAX_CONCURRENT_AI_REQUESTS", "4"))
 ai_queue_semaphore = threading.Semaphore(MAX_CONCURRENT_AI_REQUESTS)
 
+
+def _should_use_offline_ai() -> bool:
+    """Disable live Groq requests in tests and explicit mock/test environments."""
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+    return (
+        bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or groq_api_key.lower() in {"mock_groq_key", "test", "testing"}
+        or os.getenv("AI_OFFLINE_MODE", "").lower() in {"1", "true", "yes", "on"}
+    )
+
+
 @lru_cache(maxsize=1000)
 def get_ai_reply(prompt, language: str = "en"):
     acquired = ai_queue_semaphore.acquire(timeout=15.0)
@@ -918,18 +959,19 @@ def get_ai_reply(prompt, language: str = "en"):
         return generate_offline_reply(prompt)
     try:
         groq_api_key = os.getenv("GROQ_API_KEY")
-        if not groq_api_key:
-            logging.warning("GROQ_API_KEY not set, falling back to offline reply")
+        if not groq_api_key or _should_use_offline_ai():
+            logger.warning("GROQ_API_KEY not set or test mode enabled; falling back to offline reply")
             return generate_offline_reply(prompt)
         from groq import Groq
         client = Groq(api_key=groq_api_key)
+        model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant", temperature=0.7, max_tokens=1024,
+            model=model, temperature=0.7, max_tokens=1024,
         )
         return chat_completion.choices[0].message.content
-    except Exception as exc:
-        logging.error("Groq API request failed: %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Groq API request failed: %s", exc)
         return generate_offline_reply(prompt)
     finally:
         ai_queue_semaphore.release()
@@ -939,7 +981,7 @@ def format_reply(reply):
 
 # ==================== Validation Error Handler for Auth ====================
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -952,17 +994,46 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             msg = errors[0].get("msg", "invalid value")
             err_msg = f"Invalid {field}: {msg}"
         return JSONResponse(
-            status_code=200,
+            status_code=422,
             content={"success": False, "error": err_msg}
         )
     # Default behavior for other endpoints
     from fastapi.exception_handlers import request_validation_exception_handler
     return await request_validation_exception_handler(request, exc)
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled server exception: %s", exc)
+    origin = request.headers.get("origin")
+    headers = {}
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ]
+    frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/")
+    if frontend_url:
+        allowed_origins.append(frontend_url)
+    if origin in allowed_origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=headers,
+    )
+
 # ==================== Rate Limiting Middleware ====================
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    # Preflight OPTIONS requests must bypass rate limiting and allow CORSMiddleware to handle them
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     started_at = time.perf_counter()
     client_ip = request.client.host if request.client else "unknown"
     path = request.url.path
@@ -996,10 +1067,23 @@ async def rate_limit_middleware(request: Request, call_next):
             details={"path": path, "category": category},
             severity="WARN"
         )
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+            os.getenv("FRONTEND_URL", "").rstrip("/"),
+        ]
+        origin = request.headers.get("origin")
+        cors_headers = {"Retry-After": str(window)}
+        if origin and (origin in allowed_origins or origin.endswith(".vercel.app")):
+            cors_headers["Access-Control-Allow-Origin"] = origin
+            cors_headers["Access-Control-Allow-Credentials"] = "true"
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Too many requests. Please try again later."},
-            headers={"Retry-After": str(window)}
+            headers=cors_headers
         )
         
     # Call the next handler
@@ -1007,7 +1091,7 @@ async def rate_limit_middleware(request: Request, call_next):
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     if elapsed_ms >= 1000:
         # Safe production timing diagnostic: no credentials, request bodies, or tokens.
-        logging.warning("[API] %s %s completed in %.0fms", request.method, path, elapsed_ms)
+        logger.warning("[API] %s %s completed in %.0fms", request.method, path, elapsed_ms)
     
     # Inject RateLimit headers into response for transparency
     response.headers["X-RateLimit-Limit"] = str(max_req)
@@ -1017,11 +1101,56 @@ async def rate_limit_middleware(request: Request, call_next):
 
 # ==================== AUTH ENDPOINTS (JWT + bcrypt) ====================
 
+def _set_auth_cookies(
+    response: Response,
+    access_token: str | None = None,
+    refresh_token: str | None = None,
+    trusted_device_token: str | None = None,
+):
+    """Set secure authentication cookies with environment-aware security flags."""
+    env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+
+    cookie_secure = is_prod
+    cookie_samesite = "none" if is_prod else "lax"
+
+    if access_token:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=30 * 60,
+            path="/",
+        )
+    if refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=7 * 24 * 3600,
+            path="/",
+        )
+    if trusted_device_token:
+        response.set_cookie(
+            key="trusted_device_token",
+            value=trusted_device_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=30 * 24 * 3600,
+            path="/",
+        )
+
+
 @app.post("/auth/register")
 def auth_register(request: RegisterRequest, response: Response):
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."})
+        return JSONResponse(status_code=200, content={"success": False, "error": "Invalid username. Use 3-50 alphanumeric characters."})
     if len(request.password) < 8:
         return JSONResponse(status_code=422, content={"success": False, "error": "Password must be at least 8 characters"})
     
@@ -1029,29 +1158,7 @@ def auth_register(request: RegisterRequest, response: Response):
     if not result.get("success"):
         return JSONResponse(status_code=result.pop("status_code", 400), content=result)
         
-    # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
-    access_token = result.get("token")
-    refresh_token = result.get("refresh_token")
-    
-    if access_token:
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="strict",
-            max_age=30 * 60,
-        )
-    if refresh_token:
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="strict",
-            max_age=7 * 24 * 3600,
-        )
-        
+    _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
     return result
 
 @app.post("/auth/login")
@@ -1083,34 +1190,14 @@ def auth_login(request: AuthRequest, response: Response):
                     )
             
             # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
-            access_token = result.get("token")
-            refresh_token = result.get("refresh_token")
-            
-            if access_token:
-                response.set_cookie(
-                    key="access_token",
-                    value=access_token,
-                    httponly=True,
-                    secure=True,
-                    samesite="strict",
-                    max_age=30 * 60,
-                )
-            if refresh_token:
-                response.set_cookie(
-                    key="refresh_token",
-                    value=refresh_token,
-                    httponly=True,
-                    secure=True,
-                    samesite="strict",
-                    max_age=7 * 24 * 3600,
-                )
+            _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
         if not result.get("success"):
             return JSONResponse(status_code=result.pop("status_code", 401), content=result)
         return result
     return JSONResponse(status_code=503, content={"success": False, "error": "Database not initialized"})
 
 @app.post("/auth/refresh")
-async def auth_refresh(request: Request, response: Response, payload: Optional[dict] = None):
+async def auth_refresh(request: Request, response: Response, payload: dict | None = None):
     # Resolve token from request body or cookies
     refresh_token = None
     if payload:
@@ -1119,7 +1206,7 @@ async def auth_refresh(request: Request, response: Response, payload: Optional[d
         try:
             body = await request.json()
             refresh_token = body.get("refresh_token")
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             pass
     if not refresh_token:
         refresh_token = request.cookies.get("refresh_token")
@@ -1129,43 +1216,396 @@ async def auth_refresh(request: Request, response: Response, payload: Optional[d
         
     result = auth_handler.refresh_token(refresh_token)
     if result.get("success"):
-        new_access = result.get("token")
-        new_refresh = result.get("refresh_token")
-        
-        # Set updated secure cookies
-        if new_access:
-            response.set_cookie(
-                key="access_token",
-                value=new_access,
-                httponly=True,
-                secure=True,
-                samesite="strict",
-                max_age=30 * 60,
-            )
-        if new_refresh:
-            response.set_cookie(
-                key="refresh_token",
-                value=new_refresh,
-                httponly=True,
-                secure=True,
-                samesite="strict",
-                max_age=7 * 24 * 3600,
-            )
+        _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
     return result
 
 @app.post("/auth/logout")
-def auth_logout(response: Response):
-    response.delete_cookie(key="access_token")
-    response.delete_cookie(key="refresh_token")
+def auth_logout(request: Request, response: Response):
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/")
+    response.delete_cookie(key="oauth_state", path="/")
+    raw_device_token = request.cookies.get("trusted_device_token")
+    if raw_device_token and _db_manager:
+        from auth.oauth_service import hash_device_token
+        h = hash_device_token(raw_device_token)
+        _db_manager.revoke_trusted_device_by_hash(h)
+    response.delete_cookie(key="trusted_device_token", path="/")
     return {"success": True, "message": "Successfully logged out"}
 
 @app.get("/auth/me")
-def auth_me(current_user: str = Depends(require_user)):
-    """Validate a restored access token and return the authoritative user identity."""
-    user = _db_manager.get_user(current_user) if _db_manager else None
+def auth_me(request: Request, response: Response):
+    """Validate active access token or resume session from trusted device cookie with token rotation."""
+    token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        token = request.cookies.get("access_token")
+
+    username = None
+    if token:
+        payload = verify_token(token)
+        if payload and payload.get("type") == "access":
+            username = payload.get("sub")
+
+    # If access token is invalid or absent, attempt session restoration via trusted device cookie
+    if not username and _db_manager:
+        raw_device_token = request.cookies.get("trusted_device_token")
+        if raw_device_token:
+            from auth.oauth_service import resume_trusted_device_session
+            res = resume_trusted_device_session(_db_manager, raw_device_token)
+            if res:
+                u, new_raw_token = res
+                username = u.username
+                new_acc = create_access_token({"sub": username})
+                new_ref = create_refresh_token({"sub": username})
+                token = new_acc
+                _set_auth_cookies(response, new_acc, new_ref, new_raw_token)
+
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = _db_manager.get_user(username) if _db_manager else None
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    return {
+        "username": user.username,
+        "email": user.email,
+        "role": getattr(user, "role", "user") or "user",
+        "token": token or create_access_token({"sub": user.username}),
+    }
+
+
+# ==================== OAUTH 2.0 & OPENID CONNECT ENDPOINTS ====================
+
+@app.get("/auth/oauth/{provider}/login")
+def oauth_login(provider: str, remember_device: bool = False):
+    """Initiate OAuth 2.0 / OpenID Connect flow with session-bound CSRF state and PKCE."""
+    provider_clean = provider.lower()
+    if provider_clean != "google":
+        raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
+
+    from auth.oauth_service import create_oauth_session
+    auth_url, _state, cookie_value = create_oauth_session(provider=provider_clean, remember_device=remember_device)
+
+    env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    is_prod = env in ("production", "prod", "staging") or os.getenv("RENDER", "false").lower() == "true" or os.getenv("NODE_ENV", "development").lower() == "production"
+
+    resp = RedirectResponse(url=auth_url, status_code=302)
+    resp.set_cookie(
+        key="oauth_state",
+        value=cookie_value,
+        httponly=True,
+        secure=is_prod,
+        samesite="none" if is_prod else "lax",
+        max_age=300,
+        path="/",
+    )
+    return resp
+
+
+@app.get("/auth/oauth/{provider}/callback")
+async def oauth_callback(
+    provider: str,
+    request: Request,
+    response: Response,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
+    """Handle OAuth 2.0 / OpenID Connect authorization callback from Google."""
+    from auth.oauth_service import _get_base_urls
+    _, frontend_url = _get_base_urls()
+    provider_clean = provider.lower()
+
+    if provider_clean != "google":
+        return RedirectResponse(url=f"{frontend_url}/login?error=unsupported_provider", status_code=303)
+
+    if error:
+        err_msg = error_description or error
+        logger.warning(f"[OAUTH CALLBACK ERROR] {provider}: {err_msg}")
+        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_access_denied", status_code=303)
+
+    if not code or not state:
+        logger.warning(f"[OAUTH CALLBACK] Missing code or state from {provider}")
+        return RedirectResponse(url=f"{frontend_url}/login?error=missing_oauth_parameters", status_code=303)
+
+    from auth.oauth_service import (
+        AccountLinkingRequiredError,
+        exchange_google_code,
+        generate_trusted_device_token,
+        resolve_or_create_oauth_user,
+        verify_google_identity,
+        verify_oauth_session_cookie,
+        verify_oauth_state,
+    )
+
+    # 1. Verify session-bound CSRF state (cookie match + PKCE)
+    cookie_value = request.cookies.get("oauth_state")
+    session_data = verify_oauth_session_cookie(cookie_value, state, expected_provider=provider_clean)
+
+    # Fallback to direct state verification if cookie absent (e.g., test runners)
+    if not session_data:
+        legacy_state = verify_oauth_state(state, expected_provider=provider_clean)
+        if legacy_state:
+            session_data = {
+                "remember_device": legacy_state.get("remember_device", False),
+                "nonce": legacy_state.get("extra", {}).get("nonce"),
+                "code_verifier": None,
+            }
+
+    if not session_data:
+        logger.warning(f"[OAUTH CALLBACK] Session state validation failed for {provider}")
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=invalid_or_expired_oauth_state", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+
+    remember_device = session_data.get("remember_device", False)
+    nonce = session_data.get("nonce")
+    code_verifier = session_data.get("code_verifier")
+    logger.info("[OAUTH STAGE 1] Session state validated successfully for provider=%s", provider_clean)
+
+    # 2. Code exchange & identity verification using standard OIDC
+    try:
+        token_data = await exchange_google_code(code, code_verifier=code_verifier)
+        identity = await verify_google_identity(token_data, expected_nonce=nonce)
+        logger.info("[OAUTH STAGE 2] Code exchange and identity verification succeeded for provider=%s", provider_clean)
+    except Exception:
+        logger.exception("[OAUTH VERIFICATION FAILED] Stage 2 verification failed for %s", provider_clean)
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=verification_failed", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+
+    # 3. User lookup / safe account linking / user provisioning
+    if not _db_manager:
+        logger.error("[OAUTH STAGE 3] Database manager is not initialized")
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=database_unavailable", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+
+    try:
+        user, is_new_user = resolve_or_create_oauth_user(
+            db=_db_manager,
+            provider=identity["provider"],
+            provider_user_id=identity["provider_user_id"],
+            email=identity["email"],
+            name=identity.get("name", ""),
+        )
+        logger.info("[OAUTH STAGE 3] User resolution succeeded (username=%s, is_new=%s)", user.username, is_new_user)
+    except AccountLinkingRequiredError as exc:
+        logger.warning("[OAUTH STAGE 3] Account linking required: %s", exc)
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=account_linking_required", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+    except Exception:
+        logger.exception("[OAUTH USER RESOLUTION FAILED] Stage 3 error")
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=authentication_failed", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+
+    if not user.is_active:
+        from utils.audit_logger import audit_log
+        audit_log(
+            username=user.username,
+            action="oauth_login",
+            status="BLOCKED",
+            details={"reason": "account_inactive", "provider": provider_clean},
+            severity="WARN"
+        )
+        redirect_err = RedirectResponse(url=f"{frontend_url}/login?error=account_inactive", status_code=303)
+        redirect_err.delete_cookie(key="oauth_state", path="/")
+        return redirect_err
+
+    # 4. Generate application JWT tokens
+    _db_manager.update_last_login(user.username)
+    _db_manager.update_streak(user.username, "daily")
+
+    access_token = create_access_token({"sub": user.username})
+    refresh_token = create_refresh_token({"sub": user.username})
+
+    payload = verify_token(refresh_token)
+    if payload:
+        fid = payload.get("family_id")
+        exp_ts = payload.get("exp")
+        if fid and exp_ts:
+            exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
+            _db_manager.save_refresh_token(refresh_token, user.username, fid, exp_dt)
+
+    # 5. Handle "Remember this device" securely (cryptographic token & SHA-256 hash in DB)
+    raw_device_token = None
+    if remember_device:
+        raw_device_token, token_hash = generate_trusted_device_token()
+        user_agent = request.headers.get("user-agent", "Unknown Device")[:200]
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        _db_manager.save_hashed_trusted_device(
+            user_id=user.id,
+            token_hash=token_hash,
+            device_name=user_agent,
+            expires_at=expires_at,
+        )
+
+    logger.info("[OAUTH STAGE 4] Tokens and session cookies generated for username=%s", user.username)
+
+    # 6. Redirect to frontend with secure HttpOnly cookies attached and state cookie cleared
+    redirect_target = f"{frontend_url}/register?step=focus" if is_new_user else f"{frontend_url}/dashboard"
+    redirect_resp = RedirectResponse(url=redirect_target, status_code=303)
+    redirect_resp.delete_cookie(key="oauth_state", path="/")
+    _set_auth_cookies(
+        redirect_resp,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        trusted_device_token=raw_device_token,
+    )
+
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=user.username,
+        action="oauth_login",
+        status="SUCCESS",
+        details={
+            "provider": provider_clean,
+            "is_new_user": is_new_user,
+            "remember_device": remember_device,
+        }
+    )
+
+    return redirect_resp
+
+
+@app.post("/auth/trusted-devices/resume")
+def resume_trusted_device(request: Request, response: Response, payload: dict | None = None):
+    """Resume session and rotate trusted device token via HttpOnly cookie."""
+    raw_token = None
+    if payload:
+        raw_token = payload.get("trusted_device_token")
+    if not raw_token:
+        raw_token = request.cookies.get("trusted_device_token")
+    if not raw_token or not _db_manager:
+        raise HTTPException(status_code=401, detail="No trusted device token provided")
+
+    from auth.oauth_service import resume_trusted_device_session
+    res = resume_trusted_device_session(_db_manager, raw_token)
+    if not res:
+        response.delete_cookie(key="trusted_device_token", path="/")
+        raise HTTPException(status_code=401, detail="Trusted device token expired or invalid")
+
+    user, new_raw_token = res
+    new_acc = create_access_token({"sub": user.username})
+    new_ref = create_refresh_token({"sub": user.username})
+    _set_auth_cookies(response, new_acc, new_ref, new_raw_token)
+
+    return {
+        "success": True,
+        "username": user.username,
+        "role": getattr(user, "role", "user") or "user",
+    }
+
+
+@app.get("/auth/oauth/connected-accounts")
+def get_connected_accounts(current_user: str = Depends(require_user)):
+    """Retrieve connected OAuth accounts for the current user."""
+    if not _db_manager:
+        return []
+    user = _db_manager.get_user(current_user)
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return {"username": user.username, "role": getattr(user, "role", "user") or "user"}
+        raise HTTPException(status_code=404, detail="User not found")
+
+    accounts = _db_manager.get_oauth_accounts_for_user(user.id)
+    connected = {acc.provider.lower(): acc for acc in accounts}
+
+    return [
+        {
+            "provider": "google",
+            "name": "Google",
+            "connected": "google" in connected,
+            "email": connected["google"].email if "google" in connected else None,
+            "linked_at": connected["google"].created_at.isoformat() if "google" in connected else None,
+        },
+    ]
+
+
+@app.get("/auth/trusted-devices")
+def get_trusted_devices_v2(request: Request, current_user: str = Depends(require_user)):
+    """Retrieve user's active trusted devices with indicator for current device."""
+    if not _db_manager:
+        return []
+    user = _db_manager.get_user(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    raw_token = request.cookies.get("trusted_device_token")
+    current_hash = None
+    if raw_token:
+        from auth.oauth_service import hash_device_token
+        current_hash = hash_device_token(raw_token)
+
+    devices = _db_manager.get_active_trusted_devices(current_user)
+    return [
+        {
+            "device_id": d.device_id,
+            "device_name": d.device_name,
+            "is_current": (d.token_hash == current_hash) if (current_hash and d.token_hash) else False,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "last_used": d.last_used.isoformat() if d.last_used else None,
+            "expires_at": d.expires_at.isoformat() if getattr(d, "expires_at", None) else None,
+        }
+        for d in devices
+    ]
+
+
+@app.post("/auth/trusted-devices/{device_id}/revoke")
+def revoke_trusted_device_v2(device_id: str, current_user: str = Depends(require_user)):
+    """Revoke a specific trusted device."""
+    if not _db_manager:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    user = _db_manager.get_user(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    revoked = _db_manager.revoke_trusted_device_by_id(user.id, device_id)
+    if not revoked:
+        device = _db_manager.get_trusted_device(user.id, device_id)
+        if device:
+            device.is_active = False
+            device.revoked_at = datetime.now(timezone.utc)
+            _db_manager.db.commit()
+            revoked = True
+
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=current_user,
+        action="trusted_device_revoked",
+        status="SUCCESS",
+        details={"device_id": device_id}
+    )
+    return {"success": True, "message": "Device revoked successfully"}
+
+
+@app.post("/auth/trusted-devices/revoke-all")
+def revoke_all_trusted_devices_v2(response: Response, current_user: str = Depends(require_user)):
+    """Revoke all trusted devices for the authenticated user."""
+    if not _db_manager:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    user = _db_manager.get_user(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    count = _db_manager.revoke_all_trusted_devices(user.id)
+    response.delete_cookie(key="trusted_device_token", path="/")
+
+    from utils.audit_logger import audit_log
+    audit_log(
+        username=current_user,
+        action="all_trusted_devices_revoked",
+        status="SUCCESS",
+        details={"revoked_count": count}
+    )
+    return {"success": True, "revoked_count": count, "message": f"Successfully revoked {count} devices"}
 
 @app.post("/auth/reset-password")
 def auth_reset_password(request: ResetPasswordRequest):
@@ -1181,7 +1621,6 @@ def auth_reset_password(request: ResetPasswordRequest):
         return {"success": False, "error": "User not found"}
     if user.email != request.email:
         return {"success": False, "error": "Email does not match our records"}
-    from auth.auth_handler import get_password_hash
     user.password_hash = get_password_hash(request.new_password)
     db = _db_manager.db
     db.commit()
@@ -1199,27 +1638,7 @@ def auth_login_pin(request: PinLoginRequest, response: Response):
             _db_manager.update_streak(sanitized_username, "daily")
 
             # Delivery tokens via Secure, HttpOnly, SameSite strict cookies
-            access_token = result.get("token")
-            refresh_token = result.get("refresh_token")
-
-            if access_token:
-                response.set_cookie(
-                    key="access_token",
-                    value=access_token,
-                    httponly=True,
-                    secure=True,
-                    samesite="strict",
-                    max_age=30 * 60,
-                )
-            if refresh_token:
-                response.set_cookie(
-                    key="refresh_token",
-                    value=refresh_token,
-                    httponly=True,
-                    secure=True,
-                    samesite="strict",
-                    max_age=7 * 24 * 3600,
-                )
+            _set_auth_cookies(response, result.get("token"), result.get("refresh_token"))
         return result
     return {"success": False, "error": "Database not initialized"}
 
@@ -1284,7 +1703,7 @@ def auth_remove_pin(current_user: str = Depends(require_user)):
 
 @app.post("/auth/pin-login")
 def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     sanitized_username = sanitize_username(request.username)
     if not sanitized_username:
         return {"success": False, "error": "Invalid username format"}
@@ -1308,7 +1727,7 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
         )
         return {"success": False, "error": "Device not trusted"}
 
-    if device.locked_until and device.locked_until > datetime.utcnow():
+    if device.locked_until and device.locked_until > datetime.now(timezone.utc):
         from utils.audit_logger import audit_log
         audit_log(
             username=sanitized_username,
@@ -1317,7 +1736,7 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
             details={"device_id": request.device_id},
             severity="WARN"
         )
-        remaining = int((device.locked_until - datetime.utcnow()).total_seconds())
+        remaining = int((device.locked_until - datetime.now(timezone.utc)).total_seconds())
         return {
             "success": False,
             "error": f"Device temporarily locked. Try again in {remaining // 60 + 1} minutes."
@@ -1328,7 +1747,7 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     if not pin_hash or not verify_password(request.pin, pin_hash):
         device.failed_attempts += 1
         if device.failed_attempts >= 5:
-            device.locked_until = datetime.utcnow() + timedelta(minutes=10)
+            device.locked_until = datetime.now(timezone.utc) + timedelta(minutes=10)
             msg = "Incorrect PIN. Device temporarily locked due to too many failed attempts."
         else:
             msg = f"Incorrect PIN. {5 - device.failed_attempts} attempts remaining."
@@ -1352,7 +1771,11 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
     _db_manager.update_streak(sanitized_username, "daily")
     _db_manager.db.commit()
 
-    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+    from auth.auth_handler import (
+        create_access_token,
+        create_refresh_token,
+        verify_token,
+    )
     access_token = create_access_token({"sub": sanitized_username})
     refresh_token = create_refresh_token({"sub": sanitized_username})
 
@@ -1364,22 +1787,7 @@ def auth_pin_login(request: TrustedDevicePinLoginRequest, response: Response):
             exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
             _db_manager.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=30 * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=7 * 24 * 3600,
-    )
+    _set_auth_cookies(response, access_token, refresh_token)
 
     from utils.audit_logger import audit_log
     audit_log(
@@ -1450,7 +1858,11 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
     _db_manager.update_last_login(sanitized_username)
     _db_manager.update_streak(sanitized_username, "daily")
 
-    from auth.auth_handler import create_access_token, create_refresh_token, verify_token
+    from auth.auth_handler import (
+        create_access_token,
+        create_refresh_token,
+        verify_token,
+    )
     access_token = create_access_token({"sub": sanitized_username})
     refresh_token = create_refresh_token({"sub": sanitized_username})
 
@@ -1462,22 +1874,7 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
             exp_dt = datetime.fromtimestamp(exp_ts, timezone.utc)
             _db_manager.save_refresh_token(refresh_token, sanitized_username, fid, exp_dt)
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=30 * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=7 * 24 * 3600,
-    )
+    _set_auth_cookies(response, access_token, refresh_token)
 
     from utils.audit_logger import audit_log
     audit_log(
@@ -1500,17 +1897,21 @@ def auth_admin_pin_login(request: AdminPinLoginRequest, response: Response):
 def auth_get_trusted_device(device_id: str):
     if not _db_manager:
         return {"is_trusted": False}
-    
-    device = _db_manager.get_trusted_device_by_id_only(device_id)
-    if device and device.is_active:
-        user = _db_manager.get_user_by_id(device.user_id)
-        if user:
-            return {
-                "is_trusted": True,
-                "username": user.username,
-                "device_name": device.device_name,
-                "has_pin": device.pin_hash is not None or user.security_pin_hash is not None
-            }
+
+    try:
+        device = _db_manager.get_trusted_device_by_id_only(device_id)
+        if device and device.is_active:
+            user = _db_manager.get_user_by_id(device.user_id)
+            if user:
+                return {
+                    "is_trusted": True,
+                    "username": user.username,
+                    "device_name": device.device_name,
+                    "has_pin": device.pin_hash is not None or user.security_pin_hash is not None
+                }
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError, SQLAlchemyError) as e:
+        logger.warning(f"Error checking trusted device '{device_id}': {e}")
+
     return {"is_trusted": False}
 
 @app.post("/auth/remove-device")
@@ -1555,13 +1956,12 @@ def auth_get_devices(current_user: str = Depends(require_user)):
     ]
 
 @app.get("/settings/{username}")
-def get_settings(username: str, active_user: Optional[str] = Depends(optional_user)):
+def get_settings(username: str, active_user: str | None = Depends(optional_user)):
     # Security: If a token is provided, verify ownership or admin access
-    if active_user and active_user != username:
-        if _db_manager:
-            curr_db_user = _db_manager.get_user(active_user)
-            if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    if active_user and active_user != username and _db_manager:
+        curr_db_user = _db_manager.get_user(active_user)
+        if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     if not _db_manager:
         return {"theme": "dark", "language": "en", "notifications_enabled": True}
@@ -1573,14 +1973,13 @@ def get_settings(username: str, active_user: Optional[str] = Depends(optional_us
 @app.put("/settings/{username}")
 def update_settings(username: str, settings: SettingsUpdateRequest, current_user: str = Depends(require_user)):
     # Security: Ensure user can only update their own settings, or is an admin!
-    if current_user != username:
-        if _db_manager:
-            curr_db_user = _db_manager.get_user(current_user)
-            if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Permission denied. You can only update your own settings."
-                )
+    if current_user != username and _db_manager:
+        curr_db_user = _db_manager.get_user(current_user)
+        if not curr_db_user or getattr(curr_db_user, "role", "user") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission denied. You can only update your own settings."
+            )
 
     if not _db_manager:
         return {"success": False, "error": "Database not available"}
@@ -1612,8 +2011,8 @@ def chat(data: ChatRequest):
                 detected = langdetect.detect(data.text)
                 if detected and len(detected) == 2:
                     data.language = detected
-            except Exception as e:
-                logging.debug(f"Langdetect failed in /chat: {e}")
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"Langdetect failed in /chat: {e}")
 
         username = data.username or "default"
         data.text = sanitize_prompt(data.text, username)
@@ -1731,7 +2130,7 @@ TASKS:
             tasks_part = parts[1].strip()
             for line in tasks_part.split('\n'):
                 line = line.strip()
-                if line.startswith("-") or line.startswith("*") or line.startswith("☐"):
+                if line.startswith(("-", "*", "☐")):
                     clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
                     if clean_task:
                         dynamic_tasks.append(clean_task)
@@ -1765,14 +2164,14 @@ TASKS:
             try:
                 _db_manager.save_chat_message(username, "user", data.text, analysis_result.get("emotion"))
                 _db_manager.save_chat_message(username, "assistant", reply[:1000])
-            except Exception as e:
-                logging.warning(f"Chat persistence error: {e}")
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+                logger.warning(f"Chat persistence error: {e}")
 
         # Award XP for chat interaction
         if _db_manager:
             try:
                 _gamification.award_xp(username, "mood_checkin")
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
 
         interventions = []
@@ -1801,7 +2200,7 @@ TASKS:
         if _db_manager and interventions:
             try:
                 _gamification.award_xp(username, "intervention_completed")
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
 
         return {
@@ -1824,11 +2223,11 @@ TASKS:
                 "just_begin_offer": paralysis_result.get("just_begin_offer"),
             },
         }
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         import traceback
-        logging.exception("Error in /chat endpoint")
+        logger.exception("Error in /chat endpoint")
         traceback.print_exc()
-        return {"reply": f"ERROR: {str(e)}", "analysis": {"emotion": "normal", "productivity": "medium"}, "scores": {}, "interventions": []}
+        return {"reply": f"ERROR: {e!s}", "analysis": {"emotion": "normal", "productivity": "medium"}, "scores": {}, "interventions": []}
 
 
 @app.post("/chat/stream")
@@ -1841,12 +2240,13 @@ def chat_stream(data: ChatRequest):
             detected = langdetect.detect(data.text)
             if detected and len(detected) == 2:
                 data.language = detected
-        except Exception as e:
-            logging.debug(f"Langdetect failed in /chat/stream: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"Langdetect failed in /chat/stream: {e}")
+
+    import asyncio
+    import json
 
     from fastapi.responses import StreamingResponse
-    import json
-    import asyncio
 
     username = data.username or "default"
     data.text = sanitize_prompt(data.text, username)
@@ -1961,9 +2361,10 @@ TASKS:
             try:
                 from groq import AsyncGroq
                 client = AsyncGroq(api_key=groq_api_key)
+                model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 completion_stream = await client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.1-8b-instant",
+                    model=model,
                     temperature=0.7,
                     max_tokens=1024,
                     stream=True,
@@ -1973,8 +2374,8 @@ TASKS:
                     if token:
                         full_raw_response += token
                         yield f"data: {json.dumps({'token': token})}\n\n"
-            except Exception as e:
-                logging.error(f"Error in Groq streaming: {e}")
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"Error in Groq streaming: {e}")
                 offline_reply = generate_offline_reply(prompt)
                 for char in offline_reply:
                     yield f"data: {json.dumps({'token': char})}\n\n"
@@ -1993,7 +2394,7 @@ TASKS:
                 tasks_part = parts[1].strip()
                 for line in tasks_part.split('\n'):
                     line = line.strip()
-                    if line.startswith("-") or line.startswith("*") or line.startswith("☐"):
+                    if line.startswith(("-", "*", "☐")):
                         clean_task = re.sub(r'^[\-\*☐]\s*', '', line).strip()
                         if clean_task:
                             dynamic_tasks.append(clean_task)
@@ -2026,8 +2427,8 @@ TASKS:
                     _db_manager.save_chat_message(username, "user", data.text, analysis_result.get("emotion"))
                     _db_manager.save_chat_message(username, "assistant", reply[:1000])
                     _gamification.award_xp(username, "mood_checkin")
-                except Exception as db_err:
-                    logging.warning(f"Async stream DB error: {db_err}")
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
+                    logger.warning(f"Async stream DB error: {db_err}")
 
             interventions = []
             if dynamic_tasks:
@@ -2051,7 +2452,7 @@ TASKS:
             if _db_manager and interventions:
                 try:
                     _gamification.award_xp(username, "intervention_completed")
-                except Exception:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                     pass
 
             # Yield metadata payload
@@ -2077,8 +2478,8 @@ TASKS:
             }
             yield f"data: {json.dumps({'metadata': metadata})}\n\n"
 
-        except Exception as async_err:
-            logging.error(f"Error in stream post-processing: {async_err}")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as async_err:
+            logger.error(f"Error in stream post-processing: {async_err}")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -2088,11 +2489,17 @@ TASKS:
 
 @app.post("/calculate_scores")
 def calculate_scores(request: ScoreRequest):
-    english_text = translate_to_english(request.text)
-    analysis_result = analyze(english_text)
-    scores = build_user_scores(request.user_data, text=english_text, adhd_answers=request.adhd_answers, analysis=analysis_result)
-    interventions = generate_interventions(request.user_data, scores)
-    return {"scores": scores, "interventions": interventions}
+    try:
+        english_text = translate_to_english(request.text) if request.text else ""
+        analysis_result = analyze(english_text) if english_text else {"emotion": "neutral", "productivity": "medium"}
+        scores = build_user_scores(request.user_data, text=english_text, adhd_answers=request.adhd_answers, analysis=analysis_result)
+        interventions = generate_interventions(request.user_data, scores)
+        return {"scores": scores, "interventions": interventions}
+    except Exception:
+        logger.exception("Error calculating scores")
+        scores = build_user_scores(request.user_data, text="", adhd_answers=request.adhd_answers)
+        interventions = generate_interventions(request.user_data, scores)
+        return {"scores": scores, "interventions": interventions}
 
 @app.post("/get_interventions")
 def get_interventions_endpoint(request: InterventionRequest):
@@ -2119,10 +2526,10 @@ def get_analytics(data: dict):
                         cached_data = json.loads(fact.value)
                         # Add a flag to show this is cached
                         cached_data["cached"] = True
-                        logging.info(f"Analytics: Returned cached analytics compilation for '{username}'")
+                        logger.info(f"Analytics: Returned cached analytics compilation for '{username}'")
                         return cached_data
-            except Exception as cache_err:
-                logging.warning(f"Analytics: Failed to fetch precompiled cache: {cache_err}")
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as cache_err:
+                logger.warning(f"Analytics: Failed to fetch precompiled cache: {cache_err}")
 
         if username not in _insight_engines:
             memory = MemoryManager(user_id=username)
@@ -2154,7 +2561,7 @@ def get_analytics(data: dict):
             try:
                 db_weekly = _db_manager.get_weekly_report(username)
                 db_focus_hours = _db_manager.get_peak_focus_hours(username, 14)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
 
         results = {
@@ -2176,12 +2583,12 @@ def get_analytics(data: dict):
             try:
                 from utils.celery_tasks import generate_analytics_task
                 generate_analytics_task.delay(username, user_data)
-            except Exception as task_err:
-                logging.debug(f"Failed to queue background analytics cache refresh: {task_err}")
+            except (AttributeError, CeleryOperationalError, KeyError, OSError, RuntimeError, TypeError, ValueError) as task_err:
+                logger.debug(f"Failed to queue background analytics cache refresh: {task_err}")
 
         return results
-    except Exception as e:
-        logging.exception(f"Analytics generation error: {e}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
+        logger.exception("Analytics generation error")
         return {"insights": [], "insight_summary": "Analytics temporarily unavailable.", "focus_patterns": {}, "mood_patterns": {}, "correlations": [], "temporal_patterns": {}, "recommendations": [], "priority_recommendations": [], "formatted_recommendations": ""}
 
 
@@ -2197,9 +2604,24 @@ def analyze_with_agent(request: AgentAnalyzeRequest):
         if not agent:
             return {"success": False, "error": f"Agent '{request.agent_type}' not found", "agents_available": list(orchestrator.agents.keys())}
         context = orchestrator.get_context_for_prompt(request.context.get("message", ""), request.context.get("current_streak", 0), request.agent_type)
-        analysis = agent.analyze(context, request.context)
+        if hasattr(agent, "analyze"):
+            analysis = agent.analyze(context, request.context)
+        elif hasattr(agent, "get_suggestion"):
+            analysis = agent.get_suggestion(context)
+        elif hasattr(agent, "suggest_breakdown"):
+            analysis = agent.suggest_breakdown(request.context.get("task", request.context.get("message", "")), context)
+        elif hasattr(agent, "detect_intervention_needed"):
+            analysis = agent.detect_intervention_needed(request.context.get("message", ""), context)
+        elif hasattr(agent, "detect_burnout_risk"):
+            analysis = agent.detect_burnout_risk(context)
+        elif hasattr(agent, "get_habit_recommendation"):
+            analysis = agent.get_habit_recommendation(context)
+        elif hasattr(agent, "get_study_recommendation"):
+            analysis = agent.get_study_recommendation(context)
+        else:
+            analysis = {"agent": getattr(agent, "name", request.agent_type), "status": "active"}
         return {"success": True, "agent_type": request.agent_type, "analysis": analysis, "suggestions": context.get("agent_suggestions", []), "intervention": context.get("intervention")}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
 
 
@@ -2224,7 +2646,7 @@ def analyze_task_paralysis(request: TaskParalysisRequest):
             "microtasks": microtasks, "two_minute_starter": two_minute_starter,
             "just_begin": result.get("just_begin_offer"), "message": (result.get("recovery_suggestions") or {}).get("message", ""),
         }
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"task": request.task, "paralysis_detected": False, "error": str(e), "microtasks": [], "two_minute_starter": None}
 
 
@@ -2255,7 +2677,7 @@ def detect_state(request: StateDetectionRequest):
             "strategies": result.get("strategies"),
             "is_crisis": result.get("is_crisis", False),
         }
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2272,7 +2694,7 @@ def recommend_focus(request: FocusRecommendRequest):
             fatigue=request.fatigue,
         )
         return result
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 @app.post("/focus/distraction-log")
@@ -2287,10 +2709,10 @@ def log_distraction(data: dict):
         if _db_manager:
             try:
                 _gamification.award_xp(username, "focus_mode_used")
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 pass
         return {"success": True}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 @app.post("/focus/complete")
@@ -2306,7 +2728,7 @@ def complete_focus_session(data: dict):
             _db_manager.save_focus_session(username, mode, duration, completed, quality)
             _gamification.award_xp(username, "focus_session_completed")
         return {"success": True}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 @app.post("/focus/distraction-patterns")
@@ -2317,7 +2739,7 @@ def get_distraction_patterns(data: dict):
     try:
         patterns = _focus_engine.get_distraction_patterns(username, days)
         return patterns
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2331,7 +2753,7 @@ def get_gamification_state(username: str):
             return {"error": "Database not available"}
         state = _gamification.get_full_state(username)
         return state
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 @app.post("/gamification/award-xp")
@@ -2346,7 +2768,7 @@ def award_xp_endpoint(data: dict):
             return {"success": False, "error": "Database not available"}
         result = _gamification.award_xp(username, action)
         return result
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 @app.get("/gamification/{username}/achievements")
@@ -2356,7 +2778,7 @@ def get_achievements(username: str):
         if not _db_manager:
             return {"error": "Database not available"}
         return {"achievements": _db_manager.get_achievements(username)}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 @app.get("/gamification/{username}/skills")
@@ -2366,7 +2788,7 @@ def get_skills(username: str):
         if not _db_manager:
             return {"error": "Database not available"}
         return {"skills": _db_manager.get_skills(username)}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2397,7 +2819,7 @@ def log_mood(request: MoodLogRequest):
                 _gamification.award_xp(request.username, "mood_checkin")
                 return {"success": True, "entry_id": entry.id}
         return {"success": True}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 @app.get("/mood/{username}")
@@ -2414,7 +2836,7 @@ def get_mood_history(username: str, days: int = 30):
             "summary": summary,
             "burnout_alert": burnout_alert,
         }
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2432,7 +2854,7 @@ def complete_intervention(data: dict):
             _db_manager.record_intervention(username, intervention_type, title, duration)
             _gamification.award_xp(username, "intervention_completed")
         return {"success": True}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 
@@ -2449,7 +2871,7 @@ def get_weekly_report(username: str):
         game_state = _gamification.get_full_state(username)
         report["gamification"] = game_state
         return report
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2473,7 +2895,7 @@ def get_dashboard(username: str):
         # Get latest state
         result["state"] = _state_detector.get_current_state_summary()
         return result
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e)}
 
 
@@ -2487,7 +2909,7 @@ def get_memory_context(username: str):
         stats = memory.get_stats()
         prompt_context = memory.get_context_for_prompt_text()
         return {"username": username, "context": context, "stats": stats, "prompt_context": prompt_context}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"username": username, "error": str(e), "context": {}, "stats": {}, "prompt_context": "Memory temporarily unavailable."}
 
 @app.post("/memory/{username}/search")
@@ -2498,7 +2920,7 @@ def search_memory(username: str, request: dict):
         memory = MemoryManager(user_id=username)
         results = memory.search_memories(query, n_results=n_results)
         return {"query": query, "results": results}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"error": str(e), "results": []}
 
 @app.post("/memory/{username}/record")
@@ -2519,7 +2941,7 @@ def record_memory_event(username: str, request: dict):
         elif event_type == "procrastination":
             memory.record_procrastination_trigger(content, metadata.get("context", ""))
         return {"success": True, "event_type": event_type}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         return {"success": False, "error": str(e)}
 
 
@@ -2553,7 +2975,7 @@ class FeedbackRequest(BaseModel):
     username: str
     rating: int
     category: str
-    feedback_text: Optional[str] = None
+    feedback_text: str | None = None
 
 class SupportTicketRequest(BaseModel):
     username: str
@@ -2687,7 +3109,7 @@ def get_user_tickets(username: str):
 def get_admin_feedbacks(current_admin: str = Depends(require_admin)):
     if not _db_manager:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    from database.models import UserFeedback, User
+    from database.models import User, UserFeedback
     db = _db_manager.db
     results = db.query(UserFeedback, User.username).join(User, UserFeedback.user_id == User.id).order_by(UserFeedback.created_at.desc()).all()
     feedbacks = []
@@ -2779,8 +3201,8 @@ def update_ticket_status(ticket_id: int, request: TicketStatusUpdateRequest, cur
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
 
 @app.post("/tasks/calculate_scores")
 def calculate_scores_async(request: ScoreRequest, async_task: bool = True, username: str = "default"):
@@ -2804,9 +3226,9 @@ def calculate_scores_async(request: ScoreRequest, async_task: bool = True, usern
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         # Fallback to sync if Celery fails to queue
-        logging.warning(f"Failed to queue task, running synchronously: {e}")
+        logger.warning(f"Failed to queue task, running synchronously: {e}")
         return calculate_scores(request)
 
 @app.post("/tasks/analytics")
@@ -2823,8 +3245,8 @@ def generate_analytics_async(request: dict):
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
 
 @app.post("/tasks/synthesize_personality")
 def synthesize_personality_async(request: dict):
@@ -2839,8 +3261,8 @@ def synthesize_personality_async(request: dict):
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
 
 @app.post("/tasks/compile_context")
 def compile_context_async(request: dict):
@@ -2855,8 +3277,8 @@ def compile_context_async(request: dict):
         if getattr(celery_app.conf, "task_always_eager", False):
             EAGER_TASK_RESULTS[task.id] = task.result
         return {"task_id": task.id, "status": "queued"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to queue task: {str(e)}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue task: {e!s}")
 
 @app.get("/tasks/status/{task_id}")
 def get_task_status(task_id: str):
@@ -2887,8 +3309,8 @@ def get_task_status(task_id: str):
             response["error"] = str(res.result)
             
         return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch task status: {str(e)}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch task status: {e!s}")
 
 
 if __name__ == "__main__":

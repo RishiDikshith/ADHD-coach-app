@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 import threading
 from functools import lru_cache
 
@@ -77,12 +77,13 @@ def get_ai_reply(prompt, language: str = "en"):
             return generate_offline_reply(prompt)
         from groq import Groq
         client = Groq(api_key=groq_api_key)
+        model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant", temperature=0.7, max_tokens=1024,
+            model=model, temperature=0.7, max_tokens=1024,
         )
         return chat_completion.choices[0].message.content
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Groq API request failed: %s", exc)
         return generate_offline_reply(prompt)
     finally:

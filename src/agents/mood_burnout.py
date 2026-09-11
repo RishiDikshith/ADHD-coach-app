@@ -9,8 +9,6 @@ and human-like emotional continuity.
 """
 
 import logging
-from typing import Any, Optional
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ class MoodBurnoutAgent:
         }
         return validations.get(emotion, "That feeling is real and valid. You don't need to justify it or fix it right now. Just let it be here with us.")
 
-    def detect_burnout_risk(self, context: dict) -> Optional[dict]:
+    def detect_burnout_risk(self, context: dict) -> dict | None:
         user = context.get("user", {})
         session = context.get("session", {})
 
@@ -182,7 +180,7 @@ class MoodBurnoutAgent:
         mood_trend = user.get("mood_trend", [])
         avg_stress = user.get("avg_stress", 5)
         current_stress = session.get("current_stress", 5)
-        current_mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
         
         if not mood_trend:
             return ""

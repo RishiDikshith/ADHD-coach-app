@@ -7,13 +7,40 @@ rate limiting, and comprehensive input sanitization.
 Uses python-jose for JWT and passlib with bcrypt for password hashing.
 """
 
-import os
-import re
-import logging
 import hashlib
 import hmac
+import logging
+import os
+import re
+import threading
+import types
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+import bcrypt
+
+if not hasattr(bcrypt, "__about__"):
+    bcrypt.__about__ = types.SimpleNamespace(__version__=getattr(bcrypt, "__version__", "5.0.0"))
+
+if hasattr(bcrypt, "_bcrypt") and not hasattr(bcrypt._bcrypt, "__about__"):
+    bcrypt._bcrypt.__about__ = types.SimpleNamespace(__version__=getattr(bcrypt, "__version__", "5.0.0"))
+
+# Passlib wrap bug probe passes 255 bytes, but bcrypt 4.1+/5.0+ raises ValueError on >72 bytes.
+# Intercept bcrypt.hashpw to truncate >72 bytes safely so passlib never fails initialization or hashing.
+_orig_bcrypt_hashpw = bcrypt.hashpw
+def _safe_bcrypt_hashpw(password, salt):
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    if len(password) > 72:
+        password = password[:72]
+    return _orig_bcrypt_hashpw(password, salt)
+bcrypt.hashpw = _safe_bcrypt_hashpw
+
+import passlib.handlers.bcrypt as _pb_bcrypt  # noqa: I001
+_pb_bcrypt._bcrypt = bcrypt
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -24,7 +51,11 @@ logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", os.urandom(32).hex())
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    # Use a stable default in development so server reloads do not invalidate JWT sessions.
+    # Production startup in main_api.py strictly validates that JWT_SECRET_KEY is configured.
+    SECRET_KEY = "adhd-coach-dev-secret-key-change-in-production-1234567890abcdef"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -38,7 +69,7 @@ RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX", "30"))
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:72] if password else "")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -51,7 +82,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     if is_legacy_sha256_hash(hashed_password):
         candidate = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
         return hmac.compare_digest(candidate, hashed_password)
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(plain_password[:72] if plain_password else "", hashed_password)
 
 
 def is_legacy_sha256_hash(value: str) -> bool:
@@ -60,7 +91,7 @@ def is_legacy_sha256_hash(value: str) -> bool:
 
 # ==================== JWT Tokens ====================
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -68,7 +99,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(data: dict, family_id: Optional[str] = None, jti: Optional[str] = None) -> str:
+def create_refresh_token(data: dict, family_id: str | None = None, jti: str | None = None) -> str:
     """Create a JWT refresh token with longer expiry, including unique identifiers for RTR."""
     import uuid
     to_encode = data.copy()
@@ -84,7 +115,7 @@ def create_refresh_token(data: dict, family_id: Optional[str] = None, jti: Optio
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> dict | None:
     """Verify a JWT token and return the payload. Returns None if invalid."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -94,7 +125,7 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-def refresh_access_token(refresh_token: str) -> Optional[Tuple[str, str]]:
+def refresh_access_token(refresh_token: str) -> tuple[str, str] | None:
     """Exchange a refresh token for new access + refresh tokens with family tracking."""
     payload = verify_token(refresh_token)
     if payload is None or payload.get("type") != "refresh":
@@ -145,9 +176,9 @@ def sanitize_input(text: str, max_length: int = 10000) -> str:
     return text.strip()
 
 
-def sanitize_username(username: str) -> Optional[str]:
-    """Validate and sanitize username. Returns None if invalid."""
-    if not username or len(username) < 3 or len(username) > 50:
+def sanitize_username(username: str) -> str | None:
+    """Validate and sanitize username or email. Returns None if invalid."""
+    if not username or len(username) < 3 or len(username) > 100:
         return None
 
     username = username.strip()
@@ -156,12 +187,40 @@ def sanitize_username(username: str) -> Optional[str]:
     if INVALID_USERNAME_CHARS.search(username):
         return None
 
-    # Only allow alphanumeric, underscores, hyphens, and dots
-    if not re.match(r"^[a-zA-Z0-9_.-]+$", username):
-        return None
+    # Support usernames and valid email identifiers
+    if "@" in username:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", username):
+            return None
+    else:
+        # Only allow alphanumeric, underscores, hyphens, and dots
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", username):
+            return None
 
-    # Usernames are intentionally case-insensitive across registration and login.
+    # Identifiers are intentionally case-insensitive across registration and login.
     return username.lower()
+
+
+def generate_unique_username(base_name: str, db=None) -> str:
+    """Generate a clean, sanitized, unique username from an email or name."""
+    if not base_name:
+        base_name = "user"
+    # Take part before @ if email
+    if "@" in base_name:
+        base_name = base_name.split("@")[0]
+    # Replace non-alphanumeric with underscores
+    clean = re.sub(r"[^a-zA-Z0-9_.-]", "_", base_name).strip("_.-")
+    if not clean or len(clean) < 3:
+        clean = f"user_{clean}" if clean else "user"
+    clean = clean[:25].lower()
+
+    from database.crud import DatabaseManager
+    active_db = db or DatabaseManager()
+    candidate = clean
+    counter = 1
+    while active_db.get_user(candidate) is not None:
+        candidate = f"{clean[:20]}_{counter}"
+        counter += 1
+    return candidate
 
 
 def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
@@ -212,13 +271,14 @@ def sanitize_prompt(prompt: str, username: str = "anonymous") -> str:
 # ==================== Rate Limiting (Simple In-Memory) ====================
 
 class RateLimiter:
-    """Simple in-memory rate limiter using sliding window."""
+    """Simple in-memory rate limiter using sliding window with thread-safe operations."""
 
     def __init__(self):
         self._requests = {}  # key -> list of timestamps
+        self._lock = threading.Lock()
 
     def check(self, key: str, max_requests: int = RATE_LIMIT_MAX_REQUESTS,
-              window_seconds: int = RATE_LIMIT_WINDOW_SECONDS) -> Tuple[bool, int]:
+              window_seconds: int = RATE_LIMIT_WINDOW_SECONDS) -> tuple[bool, int]:
         """
         Check if a request is allowed.
         Returns (allowed, remaining_requests).
@@ -226,23 +286,35 @@ class RateLimiter:
         now = datetime.now(timezone.utc).timestamp()
         cutoff = now - window_seconds
 
-        if key not in self._requests:
-            self._requests[key] = []
+        with self._lock:
+            if key not in self._requests:
+                self._requests[key] = []
 
-        # Clean old entries
-        self._requests[key] = [t for t in self._requests[key] if t > cutoff]
+            # Clean old entries
+            self._requests[key] = [t for t in self._requests[key] if t > cutoff]
 
-        remaining = max_requests - len(self._requests[key])
+            remaining = max_requests - len(self._requests[key])
 
-        if remaining <= 0:
-            return False, 0
+            if remaining <= 0:
+                return False, 0
 
-        self._requests[key].append(now)
-        return True, remaining - 1
+            self._requests[key].append(now)
+            return True, remaining - 1
 
     def reset(self, key: str):
-        """Reset rate limit for a key."""
-        self._requests.pop(key, None)
+        """Reset rate limit for a specific key."""
+        with self._lock:
+            self._requests.pop(key, None)
+
+    def reset_all(self):
+        """Reset all rate-limit state for all keys.
+
+        This clears the in-memory tracking of all requests while preserving
+        the rate limiter configuration (limits, windows, settings).
+        Thread-safe operation.
+        """
+        with self._lock:
+            self._requests.clear()
 
 
 # Global rate limiter instance
@@ -279,7 +351,7 @@ class AuthHandler:
             user = db.create_user(sanitized_username, password_hash, email)
         except ValueError:
             return {"success": False, "error": "Username already exists", "status_code": 409}
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError):
             logger.exception("[AUTH REGISTER] username=%s user_created=false transaction_committed=false", sanitized_username)
             return {"success": False, "error": "Unable to create account. Please try again.", "status_code": 500}
 
@@ -328,9 +400,10 @@ class AuthHandler:
         is_admin_attempt = (sanitized_username.lower() == "admin" or (user and getattr(user, "role", "user") == "admin"))
         password_valid = False
         if user:
+            sanitized_username = user.username
             try:
                 password_valid = verify_password(password, user.password_hash)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 logger.warning("[AUTH LOGIN] username=%s user_found=true password_valid=false", sanitized_username)
 
         logger.info("[AUTH LOGIN] username=%s user_found=%s password_valid=%s", sanitized_username, bool(user), password_valid)
@@ -344,6 +417,16 @@ class AuthHandler:
             )
             return {"success": False, "error": "Invalid username or password", "status_code": 401}
 
+        if not getattr(user, "is_active", True):
+            audit_log(
+                username=sanitized_username,
+                action="admin_login" if is_admin_attempt else "user_login",
+                status="BLOCKED",
+                details={"reason": "account_inactive"},
+                severity="WARN"
+            )
+            return {"success": False, "error": "User account is inactive", "status_code": 403}
+
         # Upgrade accounts created by the retired SHA-256 helper after their
         # first successful password login. No plaintext password is persisted.
         if is_legacy_sha256_hash(user.password_hash):
@@ -351,7 +434,7 @@ class AuthHandler:
                 user.password_hash = get_password_hash(password)
                 db.db.commit()
                 logger.info("[AUTH LOGIN] username=%s password_hash_upgraded=bcrypt", sanitized_username)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 db.db.rollback()
                 logger.exception("[AUTH LOGIN] username=%s password_hash_upgrade_failed", sanitized_username)
                 return {"success": False, "error": "Unable to complete login. Please try again.", "status_code": 500}
@@ -361,7 +444,7 @@ class AuthHandler:
             try:
                 user.role = "admin"
                 db.db.commit()
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Failed to auto-promote admin user: {e}")
 
         # Update last login
@@ -421,6 +504,16 @@ class AuthHandler:
                 severity="WARN"
             )
             return {"success": False, "error": "Invalid PIN"}
+
+        if not getattr(user, "is_active", True):
+            audit_log(
+                username=sanitized_username,
+                action="admin_pin_login" if is_admin_attempt else "user_pin_login",
+                status="BLOCKED",
+                details={"reason": "account_inactive"},
+                severity="WARN"
+            )
+            return {"success": False, "error": "User account is inactive", "status_code": 403}
 
         # Update last login
         db.update_last_login(sanitized_username)
@@ -528,7 +621,7 @@ class AuthHandler:
             "refresh_token": new_refresh,
         }
 
-    def get_current_user(self, token: str) -> Optional[str]:
+    def get_current_user(self, token: str) -> str | None:
         """Extract username from a valid access token."""
         payload = verify_token(token)
         if payload is None or payload.get("type") != "access":
@@ -538,11 +631,12 @@ class AuthHandler:
 
 # ==================== Role-Based Access Control (RBAC) ====================
 
-from fastapi import Request, HTTPException, status, Depends
-from typing import List
+
+from fastapi import HTTPException, Request, status
+
 
 class RoleChecker:
-    def __init__(self, allowed_roles: List[str]):
+    def __init__(self, allowed_roles: list[str]):
         self.allowed_roles = allowed_roles
 
     def __call__(self, request: Request) -> str:
@@ -640,7 +734,7 @@ require_coach = RoleChecker(["coach", "admin"])
 require_admin = RoleChecker(["admin"])
 
 
-def optional_user(request: Request) -> Optional[str]:
+def optional_user(request: Request) -> str | None:
     """Optional user dependency resolver that returns None instead of raising exceptions."""
     try:
         token = None
@@ -657,6 +751,17 @@ def optional_user(request: Request) -> Optional[str]:
         if not payload or payload.get("type") != "access":
             return None
             
-        return payload.get("sub")
-    except Exception:
+        username = payload.get("sub")
+        if not username:
+            return None
+
+        from database.crud import DatabaseManager
+        db = DatabaseManager()
+        user = db.get_user(username)
+        db.close()
+        if not user or not user.is_active:
+            return None
+
+        return username
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
         return None

@@ -44,6 +44,8 @@ const generateUUID = () => {
   });
 };
 
+let initAuthPromise: Promise<void> | null = null;
+
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
@@ -81,26 +83,45 @@ export const useUserStore = create<UserState>()(
       },
 
       initializeAuth: async () => {
-        const token = get().accessToken;
-        if (!token) {
-          set({ authStatus: "unauthenticated", isAuthenticated: false, username: null });
-          return;
-        }
-        setAccessToken(token);
-        try {
-          const user = await api.me();
-          set({ username: user.username, lastUsername: user.username, role: user.role, isAuthenticated: true, authStatus: "authenticated" });
-        } catch {
-          setAccessToken(null);
-          set({ username: null, accessToken: null, isAuthenticated: false, authStatus: "unauthenticated", role: null });
-        }
+        if (initAuthPromise) return initAuthPromise;
+
+        initAuthPromise = (async () => {
+          const token = get().accessToken;
+          if (token) {
+            setAccessToken(token);
+          }
+          try {
+            const user = await api.me();
+            if (user.token) {
+              setAccessToken(user.token);
+            }
+            set({
+              username: user.username,
+              lastUsername: user.username,
+              role: user.role,
+              accessToken: user.token || token,
+              isAuthenticated: true,
+              authStatus: "authenticated",
+            });
+          } catch {
+            setAccessToken(null);
+            set({ username: null, accessToken: null, isAuthenticated: false, authStatus: "unauthenticated", role: null });
+          } finally {
+            initAuthPromise = null;
+          }
+        })();
+
+        return initAuthPromise;
       },
 
-      logout: () =>
-        (setAccessToken(null), set({
+      logout: () => {
+        setAccessToken(null);
+        void api.logout().catch(() => {});
+        set({
           username: null, isAuthenticated: false, contactInfo: null,
           settings: {}, game: defaultGame, role: null, accessToken: null, authStatus: "unauthenticated",
-        })),
+        });
+      },
 
       updateSettings: (settings) =>
         set((s) => ({ settings: { ...s.settings, ...settings } })),
@@ -166,9 +187,13 @@ export const useUserStore = create<UserState>()(
     }),
     {
       name: "adhd-coach-user",
-      partialize: (state) => ({ ...state, authStatus: "initializing" }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.accessToken) setAccessToken(state.accessToken);
+      partialize: (state) => ({
+        ...state,
+        accessToken: null,
+        authStatus: "initializing",
+      }),
+      onRehydrateStorage: () => () => {
+        setAccessToken(null);
       },
     }
   )

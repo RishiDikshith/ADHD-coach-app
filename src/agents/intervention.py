@@ -9,7 +9,6 @@ intelligent rescues, and human-like grounding support.
 """
 
 import logging
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +41,11 @@ class InterventionAgent:
             "- Tone: calm, grounding, reassuring, like a steady presence in the storm"
         )
 
-    def detect_intervention_needed(self, user_message: str, context: dict) -> Optional[dict]:
+    def detect_intervention_needed(self, user_message: str, context: dict) -> dict | None:
         session = context.get("session", {})
         stress = session.get("current_stress", 5)
         energy = session.get("current_energy", 5)
-        mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
 
         # CRITICAL urgency keywords — genuine distress signals
         critical_urgency = [

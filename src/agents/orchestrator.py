@@ -7,7 +7,6 @@ Upgraded to support multi-chatbot prompt routing and cross-agent handoffs.
 """
 
 import logging
-from typing import Any, Optional
 
 from memory.memory_manager import MemoryManager
 
@@ -36,14 +35,14 @@ class AgentOrchestrator:
     def _init_agents(self):
         """Initialize all specialized agents with shared memory."""
         if self._agent_classes is None:
-            from agents.productivity_coach import ProductivityCoachAgent
-            from agents.task_breakdown import TaskBreakdownAgent
+            from agents.accountability import AccountabilityAgent
             from agents.focus_optimization import FocusOptimizationAgent
-            from agents.mood_burnout import MoodBurnoutAgent
             from agents.habit_builder import HabitBuilderAgent
             from agents.intervention import InterventionAgent
-            from agents.accountability import AccountabilityAgent
+            from agents.mood_burnout import MoodBurnoutAgent
+            from agents.productivity_coach import ProductivityCoachAgent
             from agents.study_assistant import StudyAssistantAgent
+            from agents.task_breakdown import TaskBreakdownAgent
 
             self._agent_classes = {
                 "productivity_coach": ProductivityCoachAgent,
@@ -59,14 +58,16 @@ class AgentOrchestrator:
         for name, cls in self._agent_classes.items():
             try:
                 self.agents[name] = cls(self.memory)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Failed to initialize agent '{name}': {e}")
 
         logger.debug(f"Initialized {len(self.agents)} agents")
 
     def get_agent(self, name: str):
         """Get a specific agent by name."""
-        return self.agents.get(name)
+        if not name:
+            return None
+        return self.agents.get(name) or self.agents.get(name.replace("-", "_"))
 
     def get_all_agents(self) -> dict:
         """Get all initialized agents."""
@@ -80,12 +81,12 @@ class AgentOrchestrator:
                 prompt = agent.get_identity_prompt()
                 if prompt:
                     prompts.append(prompt)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.debug(f"Error getting identity prompt for {name}: {e}")
 
         return "\n\n".join(prompts)
 
-    def detect_handoff_suggestion(self, user_message: str, current_agent_id: str) -> Optional[dict]:
+    def detect_handoff_suggestion(self, user_message: str, current_agent_id: str) -> dict | None:
         """
         Analyze user message along with real-time mood/stress levels to route 
         the user to the best chatbot agent.
@@ -102,7 +103,7 @@ class AgentOrchestrator:
         elif not isinstance(stress, (int, float)):
             try:
                 stress = float(stress)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 stress = 5
 
         energy = session_state.get("current_energy", 5)
@@ -111,7 +112,7 @@ class AgentOrchestrator:
         elif not isinstance(energy, (int, float)):
             try:
                 energy = float(energy)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 energy = 5
 
         mood = session_state.get("current_mood", "neutral")
@@ -189,7 +190,10 @@ class AgentOrchestrator:
         Builds a custom system prompt injecting shared global context, specialized memory,
         and chatbot-specific personality.
         """
-        from agents.chatbot_registry import get_chatbot_system_prompt, retrieve_specialized_memory
+        from agents.chatbot_registry import (
+            get_chatbot_system_prompt,
+            retrieve_specialized_memory,
+        )
 
         # 1. Get the custom chatbot base prompt
         system_prompt = get_chatbot_system_prompt(agent_id)
@@ -233,7 +237,7 @@ class AgentOrchestrator:
                 ext = intervention.get_system_prompt_extension(user_message, context)
                 if ext:
                     parts.append(ext)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.debug(f"Intervention agent error: {e}")
 
         # 2. Task Breakdown Agent (detect task paralysis)
@@ -244,7 +248,7 @@ class AgentOrchestrator:
                     ext = task_breakdown.get_system_prompt_extension(user_message, context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Task Breakdown agent error: {e}")
 
         # 3. Mood & Burnout Agent
@@ -255,7 +259,7 @@ class AgentOrchestrator:
                     ext = mood.get_system_prompt_extension(context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Mood/Burnout agent error: {e}")
 
         # 4. Focus Optimization Agent (maps to focus-coach)
@@ -266,7 +270,7 @@ class AgentOrchestrator:
                     ext = focus.get_system_prompt_extension(context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Focus agent error: {e}")
 
         # 5. Productivity Coach Agent
@@ -277,7 +281,7 @@ class AgentOrchestrator:
                     ext = coach.get_system_prompt_extension(context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Productivity coach error: {e}")
 
         # 6. Habit Builder Agent
@@ -288,7 +292,7 @@ class AgentOrchestrator:
                     ext = habit.get_system_prompt_extension(context, current_streak)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Habit builder error: {e}")
 
         # 7. Accountability Agent
@@ -299,7 +303,7 @@ class AgentOrchestrator:
                     ext = accountability.get_system_prompt_extension(context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Accountability agent error: {e}")
 
         # 8. Study Assistant Agent
@@ -310,7 +314,7 @@ class AgentOrchestrator:
                     ext = study.get_system_prompt_extension(context)
                     if ext:
                         parts.append(ext)
-                except Exception as e:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                     logger.debug(f"Study Assistant agent error: {e}")
 
         return "\n\n".join(parts)
@@ -370,7 +374,7 @@ class AgentOrchestrator:
                 if rec:
                     suggestions.append(rec)
 
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.error(f"Error collecting agent suggestions: {e}")
 
         # Sort by priority: critical > high > medium > low
@@ -379,13 +383,13 @@ class AgentOrchestrator:
 
         return suggestions
 
-    def detect_and_respond_to_intervention(self, user_message: str, context: dict) -> Optional[dict]:
+    def detect_and_respond_to_intervention(self, user_message: str, context: dict) -> dict | None:
         """Check if an immediate intervention is needed and return it."""
         intervention = self.agents.get("intervention")
         if intervention:
             try:
                 return intervention.detect_intervention_needed(user_message, context)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.debug(f"Intervention detection error: {e}")
         return None
 

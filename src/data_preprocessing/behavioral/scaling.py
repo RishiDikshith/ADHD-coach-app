@@ -1,6 +1,6 @@
+import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-import joblib
 
 df = pd.read_csv("data/featured/behavioral_final.csv")
 

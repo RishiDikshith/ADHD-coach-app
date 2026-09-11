@@ -7,7 +7,6 @@ for ADHD users.
 """
 
 import logging
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class FocusOptimizationAgent:
             "- Tone: practical, adaptable, never rigid about productivity rules"
         )
 
-    def get_focus_recommendation(self, context: dict) -> Optional[dict]:
+    def get_focus_recommendation(self, context: dict) -> dict | None:
         """Generate focus recommendations based on user patterns."""
         user = context.get("user", {})
         session = context.get("session", {})
@@ -42,7 +41,7 @@ class FocusOptimizationAgent:
         optimal_length = user.get("optimal_session_length", 25)
         best_hours = user.get("best_focus_hours", [])
         avg_energy = user.get("avg_energy", 5)
-        avg_stress = user.get("avg_stress", 5)
+        user.get("avg_stress", 5)
         current_stress = session.get("current_stress", 5)
 
         # High stress — recommend very short focus blocks
@@ -92,7 +91,7 @@ class FocusOptimizationAgent:
                 "recommended_duration": optimal_length,
                 "recommended_break": max(5, optimal_length // 5),
                 "suggestions": [
-                    f"Schedule your most important task during your peak window",
+                    "Schedule your most important task during your peak window",
                     f"Use {optimal_length}-minute focus blocks with short breaks",
                     "Eliminate distractions before starting (close tabs, silence phone)",
                     "Start with the hardest task, save easy ones for low-energy times",

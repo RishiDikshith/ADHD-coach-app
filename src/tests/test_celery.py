@@ -8,7 +8,7 @@ and FastAPI asynchronous task route handling.
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Force Celery eager mode during testing to run in-process without Redis
 os.environ["CELERY_ALWAYS_EAGER"] = "true"
@@ -20,15 +20,15 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from api.main_api import app
+from tests.test_api import SyncTestClient
 from utils.celery_app import celery_app
 from utils.celery_tasks import (
     calculate_ml_scores_task,
+    compile_context_task,
     generate_analytics_task,
     synthesize_personality_task,
-    compile_context_task
 )
-from api.main_api import app
-from tests.test_api import SyncTestClient
 
 
 class TestADHDBackgroundQueue(unittest.TestCase):

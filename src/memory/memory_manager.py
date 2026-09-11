@@ -11,13 +11,11 @@ Upgraded with:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
 
 from memory.chroma_store import ChromaMemoryStore
-from memory.user_profile import UserProfile
-from memory.session_memory import SessionMemory
 from memory.fact_extractor import FactExtractor, FactMemoryConsolidator
+from memory.session_memory import SessionMemory
+from memory.user_profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +75,7 @@ class MemoryManager:
         self.fact_extractor = FactExtractor()
         self.fact_consolidator = FactMemoryConsolidator(db_manager)
 
-    def extract_and_store_facts(self, message: str) -> List[dict]:
+    def extract_and_store_facts(self, message: str) -> list[dict]:
         """
         Extract structured facts from a user message and store them.
         Returns extracted facts.
@@ -102,7 +100,7 @@ class MemoryManager:
 
     # ---------- Core Recording with Importance Scoring ----------
 
-    def _get_importance(self, memory_type: str, metadata: Optional[dict] = None) -> float:
+    def _get_importance(self, memory_type: str, metadata: dict | None = None) -> float:
         """Calculate importance score for a memory based on type and context."""
         base = MEMORY_IMPORTANCE.get(memory_type, MEMORY_IMPORTANCE["default"])
         
@@ -124,7 +122,7 @@ class MemoryManager:
         
         return round(base, 2)
 
-    def _tag_emotion(self, content: str, emotion: Optional[str] = None) -> list:
+    def _tag_emotion(self, content: str, emotion: str | None = None) -> list:
         """Tag memory with emotional context for better retrieval."""
         emotional_tags = []
         
@@ -169,8 +167,8 @@ class MemoryManager:
         user_message: str,
         assistant_message: str,
         interaction_type: str = "chat",
-        metadata: Optional[dict] = None,
-        emotion: Optional[str] = None,
+        metadata: dict | None = None,
+        emotion: str | None = None,
     ):
         metadata = metadata or {}
         
@@ -217,12 +215,12 @@ class MemoryManager:
                 val = fact.get("value")
                 if ftype == "cognitive_style":
                     self.profile.record_cognitive_style(val)
-                elif ftype == f"interest":
+                elif ftype == "interest":
                     self.profile.record_interest(val)
 
     # ---------- Emotion Recording ----------
 
-    def record_emotion(self, emotion: str, stress: int, energy: Optional[int] = None):
+    def record_emotion(self, emotion: str, stress: int, energy: int | None = None):
         self.session.record_emotion(emotion)
         self.session.set_stress(stress)
         if energy:
@@ -357,7 +355,7 @@ class MemoryManager:
 
     # ---------- Streak Tracking ----------
 
-    def update_streak(self, current_streak: int, badges: Optional[list] = None):
+    def update_streak(self, current_streak: int, badges: list | None = None):
         self.profile.update_streak(current_streak)
 
         if badges:

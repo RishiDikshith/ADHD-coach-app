@@ -1,21 +1,24 @@
+import logging
+
+logger = logging.getLogger(__name__)
 import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import logging
+from email.mime.text import MIMEText
+
 
 def send_otp_email(recipient_email, otp):
     """Sends an OTP to the specified email address."""
     smtp_server = os.getenv("SMTP_SERVER")
-    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
 
     # On platforms like Render, env vars might not be set for free tiers.
     # This provides a fallback for demonstration purposes by logging the OTP.
     if not all([smtp_server, smtp_port, smtp_user, smtp_password]):
-        logging.warning("SMTP environment variables not set. Cannot send real email.")
-        logging.warning(f"DEMO MODE: OTP for {recipient_email} is {otp}")
+        logger.warning("SMTP environment variables not set. Cannot send real email.")
+        logger.warning(f"DEMO MODE: OTP for {recipient_email} is {otp}")
         return True # Pretend it was sent successfully
 
     sender_email = os.getenv("SMTP_FROM_EMAIL", smtp_user)
@@ -49,8 +52,8 @@ def send_otp_email(recipient_email, otp):
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(sender_email, recipient_email, message.as_string())
-        logging.info(f"OTP email sent successfully to {recipient_email}")
+        logger.info(f"OTP email sent successfully to {recipient_email}")
         return True
-    except Exception as e:
-        logging.error(f"Failed to send email to {recipient_email}: {e}")
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
+        logger.error(f"Failed to send email to {recipient_email}: {e}")
         return False

@@ -16,22 +16,22 @@ Agents:
 All agents share a common interface and use the MemoryManager for context.
 """
 
-from .productivity_coach import ProductivityCoachAgent
-from .task_breakdown import TaskBreakdownAgent
+from .accountability import AccountabilityAgent
 from .focus_optimization import FocusOptimizationAgent
-from .mood_burnout import MoodBurnoutAgent
 from .habit_builder import HabitBuilderAgent
 from .intervention import InterventionAgent
-from .accountability import AccountabilityAgent
+from .mood_burnout import MoodBurnoutAgent
 from .orchestrator import AgentOrchestrator
+from .productivity_coach import ProductivityCoachAgent
+from .task_breakdown import TaskBreakdownAgent
 
 __all__ = [
-    "ProductivityCoachAgent",
-    "TaskBreakdownAgent",
-    "FocusOptimizationAgent",
-    "MoodBurnoutAgent",
-    "HabitBuilderAgent",
-    "InterventionAgent",
     "AccountabilityAgent",
     "AgentOrchestrator",
+    "FocusOptimizationAgent",
+    "HabitBuilderAgent",
+    "InterventionAgent",
+    "MoodBurnoutAgent",
+    "ProductivityCoachAgent",
+    "TaskBreakdownAgent",
 ]

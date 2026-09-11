@@ -6,8 +6,6 @@ and ADHD-friendly habit recommendations.
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +43,17 @@ class HabitBuilderAgent:
             "6. Use external accountability — body doubling, check-ins, visible tracking"
         )
 
-    def get_habit_recommendation(self, context: dict, habits: list = None) -> Optional[dict]:
+    def get_habit_recommendation(self, context: dict, habits: list | None = None) -> dict | None:
         """
         Suggest habit improvements based on user patterns.
         """
         user = context.get("user", {})
         session = context.get("session", {})
 
-        stress = session.get("current_stress", 5)
-        energy = session.get("current_energy", 5)
+        session.get("current_stress", 5)
+        session.get("current_energy", 5)
         completion_rate = user.get("task_completion_rate", 50)
-        current_streak = user.get("session_count", 0)
+        user.get("session_count", 0)
 
         existing_habits = habits or []
 
@@ -109,7 +107,7 @@ class HabitBuilderAgent:
             "tone": "congratulatory",
         }
 
-    def get_streak_milestone_message(self, streak: int) -> Optional[str]:
+    def get_streak_milestone_message(self, streak: int) -> str | None:
         """Generate celebratory message for streak milestones."""
         milestones = {
             1: "🌟 Day 1! The most important day. You showed up!",
@@ -135,7 +133,7 @@ class HabitBuilderAgent:
 
         return None
 
-    def get_habit_stacking_suggestion(self, new_habit: str, existing_routine: list = None) -> str:
+    def get_habit_stacking_suggestion(self, new_habit: str, existing_routine: list | None = None) -> str:
         """Suggest how to stack a new habit onto existing routines."""
         if existing_routine is None:
             existing_routine = [
@@ -149,7 +147,7 @@ class HabitBuilderAgent:
         anchors = existing_routine[:3]
         return (
             f"To build '{new_habit}', try stacking it onto one of your existing routines:\n"
-            + "\n".join([f"• After [routine], I will [new habit for 1 minute]" for routine in anchors])
+            + "\n".join(["• After [routine], I will [new habit for 1 minute]" for routine in anchors])
         )
 
     def get_system_prompt_extension(self, context: dict, current_streak: int = 0) -> str:

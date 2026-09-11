@@ -7,8 +7,7 @@ and emotional trends to identify meaningful patterns.
 
 import logging
 from collections import Counter
-from datetime import datetime, timedelta
-from typing import Any, Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -191,13 +190,12 @@ class PatternAnalyzer:
         focus_analysis = self.analyze_focus_patterns(
             focus_patterns.get("focus_quality_trend", [])
         )
-        if focus_analysis.get("pattern_detected"):
-            if focus_analysis.get("best_focus_hours"):
-                insights.append({
-                    "type": "timing",
-                    "message": f"Best focus time: {', '.join(focus_analysis['best_focus_hours'][:2])}",
-                    "action": "Schedule deep work during these windows",
-                })
+        if focus_analysis.get("pattern_detected") and focus_analysis.get("best_focus_hours"):
+            insights.append({
+                "type": "timing",
+                "message": f"Best focus time: {', '.join(focus_analysis['best_focus_hours'][:2])}",
+                "action": "Schedule deep work during these windows",
+            })
 
         mood_patterns = user_profile.get("emotional_patterns", {})
         mood_analysis = self.analyze_mood_patterns(

@@ -12,9 +12,7 @@ Architecture:
 """
 
 import logging
-import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +175,11 @@ class ADHDStateDetector:
 
     def __init__(self, db_manager=None):
         self.db = db_manager
-        self._message_timestamps: List[datetime] = []
-        self._last_states: List[dict] = []
+        self._message_timestamps: list[datetime] = []
+        self._last_states: list[dict] = []
         self._max_history = 100
 
-    def analyze(self, text: str, context: Optional[dict] = None) -> dict:
+    def analyze(self, text: str, context: dict | None = None) -> dict:
         """
         Analyze the current state based on text and context.
         Returns the detected state with confidence and adaptation suggestions.
@@ -219,7 +217,7 @@ class ADHDStateDetector:
             "is_crisis": state in ("overwhelmed", "dysregulated") and confidence >= 0.7,
         }
 
-    def _score_signals(self, text_lower: str, context: dict) -> Dict[str, float]:
+    def _score_signals(self, text_lower: str, context: dict) -> dict[str, float]:
         """Score each signal type based on text analysis and context."""
         scores = {}
 
@@ -270,7 +268,7 @@ class ADHDStateDetector:
 
         return scores
 
-    def _determine_state(self, signal_scores: dict, context: dict) -> Tuple[str, float]:
+    def _determine_state(self, signal_scores: dict, context: dict) -> tuple[str, float]:
         """
         Determine the dominant ADHD state based on signal scores and context.
         Returns (state_id, confidence).
@@ -301,7 +299,6 @@ class ADHDStateDetector:
                 return "burnout", 0.4
 
         # Positive states
-        positive_keywords = ["focused", "productive", "in the zone", "great", "awesome", "accomplished"]
         if context.get("text", ""):
             text = context.get("text", "").lower()
             if any(kw in text for kw in ["hyperfocus", "deep focus", "in the zone"]) or \
@@ -401,17 +398,17 @@ class ADHDStateDetector:
         if len(self._last_states) > self._max_history:
             self._last_states = self._last_states[-self._max_history:]
 
-    def get_current_state_summary(self) -> Optional[dict]:
+    def get_current_state_summary(self) -> dict | None:
         """Get the most recent state detection summary."""
         if not self._last_states:
             return None
         return self._last_states[-1]
 
-    def get_state_history(self, n: int = 10) -> List[dict]:
+    def get_state_history(self, n: int = 10) -> list[dict]:
         """Get the last N state detections."""
         return self._last_states[-n:]
 
-    def get_system_prompt_extension(self, text: str, context: Optional[dict] = None) -> str:
+    def get_system_prompt_extension(self, text: str, context: dict | None = None) -> str:
         """
         Generate a system prompt extension based on detected state.
         This gets injected into the LLM prompt to modulate coaching style.
@@ -463,7 +460,7 @@ class ADHDStateDetector:
 
 
 # State detection for quick API usage
-def detect_adhd_state(text: str, context: Optional[dict] = None) -> dict:
+def detect_adhd_state(text: str, context: dict | None = None) -> dict:
     """Convenience function to quickly detect ADHD state."""
     detector = ADHDStateDetector()
     return detector.analyze(text, context)

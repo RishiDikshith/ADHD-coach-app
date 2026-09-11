@@ -72,3 +72,10 @@ temp/
 # Jupyter
 .ipynb_checkpoints/
 .venv/
+
+# Local/generated files
+*.db-shm
+*.db-wal
+*.db-journal
+coverage.xml
+*.code-workspace

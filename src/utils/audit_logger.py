@@ -1,8 +1,10 @@
-import os
 import json
 import logging
+import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
@@ -35,8 +37,8 @@ def audit_log(
     username: str,
     action: str,
     status: str,
-    ip_address: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    ip_address: str | None = None,
+    details: dict[str, Any] | None = None,
     severity: str = "INFO"
 ):
     """
@@ -55,7 +57,7 @@ def audit_log(
     log_msg = f"Audit Log - {severity.upper()} - User: {username} - Action: {action} - Status: {status} - Details: {json.dumps(details or {})}"
     
     # Also log to main app logger for general visibility
-    logging.info(log_msg)
+    logger.info(log_msg)
     
     # Log structured event to dedicated audit log
     if severity.upper() == "CRITICAL":

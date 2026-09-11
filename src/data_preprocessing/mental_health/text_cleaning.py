@@ -1,6 +1,7 @@
-import pandas as pd
 import re
+
 import nltk
+import pandas as pd
 from nltk.corpus import stopwords
 
 df = pd.read_csv("data/raw/mental_health.csv")
@@ -21,7 +22,7 @@ def load_stop_words():
         try:
             nltk.download("stopwords", quiet=True)
             return set(stopwords.words("english"))
-        except Exception:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             print("Falling back to built-in stopword list.")
             return FALLBACK_STOPWORDS
 

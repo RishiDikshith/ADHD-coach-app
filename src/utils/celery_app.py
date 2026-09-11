@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+
 from celery import Celery
 from dotenv import load_dotenv
 
@@ -15,9 +16,12 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 
 # Fallback to synchronous/eager execution if specified (useful for local dev without Redis / testing)
 always_eager = os.getenv("CELERY_ALWAYS_EAGER", "false").lower() in ("true", "1", "yes")
-is_testing = "unittest" in "".join(os.getenv("PYTEST_CURRENT_TEST", "")) or os.getenv("DATABASE_URL", "").startswith("sqlite:///:memory:")
+environment = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+database_url = os.getenv("DATABASE_URL", "sqlite:///./adhd_coach.db")
+is_local_sqlite = database_url.startswith("sqlite") and environment not in {"production", "prod", "staging"}
+is_testing = "unittest" in "".join(os.getenv("PYTEST_CURRENT_TEST", "")) or database_url.startswith("sqlite:///:memory:")
 
-if is_testing:
+if is_testing or is_local_sqlite:
     logger.info("Test environment detected. Forcing Celery eager mode (synchronous).")
     always_eager = True
 

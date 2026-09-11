@@ -4,12 +4,12 @@ Stores conversation snippets, user patterns, and intervention outcomes
 for semantic retrieval.
 """
 
-import json
 import hashlib
+import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class ChromaMemoryStore:
             else:
                 self._collection = self._client.create_collection(self.COLLECTION_NAME)
                 logger.debug(f"Created new collection: {self.COLLECTION_NAME}")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"ChromaDB init failed: {e} — using JSON fallback")
             self._collection = None
 
@@ -118,7 +118,7 @@ class ChromaMemoryStore:
     def store(
         self,
         content: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
         memory_type: str = "conversation",
     ):
         """Store a memory entry with optional metadata and semantic deduplication."""
@@ -127,7 +127,7 @@ class ChromaMemoryStore:
         metadata.update({
             "user_id": self.user_id,
             "memory_type": memory_type,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "duplicate_count": 1,
         })
 
@@ -150,7 +150,7 @@ class ChromaMemoryStore:
                         match_id = similar["ids"][0][0]
                         existing_meta = similar["metadatas"][0][0] if (similar.get("metadatas") and similar["metadatas"][0]) else {}
                         existing_meta["duplicate_count"] = existing_meta.get("duplicate_count", 1) + 1
-                        existing_meta["last_updated"] = datetime.now().isoformat()
+                        existing_meta["last_updated"] = datetime.now(timezone.utc).isoformat()
                         if "importance" in existing_meta:
                             existing_meta["importance"] = min(1.0, existing_meta["importance"] + 0.05)
                         
@@ -161,7 +161,7 @@ class ChromaMemoryStore:
                         )
                         logger.debug(f"Deduplicated existing memory matching: {match_id}")
                         return
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB deduplication check failed: {e} — writing standard entry")
 
         # Fallback JSON deduplication
@@ -173,15 +173,18 @@ class ChromaMemoryStore:
             return len(w1 & w2) / max(len(w1), len(w2))
 
         for entry in self._fallback_data:
-            if entry.get("metadata", {}).get("memory_type") == memory_type:
-                if entry.get("content") == content or content_similarity(entry.get("content", ""), content) > 0.82:
-                    entry["metadata"]["duplicate_count"] = entry["metadata"].get("duplicate_count", 1) + 1
-                    entry["metadata"]["last_updated"] = datetime.now().isoformat()
-                    if "importance" in entry["metadata"]:
-                        entry["metadata"]["importance"] = min(1.0, entry["metadata"]["importance"] + 0.05)
-                    self._save_fallback()
-                    logger.debug(f"Deduplicated fallback memory matching content.")
-                    return
+            metadata = entry.get("metadata", {})
+            if metadata.get("memory_type") == memory_type and (
+                entry.get("content") == content
+                or content_similarity(entry.get("content", ""), content) > 0.82
+            ):
+                metadata["duplicate_count"] = metadata.get("duplicate_count", 1) + 1
+                metadata["last_updated"] = datetime.now(timezone.utc).isoformat()
+                if "importance" in metadata:
+                    metadata["importance"] = min(1.0, metadata["importance"] + 0.05)
+                self._save_fallback()
+                logger.debug("Deduplicated fallback memory matching content.")
+                return
 
         if self.collection is not None:
             try:
@@ -191,7 +194,7 @@ class ChromaMemoryStore:
                     metadatas=[metadata],
                 )
                 return
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB store failed: {e} — falling back")
 
         # Fallback: JSON storage
@@ -208,7 +211,7 @@ class ChromaMemoryStore:
         self,
         query: str,
         n_results: int = 5,
-        memory_type: Optional[str] = None,
+        memory_type: str | None = None,
     ) -> list[dict]:
         """
         Semantic search across stored memories.
@@ -237,7 +240,7 @@ class ChromaMemoryStore:
                             if raw.get("distances") else None,
                         })
                 return results
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB search failed: {e} — using fallback")
 
         # Fallback: keyword matching
@@ -266,7 +269,7 @@ class ChromaMemoryStore:
         query: str,
         n_results: int = 3,
         window_size: int = 2,
-        memory_type: Optional[str] = None,
+        memory_type: str | None = None,
     ) -> list[dict]:
         """
         Semantic search with sliding window context retrieval around matching hits.
@@ -321,7 +324,7 @@ class ChromaMemoryStore:
                                 prefix = "User: " if m_type == "user_message" else "AI: " if m_type == "assistant_response" else ""
                                 context_lines.append(f"{prefix}{item['content']}")
                             res["window_context"] = "\n".join(context_lines)
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB sliding window construction failed: {e}")
 
         # Fallback sliding window context
@@ -348,7 +351,7 @@ class ChromaMemoryStore:
 
         return results
 
-    def get_recent(self, memory_type: Optional[str] = None, limit: int = 10) -> list[dict]:
+    def get_recent(self, memory_type: str | None = None, limit: int = 10) -> list[dict]:
         """Get most recent memories of a given type (or all types if None)."""
         entries = []
 
@@ -370,7 +373,7 @@ class ChromaMemoryStore:
                             "metadata": meta,
                         })
                 return entries
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB get_recent failed: {e} — using fallback")
 
         # Fallback
@@ -391,7 +394,7 @@ class ChromaMemoryStore:
         if self.collection is not None:
             try:
                 count = self.collection.count()
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB count failed: {e}")
                 count = len(self._fallback_data)
         else:
@@ -408,7 +411,7 @@ class ChromaMemoryStore:
         if self.collection is not None:
             try:
                 self.collection.delete(where={"user_id": self.user_id})
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"ChromaDB clear_user_memory failed: {e} — clearing fallback only")
         self._fallback_data = []
         self._save_fallback()

@@ -12,13 +12,13 @@ Features:
 """
 
 from .detector import TaskParalysisDetector
-from .microtasks import MicroTaskGenerator
 from .just_begin import JustBeginMode
+from .microtasks import MicroTaskGenerator
 from .recovery_engine import TaskParalysisRecoveryEngine
 
 __all__ = [
-    "TaskParalysisDetector",
-    "MicroTaskGenerator",
     "JustBeginMode",
+    "MicroTaskGenerator",
+    "TaskParalysisDetector",
     "TaskParalysisRecoveryEngine",
 ]

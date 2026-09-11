@@ -1,16 +1,17 @@
-import pandas as pd
-import numpy as np
-import joblib
 import warnings
+
+import joblib
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-from sklearn.ensemble import VotingRegressor
-
 from catboost import CatBoostRegressor
-from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
+from sklearn.ensemble import VotingRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import cross_val_score, train_test_split
+from xgboost import XGBRegressor
 
 print("="*70)
 print("PRODUCTIVITY MODEL - FINAL FAST VERSION")
@@ -112,7 +113,7 @@ def evaluate(name, model):
     pred_log = model.predict(X_test)
 
     r2_log = r2_score(y_test, pred_log)
-    mae_log = mean_absolute_error(y_test, pred_log)
+    mean_absolute_error(y_test, pred_log)
 
     pred_orig = np.expm1(pred_log)
     y_orig = np.expm1(y_test)

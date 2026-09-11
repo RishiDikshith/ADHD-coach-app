@@ -17,7 +17,6 @@ if project_root not in sys.path:
 
 from agents.chatbot_registry import AGENT_CONFIGS, get_chatbot_system_prompt
 from agents.orchestrator import AgentOrchestrator
-from memory.memory_manager import MemoryManager
 
 
 class TestMultiChatbotEcosystem(unittest.TestCase):

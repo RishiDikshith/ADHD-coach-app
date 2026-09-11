@@ -8,9 +8,8 @@ lockout timers, admin PIN verification, and device revocation.
 import os
 import sys
 import unittest
-import logging
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 # Add project root to python search path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,11 +20,17 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_adhd_coach_temp.db"
 os.environ["GROQ_API_KEY"] = "mock_groq_key"
 
 import asyncio
+
 import httpx
+
 from api.main_api import app
-from database.models import init_db, User, TrustedDevice, engine
+from auth.auth_handler import (
+    get_password_hash,
+    require_user,
+    verify_password,
+)
 from database.crud import DatabaseManager
-from auth.auth_handler import require_admin, require_user, get_password_hash, verify_password
+from database.models import User, engine, init_db
 
 
 class SyncTestClient:
@@ -53,14 +58,14 @@ class TestDeviceAuthenticationSystem(unittest.TestCase):
         self.db_manager = DatabaseManager()
         
         # Bind database manager to main_api and auth_handler globals
-        import api.main_api as main_api
+        from api import main_api
         main_api._db_manager = self.db_manager
         main_api.auth_handler.db = self.db_manager
 
     def tearDown(self):
         """Clean up database connection and files."""
         # Unbind database manager
-        import api.main_api as main_api
+        from api import main_api
         main_api._db_manager = None
         main_api.auth_handler.db = None
         
@@ -73,7 +78,7 @@ class TestDeviceAuthenticationSystem(unittest.TestCase):
             if os.path.exists(f):
                 try:
                     os.remove(f)
-                except Exception:
+                except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                     pass
 
     def test_login_registers_trusted_device(self):
@@ -211,7 +216,7 @@ class TestDeviceAuthenticationSystem(unittest.TestCase):
         device = self.db_manager.get_trusted_device(user.id, "locked_dev")
         self.assertEqual(device.failed_attempts, 5)
         self.assertIsNotNone(device.locked_until)
-        self.assertTrue(device.locked_until > datetime.utcnow())
+        self.assertTrue(device.locked_until > datetime.now(timezone.utc))
 
         # 5. Subsequent attempts (even with correct PIN) should fail immediately due to lock
         payload = {

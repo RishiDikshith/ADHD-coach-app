@@ -1,12 +1,25 @@
-import os
 import json
 import logging
+import os
 from datetime import datetime, timezone
+
 from celery.exceptions import MaxRetriesExceededError
-from utils.celery_app import celery_app
+
 from database.crud import DatabaseManager
+from utils.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _should_use_offline_ai() -> bool:
+    """Avoid live Groq calls during tests or explicit mock/test runs."""
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+    return (
+        bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or groq_api_key.lower() in {"mock_groq_key", "test", "testing"}
+        or os.getenv("AI_OFFLINE_MODE", "").lower() in {"1", "true", "yes", "on"}
+    )
+
 
 # ==================== LAZY ML MODEL LOADERS ====================
 # We lazy-load these heavy models only when a task actually runs,
@@ -21,9 +34,9 @@ _models = {
 def get_ml_models():
     """Lazy-load and cache the machine learning models."""
     from pathlib import Path
-    import joblib
-    from utils.helpers import prepare_model_for_inference
+
     from ml_models.efficient_inference import EfficientInference, load_model_cached
+    from utils.helpers import prepare_model_for_inference
 
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     MODELS_DIR = PROJECT_ROOT / "models"
@@ -34,7 +47,7 @@ def get_ml_models():
                 str(MODELS_DIR / "adhd_risk_model.pkl"), "ADHD Risk Model"
             )
             logger.info("Celery: ADHD Risk Model lazy-loaded successfully")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.error(f"Celery: Failed to load ADHD model: {e}")
 
     if _models["productivity"] is None:
@@ -43,7 +56,7 @@ def get_ml_models():
                 str(MODELS_DIR / "productivity_model.pkl"), "Productivity Model"
             )
             logger.info("Celery: Productivity Model lazy-loaded successfully")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.error(f"Celery: Failed to load Productivity model: {e}")
 
     if _models["student"] is None:
@@ -52,7 +65,7 @@ def get_ml_models():
                 str(MODELS_DIR / "student_model.pkl"), "Student Depression Model"
             )
             logger.info("Celery: Student Depression Model lazy-loaded successfully")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.error(f"Celery: Failed to load Student model: {e}")
 
     if _models["mental_health"] is None:
@@ -60,7 +73,7 @@ def get_ml_models():
             mental_pipeline = load_model_cached(str(MODELS_DIR / "mental_health_nlp_pipeline.pkl"))
             _models["mental_health"] = prepare_model_for_inference(mental_pipeline)
             logger.info("Celery: Mental Health NLP Pipeline lazy-loaded successfully")
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.error(f"Celery: Failed to load Mental Health model: {e}")
 
     return _models
@@ -69,22 +82,26 @@ def get_ml_models():
 # ==================== 1. ML INFERENCE TASK ====================
 
 @celery_app.task(name="tasks.calculate_ml_scores", bind=True, max_retries=3)
-def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers: list = None, username: str = "default"):
+def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers: list | None = None, username: str = "default"):
     """
     Offloads heavy ML model inference (productivity, ADHD risk, depression scoring)
     to a Celery worker. Retries with exponential backoff on transient errors.
     """
     logger.info(f"Celery: Starting ML inference task for user '{username}'...")
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from feature_engineering.feature_builder import build_features
+        from intervention.intervention_engine import generate_interventions
         from scoring.adhd_questionnaire_score import calculate_adhd_score
         from scoring.adhd_scoring import combined_adhd_score
         from scoring.final_score import final_score
-        from scoring.mental_health_scoring import mental_health_score, analyze_stress_text
+        from scoring.mental_health_scoring import (
+            analyze_stress_text,
+            mental_health_score,
+        )
         from scoring.productivity_scoring import productivity_score
-        from intervention.intervention_engine import generate_interventions
 
         models = get_ml_models()
         adhd_inf = models["adhd"]
@@ -106,7 +123,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                 raise ValueError("Productivity model unavailable")
             productivity_raw = np.expm1(prod_inf.predict(engineered_df)[0])
             productivity_pct = float(productivity_score(productivity_raw))
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"Productivity score computation failed: {e}")
             productivity_pct = 50.0
 
@@ -116,7 +133,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                 raise ValueError("ADHD model unavailable")
             adhd_raw = adhd_inf.predict(engineered_df)[0]
             adhd_risk = max(0.0, min(1.0, adhd_raw / 100 if adhd_raw > 1 else adhd_raw))
-        except Exception as e:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
             logger.warning(f"ADHD risk model computation failed: {e}")
             adhd_risk = 0.5
 
@@ -136,7 +153,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                 predicted_label = student_inf.predict(engineered_df)[0]
                 from scoring.student_scoring import depression_score
                 depression_pct = float(depression_score(predicted_label))
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Student model prediction failed: {e}")
                 estimated_risk = min(1.0, max(0.0, (stress_level / 10) * 0.7 + max(0, 7 - user_snapshot.get("sleep_hours", 7)) * 0.08))
                 depression_pct = float(max(20, min(85, (1 - estimated_risk) * 100)))
@@ -157,7 +174,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                 else:
                     prediction = str(mh_pipeline.predict([text])[0]).lower()
                     ml_probability = 1.0 if prediction in {"1", "stress"} else 0.0
-            except Exception as e:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.warning(f"Mental Health pipeline execution failed: {e}")
         
         # Combine NLP ML probability with heuristic text analysis
@@ -218,7 +235,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
                     source="celery_inference"
                 )
                 logger.info(f"Celery: Saved ML scores payload in SQLite database for user '{username}'")
-        except Exception as db_err:
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as db_err:
             logger.warning(f"Celery: Database recording failed: {db_err}")
         finally:
             db_mgr.close()
@@ -226,7 +243,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
         logger.info(f"Celery: ML inference task completed successfully for '{username}'")
         return {"scores": scores_payload, "interventions": interventions}
 
-    except Exception as exc:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         logger.error(f"Celery: ML inference error: {exc}")
         # Retry with exponential backoff on failures
         try:
@@ -239,7 +256,7 @@ def calculate_ml_scores_task(self, user_data: dict, text: str = "", adhd_answers
 # ==================== 2. PERIODIC ANALYTICS GENERATION ====================
 
 @celery_app.task(name="tasks.generate_analytics", bind=True)
-def generate_analytics_task(self, username: str, user_data: dict = None):
+def generate_analytics_task(self, username: str, user_data: dict | None = None):
     """
     Gathers behavioral events, focus sessions, and mood logs to compile deep analytics.
     Caches the pre-compiled analytics as a structured fact to make API calls instant.
@@ -247,10 +264,10 @@ def generate_analytics_task(self, username: str, user_data: dict = None):
     logger.info(f"Celery: Starting analytics generation for user '{username}'...")
     db_mgr = DatabaseManager()
     try:
-        from memory.memory_manager import MemoryManager
         from analytics.insight_engine import InsightEngine
         from analytics.pattern_analyzer import PatternAnalyzer
         from analytics.recommendation_engine import RecommendationEngine
+        from memory.memory_manager import MemoryManager
 
         user_data = user_data or {}
         memory = MemoryManager(user_id=username)
@@ -316,7 +333,7 @@ def generate_analytics_task(self, username: str, user_data: dict = None):
         logger.info(f"Celery: Saved pre-compiled analytics cache in SQLite for user '{username}'")
         return analytics_payload
 
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Celery: Analytics generation error for '{username}': {e}")
         return {"error": "Failed to compile analytics", "details": str(e)}
     finally:
@@ -343,7 +360,7 @@ def periodic_weekly_analytics_beat():
             logger.info(f"Celery Beat: Queued analytics pre-compilation task for '{user.username}'")
             
         return {"users_queued": len(active_users)}
-    except Exception as e:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.error(f"Celery Beat: Periodic weekly analytics failed: {e}")
         return {"error": str(e)}
     finally:
@@ -361,8 +378,6 @@ def synthesize_personality_task(self, username: str):
     logger.info(f"Celery: Running multi-agent personality synthesis for user '{username}'...")
     db_mgr = DatabaseManager()
     try:
-        from memory.memory_manager import MemoryManager
-        from utils.main_api_imports import get_ai_reply  # Helper to make AI completion safe
         
         # Pull history aggregates
         recent_chats = db_mgr.get_chat_history(username, limit=30)
@@ -403,7 +418,7 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
         
         # Get AI completion
         groq_api_key = os.getenv("GROQ_API_KEY")
-        if not groq_api_key:
+        if not groq_api_key or _should_use_offline_ai():
             # Emulated synthesis fallback
             result_json = {
                 "adhd_archetype": "Intuitive Sprinting Creator",
@@ -416,15 +431,16 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
             try:
                 from groq import Groq
                 client = Groq(api_key=groq_api_key)
+                model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.1-8b-instant",
+                    model=model,
                     temperature=0.6,
                     max_tokens=1024,
                     response_format={"type": "json_object"}
                 )
                 result_json = json.loads(chat_completion.choices[0].message.content)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"AI Synthesis API failed: {e}. Emulating profile.")
                 result_json = {
                     "adhd_archetype": "Overwhelmed Task-Juggler",
@@ -447,7 +463,7 @@ Do not include markdown or explanations. Respond with ONLY valid JSON code.
         logger.info(f"Celery: Completed multi-agent personality synthesis for '{username}'")
         return result_json
 
-    except Exception as exc:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         logger.error(f"Celery: Personality synthesis failed for '{username}': {exc}")
         return {"error": "Failed to synthesize personality", "details": str(exc)}
     finally:
@@ -464,7 +480,6 @@ def compile_context_task(self, username: str):
     db_mgr = DatabaseManager()
     try:
         from memory.memory_manager import MemoryManager
-        from utils.main_api_imports import get_ai_reply
 
         memory = MemoryManager(user_id=username)
         raw_context = memory.get_context_for_prompt_text()
@@ -489,20 +504,21 @@ Format the response as a clear, dense, 3-paragraph summary that can be directly 
 Keep it strictly under 300 words. Be empathetic and supportive.
 """
         groq_api_key = os.getenv("GROQ_API_KEY")
-        if not groq_api_key:
+        if not groq_api_key or _should_use_offline_ai():
             summary = "User is building consistency in study routines, responding exceptionally to Pomodoro timers. Task paralysis triggers include starting big reports. Currently supported by deep grounding interventions."
         else:
             try:
                 from groq import Groq
                 client = Groq(api_key=groq_api_key)
+                model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.1-8b-instant",
+                    model=model,
                     temperature=0.5,
                     max_tokens=500
                 )
                 summary = chat_completion.choices[0].message.content
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"AI Context compiler failed: {e}")
                 summary = "Failed to synthesize. Active preference for small, visual task breakdowns."
 
@@ -519,7 +535,7 @@ Keep it strictly under 300 words. Be empathetic and supportive.
         logger.info(f"Celery: Context compiled and cached successfully for user '{username}'")
         return {"summary": summary}
 
-    except Exception as exc:
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         logger.error(f"Celery: Context compilation failed for '{username}': {exc}")
         return {"error": "Failed to compile context", "details": str(exc)}
     finally:

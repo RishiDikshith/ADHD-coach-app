@@ -1,6 +1,7 @@
+import pickle
+
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-import pickle
 
 df = pd.read_csv("data/cleaned/mental_health_cleaned.csv")
 
@@ -19,7 +20,8 @@ vectorizer = TfidfVectorizer(max_features=1000)
 X = vectorizer.fit_transform(df["cleaned_text"])
 
 # Save vectorizer
-pickle.dump(vectorizer, open("models/tfidf_vectorizer.pkl", "wb"))
+with open("models/tfidf_vectorizer.pkl", "wb") as vector_file:
+    pickle.dump(vectorizer, vector_file)
 
 # Convert to dataframe
 X_df = pd.DataFrame(X.toarray())

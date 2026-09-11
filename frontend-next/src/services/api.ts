@@ -36,7 +36,8 @@ async function fetchApi<T>(
   options: RequestInit = {},
   retries?: number
 ): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE}${normalizedEndpoint}`;
   const method = (options.method || "GET").toUpperCase();
   // Retrying writes can create duplicate accounts, PINs, or analytics records.
   const retryCount = retries ?? (method === "GET" ? 1 : 0);
@@ -48,24 +49,45 @@ async function fetchApi<T>(
       controller.abort();
     }, API_TIMEOUT);
 
-    console.info(`[API] ${method} ${endpoint} attempt ${attempt + 1}/${retryCount + 1}`);
+    let signal: AbortSignal = controller.signal;
+    if (options.signal) {
+      if ("any" in AbortSignal && typeof (AbortSignal as any).any === "function") {
+        signal = (AbortSignal as any).any([controller.signal, options.signal]);
+      } else {
+        options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+    }
+
+    console.info(`[API] ${method} ${normalizedEndpoint} attempt ${attempt + 1}/${retryCount + 1}`);
 
     try {
+      const headers: Record<string, string> = {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      };
+      if (options.body || (method !== "GET" && method !== "HEAD")) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (options.headers) {
+        Object.assign(headers, options.headers);
+      }
+
       const res = await fetch(url, {
         ...options,
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          ...options.headers,
-        },
+        credentials: "include",
+        signal,
+        headers,
       });
 
-      console.info(`[API] ${method} ${endpoint} completed (${res.status})`);
+      console.info(`[API] ${method} ${normalizedEndpoint} completed (${res.status})`);
 
       if (!res.ok) {
         const errorBody = await res.text().catch(() => "");
-        console.error(`[API RESPONSE ERROR] ${options.method || "GET"} ${url} - Status: ${res.status}, Body:`, errorBody);
+        const isExpectedAuthMe401 = res.status === 401 && normalizedEndpoint === "/auth/me";
+        if (!isExpectedAuthMe401) {
+          console.error(`[API RESPONSE ERROR] ${options.method || "GET"} ${url} - Status: ${res.status}, Body:`, errorBody);
+        } else {
+          console.debug(`[API] Unauthenticated session on ${normalizedEndpoint} (401)`);
+        }
 
         let errorMessage = `API Error ${res.status}`;
         if (errorBody) {
@@ -88,6 +110,9 @@ async function fetchApi<T>(
             errorMessage = errorBody.slice(0, 200);
           }
         }
+        if (res.status === 401 && !normalizedEndpoint.startsWith("/auth/login") && !normalizedEndpoint.startsWith("/auth/register")) {
+          setAccessToken(null);
+        }
         throw new ApiError(errorMessage, res.status);
       }
 
@@ -100,7 +125,10 @@ async function fetchApi<T>(
         throw new ApiError("Failed to parse JSON response", res.status);
       }
     } catch (err: any) {
-      console.error(`[API] ${method} ${endpoint} failed`, err instanceof Error ? err.message : err);
+      const isExpectedAuthMe401 = (err instanceof ApiError && err.status === 401 && normalizedEndpoint === "/auth/me");
+      if (!isExpectedAuthMe401) {
+        console.error(`[API] ${method} ${normalizedEndpoint} failed`, err instanceof Error ? err.message : err);
+      }
 
       if (err.name === "AbortError" || controller.signal.aborted) {
         console.warn(`[API REQUEST TIMEOUT/ABORTED] Request to ${url} was aborted/timed out.`);
@@ -203,13 +231,40 @@ export const api = {
       body: JSON.stringify({ username, pin }),
     }),
 
-  me: () => fetchApi<{ username: string; role: string }>("/auth/me", {}, 0),
+  me: () => fetchApi<{ username: string; email?: string; role: string; token?: string }>("/auth/me", {}, 0),
 
   logout: () => fetchApi<{ success: boolean }>("/auth/logout", { method: "POST" }, 0),
 
+  getConnectedAccounts: () =>
+    fetchApi<Array<{ provider: string; name: string; connected: boolean; email?: string; linked_at?: string }>>(
+      "/auth/oauth/connected-accounts"
+    ),
+
+  getTrustedDevices: () =>
+    fetchApi<Array<{
+      device_id: string;
+      device_name: string;
+      is_current: boolean;
+      created_at: string | null;
+      last_used: string | null;
+      expires_at: string | null;
+    }>>("/auth/trusted-devices"),
+
+  revokeTrustedDevice: (deviceId: string) =>
+    fetchApi<{ success: boolean; message?: string }>(`/auth/trusted-devices/${encodeURIComponent(deviceId)}/revoke`, {
+      method: "POST",
+    }),
+
+  revokeAllTrustedDevices: () =>
+    fetchApi<{ success: boolean; revoked_count: number; message?: string }>("/auth/trusted-devices/revoke-all", {
+      method: "POST",
+    }),
+
   checkTrustedDevice: (deviceId: string) =>
     fetchApi<{ is_trusted: boolean; username?: string; device_name?: string; has_pin?: boolean }>(
-      `/auth/trusted-device?device_id=${encodeURIComponent(deviceId)}`
+      `/auth/trusted-device?device_id=${encodeURIComponent(deviceId)}`,
+      {},
+      0
     ),
 
   hasPin: () => fetchApi<{ has_pin: boolean }>("/auth/has-pin", {}, 0),

@@ -9,8 +9,6 @@ adaptive tone, motivational continuity, and human-like coaching style.
 """
 
 import logging
-from typing import Any, Optional
-from datetime import datetime, timedelta
 
 from memory.memory_manager import MemoryManager
 
@@ -49,7 +47,7 @@ class ProductivityCoachAgent:
         """Generate an emotionally aware opening based on user state."""
         session = context.get("session", {})
         stress = session.get("current_stress", 5)
-        mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
         energy = session.get("current_energy", 5)
         turn_count = session.get("turn_count", 0)
         
@@ -68,7 +66,7 @@ class ProductivityCoachAgent:
         elif energy >= 7 and stress <= 4:
             last_completed = session.get("completed_tasks_count", 0)
             if last_completed > 0:
-                return f"You made real progress last session! How are you feeling about continuing that momentum?"
+                return "You made real progress last session! How are you feeling about continuing that momentum?"
             return "You seem in a good space today! This is a great time to tackle something you've been putting off."
         
         return ""
@@ -85,7 +83,7 @@ class ProductivityCoachAgent:
         
         # Progress acknowledgment
         if completed > 0 and turn_count > 1:
-            return f"You got things done since we started talking — that's real progress! ADHD brains often don't give themselves credit for the small steps. I see you. 💛"
+            return "You got things done since we started talking — that's real progress! ADHD brains often don't give themselves credit for the small steps. I see you. 💛"
         
         # Showing up is winning
         if turn_count > 0 and turn_count % 3 == 0:
@@ -93,7 +91,7 @@ class ProductivityCoachAgent:
         
         # Streak recognition
         if streak > 0 and streak % 5 == 0:
-            return f"You've been showing up consistently. That's not luck — that's you building a system that works for your brain. Keep going at your own pace."
+            return "You've been showing up consistently. That's not luck — that's you building a system that works for your brain. Keep going at your own pace."
         
         # Gentle for stressed users
         if stress >= 7:
@@ -101,7 +99,7 @@ class ProductivityCoachAgent:
         
         return ""
 
-    def get_suggestion(self, context: dict) -> Optional[dict]:
+    def get_suggestion(self, context: dict) -> dict | None:
         user = context.get("user", {})
         session = context.get("session", {})
 
@@ -109,7 +107,7 @@ class ProductivityCoachAgent:
         energy = session.get("current_energy", 5)
         completion_rate = user.get("task_completion_rate", 50)
         focus_hours = user.get("best_focus_hours", [])
-        mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
 
         # High stress — focus on recovery, not productivity
         if stress >= 8:
@@ -164,7 +162,7 @@ class ProductivityCoachAgent:
                 "priority": "low",
                 "message": f"Your best focus hours are around {', '.join(focus_hours[:2])}. Try scheduling important tasks then!",
                 "suggestions": [
-                    f"Reserve your next deep work session during your peak focus time",
+                    "Reserve your next deep work session during your peak focus time",
                     "Protect that time — no meetings, no notifications",
                     "Start with the hardest task first during this window",
                 ],
@@ -181,7 +179,7 @@ class ProductivityCoachAgent:
         turn_count = session.get("turn_count", 0)
         stress = session.get("current_stress", 5)
         completion = user.get("task_completion_rate", 50)
-        mood = session.get("current_mood", "neutral")
+        session.get("current_mood", "neutral")
 
         if turn_count > 0 and turn_count % 5 == 0:
             return (

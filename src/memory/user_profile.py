@@ -6,9 +6,9 @@ to personalize the ADHD coaching experience.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,8 @@ class UserProfile:
         # Core profile data
         self.data: dict[str, Any] = {
             "user_id": user_id,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
 
             # ADHD-specific profile
             "adhd_type": None,  # inattentive, hyperactive, combined, unknown
@@ -132,7 +132,7 @@ class UserProfile:
 
     def save(self):
         """Persist profile to disk."""
-        self.data["updated_at"] = datetime.now().isoformat()
+        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
         try:
             with open(self.profile_path, "w") as f:
                 json.dump(self.data, f, indent=2)
@@ -156,7 +156,7 @@ class UserProfile:
         quality = max(1, min(10, quality))
 
         patterns["focus_quality_trend"].append({
-            "date": datetime.now().date().isoformat(),
+            "date": datetime.now(timezone.utc).date().isoformat(),
             "quality_score": quality,
             "session_length": duration_minutes,
             "hour": hour,
@@ -192,11 +192,11 @@ class UserProfile:
 
         self.save()
 
-    def record_emotion(self, emotion: str, stress: int, energy: Optional[int] = None):
+    def record_emotion(self, emotion: str, stress: int, energy: int | None = None):
         """Record an emotional data point."""
         patterns = self.data["emotional_patterns"]
         patterns["mood_trend"].append({
-            "date": datetime.now().isoformat(),
+            "date": datetime.now(timezone.utc).isoformat(),
             "mood": emotion,
             "stress": stress,
             "energy": energy or 5,
@@ -215,7 +215,7 @@ class UserProfile:
     def record_intervention_result(self, intervention: str, success: bool, context: str = ""):
         """Record whether an intervention was effective."""
         history = self.data["intervention_history"]
-        entry = {"intervention": intervention, "context": context, "date": datetime.now().isoformat()}
+        entry = {"intervention": intervention, "context": context, "date": datetime.now(timezone.utc).isoformat()}
 
         if success:
             history["successful_interventions"].append(entry)
@@ -252,8 +252,7 @@ class UserProfile:
         """Update streak information."""
         summary = self.data["session_summary"]
         summary["current_streak"] = current_streak
-        if current_streak > summary["highest_streak"]:
-            summary["highest_streak"] = current_streak
+        summary["highest_streak"] = max(summary["highest_streak"], current_streak)
         self.save()
 
     def update_preferences(self, preferences: dict):

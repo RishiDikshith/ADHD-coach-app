@@ -13,7 +13,6 @@ Key features:
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -273,8 +272,8 @@ class AdaptiveCoach:
     def get_coaching_plan(
         self,
         detected_state: dict,
-        user_data: Optional[dict] = None,
-        mood: Optional[str] = None,
+        user_data: dict | None = None,
+        mood: str | None = None,
     ) -> dict:
         """
         Generate a comprehensive coaching plan based on detected state, mood, and time.
@@ -286,9 +285,7 @@ class AdaptiveCoach:
         # Determine coaching priority
         if detected_state.get("is_crisis", False):
             priority = "crisis"
-        elif state_id in ("burnout", "dysregulated"):
-            priority = "high"
-        elif state_id in ("overwhelmed",):
+        elif state_id in ("burnout", "dysregulated") or state_id in ("overwhelmed",):
             priority = "high"
         elif state_id in ("avoidant",):
             priority = "medium"
@@ -345,7 +342,7 @@ class AdaptiveCoach:
 
         time_context = coaching_plan.get("time_context", "")
         time_period = coaching_plan.get("time_period", "")
-        time_emoji = coaching_plan.get("time_emoji", "")
+        coaching_plan.get("time_emoji", "")
 
         if time_period:
             additions.append(f"[Time Context] It's {time_period}. Focus: {time_context}.")
@@ -373,8 +370,8 @@ class AdaptiveCoach:
 
         return system_prompt
 
-    def get_system_prompt_extension(self, text: str, context: Optional[dict] = None,
-                                    mood: Optional[str] = None) -> str:
+    def get_system_prompt_extension(self, text: str, context: dict | None = None,
+                                    mood: str | None = None) -> str:
         """Generate a system prompt extension combining state detection, mood, and time awareness."""
         if not self.state_detector:
             return ""
