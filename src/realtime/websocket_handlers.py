@@ -688,7 +688,7 @@ User input (Original): "{text}"
 User input (English Translation context): "{english_text}"
 
 CRITICAL LANGUAGE RULE: You MUST reply in the EXACT SAME language and script as "User input (Original)".
-CRITICAL FORMATTING: Keep your paragraphs extremely brief (2-3 sentences max). Use formatting like bold, lists, and emojis strategically. 
+CRITICAL FORMATTING: Keep your paragraphs extremely brief (2-3 sentences max). Use formatting like bold, lists, and emojis strategically.
 
 You MUST format your entire response exactly like this:
 

@@ -371,7 +371,7 @@ def periodic_weekly_analytics_beat():
         from database.models import User
 
         # Retrieve active users
-        active_users = db_mgr.db.query(User).filter(User.is_active == True).all()
+        active_users = db_mgr.db.query(User).filter(User.is_active.is_(True)).all()
         logger.info(f"Celery Beat: Found {len(active_users)} active users to process.")
 
         for user in active_users:

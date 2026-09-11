@@ -266,7 +266,7 @@ class DatabaseManager:
                 .filter(
                     TrustedDevice.user_id == user_id,
                     TrustedDevice.device_id == device_id,
-                    TrustedDevice.is_active == True,
+                    TrustedDevice.is_active.is_(True),
                 )
                 .first()
             )
@@ -280,7 +280,7 @@ class DatabaseManager:
             self._ensure_session()
             return (
                 self.db.query(TrustedDevice)
-                .filter(TrustedDevice.device_id == device_id, TrustedDevice.is_active == True)
+                .filter(TrustedDevice.device_id == device_id, TrustedDevice.is_active.is_(True))
                 .first()
             )
         except (
@@ -337,7 +337,7 @@ class DatabaseManager:
                 return []
             return (
                 self.db.query(TrustedDevice)
-                .filter(TrustedDevice.user_id == user.id, TrustedDevice.is_active == True)
+                .filter(TrustedDevice.user_id == user.id, TrustedDevice.is_active.is_(True))
                 .all()
             )
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as e:
@@ -395,9 +395,9 @@ class DatabaseManager:
                 self.db.query(TrustedDevice)
                 .filter(
                     TrustedDevice.token_hash == token_hash,
-                    TrustedDevice.is_active == True,
-                    TrustedDevice.revoked_at == None,
-                    (TrustedDevice.expires_at == None) | (TrustedDevice.expires_at > now),
+                    TrustedDevice.is_active.is_(True),
+                    TrustedDevice.revoked_at.is_(None),
+                    (TrustedDevice.expires_at.is_(None)) | (TrustedDevice.expires_at > now),
                 )
                 .first()
             )
@@ -447,7 +447,7 @@ class DatabaseManager:
             self._ensure_session()
             devices = (
                 self.db.query(TrustedDevice)
-                .filter(TrustedDevice.user_id == user_id, TrustedDevice.is_active == True)
+                .filter(TrustedDevice.user_id == user_id, TrustedDevice.is_active.is_(True))
                 .all()
             )
             now = datetime.now(timezone.utc)
@@ -911,7 +911,7 @@ class DatabaseManager:
         # Update existing fact if same key exists
         existing = (
             self.db.query(UserFact)
-            .filter(UserFact.user_id == user.id, UserFact.key == key, UserFact.is_active == True)
+            .filter(UserFact.user_id == user.id, UserFact.key == key, UserFact.is_active.is_(True))
             .first()
         )
         if existing:
@@ -942,7 +942,7 @@ class DatabaseManager:
         if not user:
             return []
         query = self.db.query(UserFact).filter(
-            UserFact.user_id == user.id, UserFact.is_active == True
+            UserFact.user_id == user.id, UserFact.is_active.is_(True)
         )
         if fact_type:
             query = query.filter(UserFact.fact_type == fact_type)
@@ -971,7 +971,7 @@ class DatabaseManager:
             self.db.query(UserFact)
             .filter(
                 UserFact.user_id == user.id,
-                UserFact.is_active == True,
+                UserFact.is_active.is_(True),
                 (
                     UserFact.key.ilike(f"%{query}%")
                     | UserFact.value.ilike(f"%{query}%")
@@ -1380,7 +1380,7 @@ class DatabaseManager:
             .filter(
                 FocusSession.user_id == user.id,
                 FocusSession.created_at >= today,
-                FocusSession.completed == True,
+                FocusSession.completed.is_(True),
             )
             .scalar()
             or 0

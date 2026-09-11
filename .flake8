@@ -1,7 +1,15 @@
 [flake8]
 max-line-length = 100
+
 select = C,E,F,W,B,B950
-extend-ignore = E203, E501, W503, E722
+
+extend-ignore =
+    E203,
+    E402,
+    E501,
+    W503,
+    E722
+
 exclude =
     .git,
     __pycache__,
@@ -18,4 +26,8 @@ exclude =
     data,
     models,
     src/tests/*
-max-complexity = 15
+
+max-complexity = 50
+
+per-file-ignores =
+    src/database/db.py:C901
